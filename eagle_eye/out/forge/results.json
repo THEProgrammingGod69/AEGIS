@@ -1,0 +1,1294 @@
+[
+ {
+  "i": 200,
+  "strength": 1.1462380978343853,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {}
+ },
+ {
+  "i": 201,
+  "strength": 1.1391261999838518,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "PS11",
+    "text": "PS17"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB43",
+    "b": "CB44"
+   },
+   {
+    "type": "missing_label",
+    "tag": "CB42"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "1CBP02",
+    "text": "1CBP20"
+   }
+  ],
+  "caught": {
+   "LBL-PS11": true,
+   "ORD-RAIL-1": true,
+   "LBL-CB42": true,
+   "LBL-1CBP02": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "LBL-PS11": "FAIL",
+   "ORD-RAIL-1": "FAIL",
+   "LBL-CB42": "FAIL",
+   "LBL-1CBP02": "FAIL"
+  }
+ },
+ {
+  "i": 203,
+  "strength": 1.395683818194017,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "D12"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 1
+   },
+   {
+    "type": "wrong_label",
+    "tag": "PS11",
+    "text": "PS17"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "CB41",
+    "text": "CB14"
+   }
+  ],
+  "caught": {
+   "GA-D12": true,
+   "FER-X3:1": true,
+   "LBL-PS11": true,
+   "LBL-CB41": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 15,
+  "found": {
+   "GA-D12": "FAIL",
+   "FER-X3:1": "FAIL",
+   "LBL-PS11": "FAIL",
+   "LBL-CB41": "FAIL"
+  }
+ },
+ {
+  "i": 202,
+  "strength": 1.320674189676445,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB44"
+   },
+   {
+    "type": "missing_label",
+    "tag": "1CBP04"
+   },
+   {
+    "type": "missing_component",
+    "tag": "D12"
+   }
+  ],
+  "caught": {
+   "GA-CB44": true,
+   "LBL-1CBP04": true,
+   "GA-D12": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 2,
+  "anchors": 17,
+  "found": {
+   "GA-CB44": "FAIL",
+   "LBL-1CBP04": "FAIL",
+   "GA-D12": "FAIL"
+  }
+ },
+ {
+  "i": 204,
+  "strength": 1.3520552397480048,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 7
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB41",
+    "b": "CB42"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 3,
+    "text": "X3-4/CB44-2"
+   }
+  ],
+  "caught": {
+   "FER-X3:7": true,
+   "ORD-RAIL-1": true,
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "FER-X3:7": "FAIL",
+   "ORD-RAIL-1": "FAIL",
+   "FER-X3:3": "FAIL"
+  }
+ },
+ {
+  "i": 205,
+  "strength": 1.2818654768291442,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [
+   "FER-X3:4"
+  ],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {}
+ },
+ {
+  "i": 206,
+  "strength": 1.179538032668162,
+  "faults": [
+   {
+    "type": "swap_breakers",
+    "a": "CB41",
+    "b": "CB42"
+   }
+  ],
+  "caught": {
+   "ORD-RAIL-1": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {
+   "ORD-RAIL-1": "FAIL"
+  }
+ },
+ {
+  "i": 207,
+  "strength": 0.8170751589547262,
+  "faults": [
+   {
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "CB41",
+    "text": "CB14"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 6,
+    "text": "X3-7/D12-L"
+   }
+  ],
+  "caught": {
+   "ORD-RAIL-1": true,
+   "LBL-CB41": true,
+   "FER-X3:6": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {
+   "ORD-RAIL-1": "FAIL",
+   "LBL-CB41": "FAIL",
+   "FER-X3:6": "FAIL"
+  }
+ },
+ {
+  "i": 208,
+  "strength": 1.3865441886318624,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "CB43",
+    "text": "CB34"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 7,
+    "text": "X3-8/PE-1"
+   },
+   {
+    "type": "wrong_colour",
+    "n": 1,
+    "colour": "GNYE"
+   }
+  ],
+  "caught": {
+   "LBL-CB43": true,
+   "FER-X3:7": true,
+   "COL-X3:1": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "LBL-CB43": "FAIL",
+   "FER-X3:7": "FAIL",
+   "COL-X3:1": "FAIL"
+  }
+ },
+ {
+  "i": 209,
+  "strength": 1.37056555198685,
+  "faults": [
+   {
+    "type": "missing_label",
+    "tag": "PS11"
+   }
+  ],
+  "caught": {
+   "LBL-PS11": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {
+   "LBL-PS11": "FAIL"
+  }
+ },
+ {
+  "i": 210,
+  "strength": 0.9949815423432893,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {}
+ },
+ {
+  "i": 211,
+  "strength": 1.132485341898196,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "CB43",
+    "text": "CB34"
+   },
+   {
+    "type": "wrong_colour",
+    "n": 7,
+    "colour": "BN"
+   },
+   {
+    "type": "missing_label",
+    "tag": "D12"
+   },
+   {
+    "type": "missing_label",
+    "tag": "PE"
+   }
+  ],
+  "caught": {
+   "LBL-CB43": true,
+   "COL-X3:7": true,
+   "LBL-D12": true,
+   "LBL-PE": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "LBL-CB43": "FAIL",
+   "COL-X3:7": "FAIL",
+   "LBL-D12": "FAIL",
+   "LBL-PE": "FAIL"
+  }
+ },
+ {
+  "i": 212,
+  "strength": 1.2531611848461266,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [
+   "FER-X3:1"
+  ],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {}
+ },
+ {
+  "i": 213,
+  "strength": 0.8663575217186203,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {}
+ },
+ {
+  "i": 214,
+  "strength": 1.0412217947143092,
+  "faults": [
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "BK"
+   }
+  ],
+  "caught": {
+   "COL-X3:8": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "COL-X3:8": "FAIL"
+  }
+ },
+ {
+  "i": 215,
+  "strength": 0.82221649366214,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {}
+ },
+ {
+  "i": 216,
+  "strength": 1.2713039718046115,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB43"
+   }
+  ],
+  "caught": {
+   "GA-CB43": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 19,
+  "found": {
+   "GA-CB43": "FAIL"
+  }
+ },
+ {
+  "i": 217,
+  "strength": 1.30972941032008,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "D12",
+    "text": "D21"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 7
+   }
+  ],
+  "caught": {
+   "LBL-D12": true,
+   "FER-X3:7": true
+  },
+  "false_alarms": [],
+  "reviews": [
+   "FER-X3:2",
+   "FER-X3:5",
+   "FER-X3:6"
+  ],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "LBL-D12": "FAIL",
+   "FER-X3:7": "FAIL"
+  }
+ },
+ {
+  "i": 218,
+  "strength": 1.1497720374933578,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "PS12",
+    "text": "PS21"
+   }
+  ],
+  "caught": {
+   "LBL-PS12": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "LBL-PS12": "FAIL"
+  }
+ },
+ {
+  "i": 219,
+  "strength": 0.8171012249369932,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 8
+   },
+   {
+    "type": "wrong_label",
+    "tag": "1CBP01",
+    "text": "1CBP10"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "PE",
+    "text": "PN"
+   },
+   {
+    "type": "missing_label",
+    "tag": "CB44"
+   }
+  ],
+  "caught": {
+   "FER-X3:8": true,
+   "LBL-1CBP01": true,
+   "LBL-PE": true,
+   "LBL-CB44": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 14,
+  "found": {
+   "FER-X3:8": "FAIL",
+   "LBL-1CBP01": "FAIL",
+   "LBL-PE": "FAIL",
+   "LBL-CB44": "FAIL"
+  }
+ },
+ {
+  "i": 220,
+  "strength": 1.176130749815074,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {}
+ },
+ {
+  "i": 221,
+  "strength": 0.9030241232095115,
+  "faults": [
+   {
+    "type": "wrong_ferrule",
+    "n": 2,
+    "text": "X3-3/CB43-2"
+   }
+  ],
+  "caught": {
+   "FER-X3:2": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "FER-X3:2": "FAIL"
+  }
+ },
+ {
+  "i": 222,
+  "strength": 0.8933743615539241,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB43"
+   }
+  ],
+  "caught": {
+   "GA-CB43": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 19,
+  "found": {
+   "GA-CB43": "FAIL"
+  }
+ },
+ {
+  "i": 223,
+  "strength": 1.3485539243349738,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {}
+ },
+ {
+  "i": 224,
+  "strength": 1.3375671047619773,
+  "faults": [
+   {
+    "type": "missing_label",
+    "tag": "PS11"
+   }
+  ],
+  "caught": {
+   "LBL-PS11": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "LBL-PS11": "FAIL"
+  }
+ },
+ {
+  "i": 225,
+  "strength": 1.1438107374762636,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {}
+ },
+ {
+  "i": 226,
+  "strength": 1.183656299310389,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {}
+ },
+ {
+  "i": 227,
+  "strength": 0.8528583542882249,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "1CBP02",
+    "text": "1CBP20"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "1CBP03",
+    "text": "1CBP08"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "D12",
+    "text": "D21"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   }
+  ],
+  "caught": {
+   "LBL-1CBP02": true,
+   "LBL-1CBP03": true,
+   "LBL-D12": true,
+   "ORD-RAIL-1": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "LBL-1CBP02": "FAIL",
+   "LBL-1CBP03": "FAIL",
+   "LBL-D12": "FAIL",
+   "ORD-RAIL-1": "FAIL"
+  }
+ },
+ {
+  "i": 228,
+  "strength": 0.8589666671804821,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "CB44",
+    "text": "CB47"
+   },
+   {
+    "type": "missing_component",
+    "tag": "1CBP03"
+   },
+   {
+    "type": "wrong_label",
+    "tag": "CB42",
+    "text": "CB24"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 3,
+    "text": "X3-4/CB44-2"
+   }
+  ],
+  "caught": {
+   "LBL-CB44": true,
+   "GA-1CBP03": true,
+   "LBL-CB42": true,
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 16,
+  "found": {
+   "LBL-CB44": "FAIL",
+   "GA-1CBP03": "FAIL",
+   "LBL-CB42": "FAIL",
+   "FER-X3:3": "FAIL"
+  }
+ },
+ {
+  "i": 229,
+  "strength": 1.1962188914390286,
+  "faults": [
+   {
+    "type": "missing_label",
+    "tag": "CB43"
+   }
+  ],
+  "caught": {
+   "LBL-CB43": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "LBL-CB43": "FAIL"
+  }
+ },
+ {
+  "i": 230,
+  "strength": 0.8576191147915485,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {}
+ },
+ {
+  "i": 231,
+  "strength": 1.2169813844493371,
+  "faults": [
+   {
+    "type": "wrong_colour",
+    "n": 1,
+    "colour": "BU"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   }
+  ],
+  "caught": {
+   "COL-X3:1": true,
+   "ORD-RAIL-1": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {
+   "COL-X3:1": "FAIL",
+   "ORD-RAIL-1": "FAIL"
+  }
+ },
+ {
+  "i": 233,
+  "strength": 0.8776623709360194,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   }
+  ],
+  "caught": {
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "FER-X3:3": "FAIL"
+  }
+ },
+ {
+  "i": 232,
+  "strength": 1.0782725611604416,
+  "faults": [
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "BN"
+   }
+  ],
+  "caught": {
+   "COL-X3:8": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "COL-X3:8": "FAIL"
+  }
+ },
+ {
+  "i": 234,
+  "strength": 0.8708547397799857,
+  "faults": [
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "BU"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB43",
+    "b": "CB44"
+   },
+   {
+    "type": "missing_component",
+    "tag": "D12"
+   },
+   {
+    "type": "missing_component",
+    "tag": "CB41"
+   }
+  ],
+  "caught": {
+   "COL-X3:8": true,
+   "ORD-RAIL-1": true,
+   "GA-D12": true,
+   "GA-CB41": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 2,
+  "anchors": 18,
+  "found": {
+   "COL-X3:8": "FAIL",
+   "ORD-RAIL-1": "FAIL",
+   "GA-D12": "FAIL",
+   "GA-CB41": "FAIL"
+  }
+ },
+ {
+  "i": 235,
+  "strength": 0.9064880027494799,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {}
+ },
+ {
+  "i": 236,
+  "strength": 0.8714764788178281,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 2
+   },
+   {
+    "type": "wrong_colour",
+    "n": 6,
+    "colour": "BU"
+   },
+   {
+    "type": "missing_label",
+    "tag": "1CBP01"
+   }
+  ],
+  "caught": {
+   "FER-X3:2": true,
+   "COL-X3:6": true,
+   "LBL-1CBP01": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "FER-X3:2": "FAIL",
+   "COL-X3:6": "FAIL",
+   "LBL-1CBP01": "FAIL"
+  }
+ },
+ {
+  "i": 237,
+  "strength": 0.9762253428487982,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "PE",
+    "text": "PN"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 1
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB41",
+    "b": "CB42"
+   },
+   {
+    "type": "missing_label",
+    "tag": "PS11"
+   }
+  ],
+  "caught": {
+   "LBL-PE": true,
+   "FER-X3:1": true,
+   "ORD-RAIL-1": true,
+   "LBL-PS11": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 15,
+  "found": {
+   "LBL-PE": "FAIL",
+   "FER-X3:1": "FAIL",
+   "ORD-RAIL-1": "FAIL",
+   "LBL-PS11": "FAIL"
+  }
+ },
+ {
+  "i": 238,
+  "strength": 1.141361368405641,
+  "faults": [
+   {
+    "type": "wrong_colour",
+    "n": 1,
+    "colour": "BU"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB43",
+    "b": "CB44"
+   }
+  ],
+  "caught": {
+   "COL-X3:1": true,
+   "ORD-RAIL-1": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "COL-X3:1": "FAIL",
+   "ORD-RAIL-1": "FAIL"
+  }
+ },
+ {
+  "i": 239,
+  "strength": 1.0778262009080726,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "CB44",
+    "text": "CB47"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 8
+   },
+   {
+    "type": "missing_component",
+    "tag": "1CBP01"
+   },
+   {
+    "type": "wrong_colour",
+    "n": 4,
+    "colour": "BU"
+   }
+  ],
+  "caught": {
+   "LBL-CB44": true,
+   "FER-X3:8": true,
+   "GA-1CBP01": true,
+   "COL-X3:4": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 15,
+  "found": {
+   "LBL-CB44": "FAIL",
+   "FER-X3:8": "FAIL",
+   "GA-1CBP01": "FAIL",
+   "COL-X3:4": "FAIL"
+  }
+ },
+ {
+  "i": 240,
+  "strength": 0.8345574498129796,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 18,
+  "found": {}
+ },
+ {
+  "i": 241,
+  "strength": 1.1638215092376294,
+  "faults": [
+   {
+    "type": "wrong_ferrule",
+    "n": 5,
+    "text": "X3-6/PS11-"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 8,
+    "text": "X3-1/CB41-2"
+   },
+   {
+    "type": "missing_component",
+    "tag": "CB41"
+   }
+  ],
+  "caught": {
+   "FER-X3:5": true,
+   "FER-X3:8": true,
+   "GA-CB41": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 19,
+  "found": {
+   "FER-X3:5": "FAIL",
+   "FER-X3:8": "FAIL",
+   "GA-CB41": "FAIL"
+  }
+ },
+ {
+  "i": 243,
+  "strength": 0.885672338427445,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB44"
+   }
+  ],
+  "caught": {
+   "GA-CB44": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 17,
+  "found": {
+   "GA-CB44": "FAIL"
+  }
+ },
+ {
+  "i": 242,
+  "strength": 1.3019205075850335,
+  "faults": [
+   {
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 3,
+    "text": "X3-4/CB44-2"
+   }
+  ],
+  "caught": {
+   "ORD-RAIL-1": true,
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "ORD-RAIL-1": "FAIL",
+   "FER-X3:3": "FAIL"
+  }
+ },
+ {
+  "i": 245,
+  "strength": 1.290610859953002,
+  "faults": [],
+  "caught": {},
+  "false_alarms": [],
+  "reviews": [
+   "GA-CB44"
+  ],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {}
+ },
+ {
+  "i": 244,
+  "strength": 1.3460072739343882,
+  "faults": [
+   {
+    "type": "wrong_ferrule",
+    "n": 3,
+    "text": "X3-4/CB44-2"
+   }
+  ],
+  "caught": {
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 20,
+  "found": {
+   "FER-X3:3": "FAIL"
+  }
+ },
+ {
+  "i": 247,
+  "strength": 0.8112331497497266,
+  "faults": [
+   {
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 4
+   },
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "RD"
+   }
+  ],
+  "caught": {
+   "ORD-RAIL-1": true,
+   "FER-X3:3": true,
+   "FER-X3:4": true,
+   "COL-X3:8": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 16,
+  "found": {
+   "ORD-RAIL-1": "FAIL",
+   "FER-X3:3": "FAIL",
+   "FER-X3:4": "FAIL",
+   "COL-X3:8": "FAIL"
+  }
+ },
+ {
+  "i": 246,
+  "strength": 0.9619570261582877,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 2
+   },
+   {
+    "type": "wrong_label",
+    "tag": "CB41",
+    "text": "CB14"
+   },
+   {
+    "type": "wrong_ferrule",
+    "n": 5,
+    "text": "X3-6/PS11-"
+   },
+   {
+    "type": "missing_component",
+    "tag": "PS12"
+   }
+  ],
+  "caught": {
+   "FER-X3:2": true,
+   "LBL-CB41": true,
+   "FER-X3:5": true,
+   "GA-PS12": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 15,
+  "found": {
+   "FER-X3:2": "FAIL",
+   "LBL-CB41": "FAIL",
+   "FER-X3:5": "FAIL",
+   "GA-PS12": "FAIL"
+  }
+ },
+ {
+  "i": 249,
+  "strength": 1.1322578869254887,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "1CBP01"
+   }
+  ],
+  "caught": {
+   "GA-1CBP01": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 16,
+  "found": {
+   "GA-1CBP01": "FAIL"
+  }
+ },
+ {
+  "i": 248,
+  "strength": 1.1609116397804482,
+  "faults": [
+   {
+    "type": "swap_breakers",
+    "a": "CB43",
+    "b": "CB44"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 6
+   },
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "BK"
+   }
+  ],
+  "caught": {
+   "ORD-RAIL-1": true,
+   "FER-X3:6": true,
+   "COL-X3:8": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 19,
+  "found": {
+   "ORD-RAIL-1": "FAIL",
+   "FER-X3:6": "FAIL",
+   "COL-X3:8": "FAIL"
+  }
+ }
+]

@@ -1,0 +1,33 @@
+[
+ {
+  "time": "2026-10-11T12:51:58",
+  "run": "v1 initial QC",
+  "photo": "photo_v1.jpg",
+  "fail": 4,
+  "passed": 36,
+  "issues": [
+   "GA-PS12",
+   "ORD-RAIL-1",
+   "LBL-1CBP03",
+   "FER-X3:3"
+  ]
+ },
+ {
+  "time": "2026-10-11T12:52:20",
+  "run": "v2 re-check after fix",
+  "photo": "photo_v2.jpg",
+  "fail": 1,
+  "passed": 40,
+  "issues": [
+   "FER-X3:3"
+  ]
+ },
+ {
+  "time": "2026-10-11T12:52:43",
+  "run": "v3 re-check, all closed",
+  "photo": "photo_v3.jpg",
+  "fail": 0,
+  "passed": 41,
+  "issues": []
+ }
+]

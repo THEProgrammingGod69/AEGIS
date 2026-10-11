@@ -1,0 +1,44 @@
+{
+ "cabinets": 50,
+ "planted": 87,
+ "caught": 87,
+ "recall": 1.0,
+ "correct_items": 1950,
+ "false_alarms": 0,
+ "false_alarm_rate": 0.0,
+ "reviews": 6,
+ "review_rate": 0.003076923076923077,
+ "per_type": {
+  "wrong_label": [
+   19,
+   19
+  ],
+  "swap_breakers": [
+   12,
+   12
+  ],
+  "missing_label": [
+   10,
+   10
+  ],
+  "missing_component": [
+   13,
+   13
+  ],
+  "missing_ferrule": [
+   12,
+   12
+  ],
+  "wrong_ferrule": [
+   10,
+   10
+  ],
+  "wrong_colour": [
+   11,
+   11
+  ]
+ },
+ "clean_cabinets_zero_fail": 14,
+ "clean_cabinets": 14,
+ "sec_per_cabinet": 22.99639880657196
+}
