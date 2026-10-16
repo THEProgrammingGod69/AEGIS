@@ -1,9 +1,16 @@
-numpy
-opencv-python-headless
-pymupdf
-pytesseract
-openpyxl
-reportlab
-streamlit
-pandas
-Pillow
+# EAGLE EYE engine
+numpy>=1.24
+opencv-python-headless>=4.8
+pymupdf>=1.24
+pytesseract>=0.3.10
+openpyxl>=3.1
+reportlab>=4.0
+Pillow>=10.0
+# web console (python server.py)
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+# Streamlit fallback UI (streamlit run app.py)
+streamlit>=1.36
+pandas>=2.0
+# plus the Tesseract OCR binary: Windows UB-Mannheim installer / brew install tesseract / apt install tesseract-ocr

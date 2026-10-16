@@ -508,7 +508,7 @@ class OrderCheck:
             devs = [ctx.dev[t] for t in rail["tags"]]
 
             def read_slot(d):
-                if not ctx.present.get(d["tag"]):
+                if not ctx.present.get(d["tag"], True):
                     return "(empty)", None
                 if not has_label(crop(ctx.rect, d["label_box"], 4))[0]:
                     return "(no label)", None                   # LabelCheck owns this item
@@ -570,7 +570,7 @@ class LabelCheck:
 
         def one(d):
             iid = f"LBL-{d['tag']}"
-            if not ctx.present.get(d["tag"]):
+            if not ctx.present.get(d["tag"], True):            # presence unknown (GA disabled) -> check the label
                 return res(iid, "LABEL", d["tag"], d["tag"], "—", "SKIP", d["box"], 1, [f"blocked by GA-{d['tag']}"],
                            root_cause=f"GA-{d['tag']}")
             if d.get("group") and d["tag"] in ctx.label_at:   # label found on the rail (maybe in swapped slot)
@@ -722,6 +722,11 @@ def counts(results):
     return {k: sum(r["result"] == k for r in results) for k in ("PASS", "FAIL", "REVIEW", "SKIP")}
 
 
+def min_anchors(reg):
+    """Fewest matched labels/ferrules for a fit we trust (the self-test never goes below 14 of 20)."""
+    return max(6, int(0.4 * reg["targets"]))
+
+
 def load_photo(path):
     """Decode a photo from any path (np.fromfile keeps non-ASCII Windows paths working)."""
     try:
@@ -753,11 +758,30 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
 
     t = time.perf_counter(); stage("register", "start")
     ctx.rect, ctx.H, ctx.reg = register(photo, ga, ctx.wires)
+    need = min_anchors(ctx.reg)
+    rotation = 0
+    if ctx.reg["anchors"] < need:
+        # Too few labels/ferrules matched the drawing. A phone photo taken upside down or sideways is the usual
+        # cause, so try the other orientations before giving up. Never triggers on a well-registered photo.
+        stage("register", "retry", anchors=ctx.reg["anchors"], reason="weak registration, trying other orientations")
+        best = (ctx.reg["anchors"], 0, ctx.rect, ctx.H, ctx.reg, photo)
+        for k in (2, 1, 3):
+            ph = np.ascontiguousarray(np.rot90(photo, k))
+            try:
+                rr, hh, gg = register(ph, ga, ctx.wires)
+            except InspectionError:
+                continue
+            if gg["anchors"] > best[0]:
+                best = (gg["anchors"], k, rr, hh, gg, ph)
+            if gg["anchors"] >= need:
+                break
+        _, rotation, ctx.rect, ctx.H, ctx.reg, photo = best
+    ctx.photo = photo
     ctx.bpm = Backplate(ctx.rect, ga)
     ctx.wb_gains = white_balance(ctx.rect, ga, ctx.bpm)
     timing["register"] = round(time.perf_counter() - t, 3)
     stage("register", "done", anchors=ctx.reg["anchors"], inliers=ctx.reg["inliers"],
-          outliers=ctx.reg["outliers"], refined=ctx.reg["refined"])
+          outliers=ctx.reg["outliers"], refined=ctx.reg["refined"], rotated=rotation * 90)
 
     ctx.dev = {d["tag"]: d for d in ga["devices"]}
     ctx.present, ctx.facts, ctx.label_at = {}, {}, {}
@@ -772,14 +796,27 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
         results += out
         timing["checks"][name] = round(time.perf_counter() - t, 3)
         stage("check", "done", check=name, items=len(out), counts=counts(out))
+    warnings = []
+    if rotation:
+        warnings.append(dict(code="rotated", message=f"The photo was rotated {rotation * 90}° to match the drawing."))
+    if ctx.reg["anchors"] < need:
+        # Precision first: without a trustworthy fit to the drawing nothing is called FAIL.
+        note = (f"weak registration: only {ctx.reg['anchors']} of {ctx.reg['targets']} labels/ferrules matched the drawing; "
+                f"the photo may not show cabinet {ga['cabinet']}")
+        for r in results:
+            if r["result"] == "FAIL":
+                r.update(result="REVIEW", found=f"Unverified: {r['found']}", evidence=r["evidence"] + [note], guarded=True)
+        warnings.append(dict(code="weak_registration", message=note[0].upper() + note[1:] + ". Every would-be FAIL was "
+                             "sent to REVIEW. Check the photo shows the whole backplate of this cabinet, then re-photo."))
     timing["total"] = round(time.perf_counter() - t0, 3)
     c = counts(results)
-    stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"])
+    stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"], warnings=[w["code"] for w in warnings])
     rep = dict(photo=str(photo_path), results=results, registration=ctx.reg, H=ctx.H.tolist(),
                photo_size=[int(photo.shape[1]), int(photo.shape[0])], rect_px_per_mm=R,
                ga=dict(cabinet=ga["cabinet"], size=list(ga["size"]), devices=ga["devices"],
                        terminals=ga["terminals"], rails=ga["rails"]),
-               wires=ctx.wires, enabled=enabled, counts=c, timing=timing, engine=config.VERSION)
+               wires=ctx.wires, enabled=enabled, counts=c, timing=timing, engine=config.VERSION,
+               orientation=rotation * 90, warnings=warnings)
     return rep, ctx
 
 

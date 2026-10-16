@@ -1,0 +1,6 @@
+.git
+**/__pycache__
+eagle_eye/web/node_modules
+eagle_eye/out/runs
+eagle_eye/out/cache
+eagle_eye/out/forge/*.jpg

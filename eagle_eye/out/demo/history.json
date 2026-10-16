@@ -1,6 +1,6 @@
 [
  {
-  "time": "2026-10-11T12:51:58",
+  "time": "2026-10-16T19:57:06",
   "run": "v1 initial QC",
   "photo": "photo_v1.jpg",
   "fail": 4,
@@ -13,7 +13,7 @@
   ]
  },
  {
-  "time": "2026-10-11T12:52:20",
+  "time": "2026-10-16T19:57:15",
   "run": "v2 re-check after fix",
   "photo": "photo_v2.jpg",
   "fail": 1,
@@ -23,7 +23,7 @@
   ]
  },
  {
-  "time": "2026-10-11T12:52:43",
+  "time": "2026-10-16T19:57:24",
   "run": "v3 re-check, all closed",
   "photo": "photo_v3.jpg",
   "fail": 0,

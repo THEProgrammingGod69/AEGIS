@@ -364,6 +364,12 @@ def main():
     print(f"  Tesseract: {t['version'] if t['ok'] else 'NOT FOUND - ' + t['error']}")
     print(f"  OCR workers: {config.WORKERS}\n")
     threading.Thread(target=_warm_up, daemon=True).start()
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if s.connect_ex(("127.0.0.1", a.port)) == 0:
+            print(f"  Port {a.port} is already in use (is EAGLE EYE already running? then just open {url}).")
+            print(f"  To start a second copy: python server.py --port {a.port + 1}\n")
+            raise SystemExit(1)
     if not a.no_browser:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
     uvicorn.run(app, host=a.host, port=a.port, log_level="warning")

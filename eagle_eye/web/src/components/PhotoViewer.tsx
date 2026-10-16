@@ -48,6 +48,19 @@ interface Props {
   interactive?: boolean;
 }
 
+/** Text label on a dark chip, sized in screen pixels whatever the zoom (u = overlay units per pixel). */
+function Chip({ x, y, u, color, text, small }: { x: number; y: number; u: number; color: string; text: string; small?: boolean }) {
+  const fs = (small ? 10.5 : 12) * u;
+  const w = text.length * fs * 0.62 + 14 * u;
+  const h = fs * 1.75;
+  return (
+    <g pointerEvents="none">
+      <rect x={x} y={y} width={w} height={h} rx={6 * u} fill="rgba(5,7,11,0.88)" stroke={color} strokeOpacity={0.55} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      <text x={x + 7 * u} y={y + h * 0.69} fontSize={fs} className="svg-chip" style={{ fill: color }}>{text}</text>
+    </g>
+  );
+}
+
 const bbox = (q: Pt[]) => {
   const xs = q.map((p) => p[0]);
   const ys = q.map((p) => p[1]);
@@ -185,7 +198,7 @@ export function PhotoViewer({
                     <g key={l.tag} style={{ animationDelay: `${i * 35}ms` }}>
                       <polygon points={l.quad.map((p) => p.join(",")).join(" ")} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
                       {l.kind !== "terminal" && (
-                        <text x={b.x0 + 4 * u} y={b.y1 - 6 * u} fontSize={11 * u} strokeWidth={2.6 * u} className="svg-tag">
+                        <text x={b.x0 + 4 * u} y={b.y1 - 6 * u} fontSize={10.5 * u} strokeWidth={2 * u} className="svg-tag">
                           {l.tag}
                         </text>
                       )}
@@ -204,11 +217,7 @@ export function PhotoViewer({
                     )}
                     <circle cx={a.expected[0]} cy={a.expected[1]} r={7 * u} fill="none" stroke="#38bdf8" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.8} />
                     <circle cx={a.found[0]} cy={a.found[1]} r={3.6 * u} fill={c} stroke="#05070b" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                    {a.inlier === false && (
-                      <text x={a.found[0]} y={a.found[1] - (i % 2 ? 22 : 11) * u} textAnchor="middle" fontSize={11 * u} strokeWidth={2.6 * u} className="svg-tag" style={{ fill: c }}>
-                        {a.tag}
-                      </text>
-                    )}
+                    {a.inlier === false && <Chip x={a.found[0] - 18 * u} y={a.found[1] - (i % 2 ? 44 : 26) * u} u={u} color={c} text={a.tag} small />}
                   </g>
                 );
               })}
@@ -233,11 +242,7 @@ export function PhotoViewer({
                         </text>
                       </g>
                     )}
-                    {on && it.caption && (
-                      <text x={b.x0 - pad} y={b.y1 + pad + 16 * u} fontSize={12.5 * u} strokeWidth={3 * u} className="svg-caption" style={{ fill: c }}>
-                        {it.caption}
-                      </text>
-                    )}
+                    {on && it.caption && <Chip x={b.x0 - pad} y={b.y1 + pad + 6 * u} u={u} color={c} text={it.caption} />}
                   </g>
                 );
               })}

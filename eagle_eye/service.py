@@ -120,7 +120,12 @@ def thumbnail(path, width):
     return out
 
 
-def verdict(c, n_items):
+def verdict(c, n_items, warnings=None):
+    weak = next((w for w in warnings or [] if w["code"] == "weak_registration"), None)
+    if weak:
+        return dict(label="REVIEW", headline="REVIEW · photo does not match the drawing",
+                    detail="Too few labels and ferrules could be matched to the GA drawing, so EAGLE EYE refuses to call "
+                           "anything FAIL. Check the photo shows this cabinet's whole backplate, then re-photo.")
     if c["FAIL"]:
         return dict(label="HOLD", headline=f"HOLD · {c['FAIL']} fault{'s' if c['FAIL'] != 1 else ''} to fix before shipping",
                     detail="Every FAIL is boxed on the photo with expected-vs-found proof."
@@ -136,6 +141,14 @@ def verdict(c, n_items):
 # ------------------------------------------------------------------ inputs
 def default_inputs():
     return dict(ga=config.DEMO_GA, wires=config.DEMO_WIRES, checklist=config.DEMO_CHECKLIST)
+
+
+def input_path(rid, meta, key):
+    """Where a run's input file lives now (robust to the project folder being moved or copied)."""
+    ref = meta["inputs"][key]
+    if ref["demo"]:
+        return default_inputs()[key]
+    return run_dir(rid) / "inputs" / Path(ref["path"]).name
 
 
 def resolve_inputs(d, ga=None, wires=None, checklist=None, names=None):
@@ -176,13 +189,15 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
         prev_meta = get_meta(parent)
         prev_rep = read_json(run_dir(parent) / FILES["json"])
         if not (ga or wires or checklist):     # a re-check reuses the drawing set of the run it re-checks
-            ga, wires, checklist = (None if prev_meta["inputs"][k]["demo"] else prev_meta["inputs"][k]["path"]
+            ga, wires, checklist = (None if prev_meta["inputs"][k]["demo"] else input_path(parent, prev_meta, k)
                                     for k in ("ga", "wires", "checklist"))
             input_names = {k: prev_meta["inputs"][k]["name"] for k in ("ga", "wires", "checklist")}
     inputs = resolve_inputs(d, ga, wires, checklist, input_names)
     photo_path = prepare_photo(photo, d)
 
     rep, ctx = inspect(str(photo_path), inputs["ga"]["path"], inputs["wires"]["path"], enabled=enabled, on_event=emit)
+    if rep.get("orientation"):            # keep the stored photo in the orientation the engine used
+        Image.fromarray(ctx.photo).save(photo_path, quality=95)
     rep["photo"] = photo_path.name
 
     t = datetime.datetime.now(); emit(dict(stage="report", status="start", t=rep["timing"]["total"]))
@@ -201,7 +216,7 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
     meta = dict(id=rid, created=created, label=label or (f"Re-check v{version}" if prev_meta else "Inspection"),
                 source=source, photo_name=photo_name or Path(photo).name, photo=photo_path.name, inputs=inputs,
                 enabled=enabled, cabinet=rep["ga"]["cabinet"], counts=c, items=len(rep["results"]),
-                verdict=verdict(c, len(rep["results"])), timing=rep["timing"],
+                verdict=verdict(c, len(rep["results"]), rep.get("warnings")), timing=rep["timing"], warnings=rep.get("warnings", []),
                 registration={k: rep["registration"][k] for k in ("anchors", "inliers", "outliers", "refined", "targets")},
                 issues=[dict(id=r["id"], result=r["result"], found=r["found"], marker=r.get("marker"),
                              recheck=r.get("recheck")) for r in rep["results"] if r.get("marker")],
@@ -297,7 +312,7 @@ def item_crop(rid, item_id, kind, rep=None, meta=None):
     out.parent.mkdir(exist_ok=True)
     color = rp.COL.get(r.get("recheck") or r["result"], rp.COL["FAIL"])
     if kind == "expected":
-        png, s = ga_raster(meta["inputs"]["ga"]["path"])
+        png, s = ga_raster(input_path(rid, meta, "ga"))
         rp.expected_crop(Image.open(png), s, r["box"]).save(out)
     elif kind == "found":
         rp.found_crop(Image.open(d / meta["photo"]), rep["H"], r["box"], color).save(out, quality=90)

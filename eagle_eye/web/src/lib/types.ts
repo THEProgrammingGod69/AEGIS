@@ -104,6 +104,7 @@ export interface RunMeta {
   recheck: RecheckCounts | null;
   forge?: { seed: number; strength: number; faults: ForgeFault[]; score: ForgeScore };
   engine: string;
+  warnings?: { code: string; message: string }[];
 }
 
 export interface AnchorPoint {

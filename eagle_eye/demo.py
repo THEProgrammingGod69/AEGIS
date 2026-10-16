@@ -7,6 +7,8 @@ from report import *
 
 os.chdir(config.BASE)
 IN = "inputs"; OUT = "out/demo"; os.makedirs(OUT, exist_ok=True)
+if os.path.exists(f"{OUT}/history.json"):
+    os.remove(f"{OUT}/history.json")                      # each demo run starts a fresh issue history
 GA, WL, CL = f"{IN}/GA_EE-DEMO-01.pdf", f"{IN}/WireList_EE-DEMO-01.xlsx", f"{IN}/QC_Checklist_EE-DEMO-01.xlsx"
 
 faults = [dict(type="missing_component", tag="PS12"), dict(type="swap_breakers", a="CB43", b="CB44"),

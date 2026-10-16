@@ -36,9 +36,12 @@ export function derive(all: JobEvent[], enabled: string[], withRecheck: boolean)
     detail: pd ? `${pd.cabinet} · ${pd.devices} devices · ${pd.terminals} terminals · ${pd.rails} rail · ${pd.wires} wires` : undefined });
 
   const rd = find("register", "done");
+  const retry = find("register", "retry");
   const outl = (rd?.outliers as string[] | undefined) ?? [];
   out.push({ key: "register", status: st("register"), t: rd?.t,
-    detail: rd ? `${rd.anchors} anchors locked · ${rd.inliers} RANSAC inliers${outl.length ? ` · off-pattern: ${outl.join(", ")}` : ""}` : undefined });
+    detail: rd
+      ? `${rd.anchors} anchors locked · ${rd.inliers} RANSAC inliers${outl.length ? ` · off-pattern: ${outl.join(", ")}` : ""}${rd.rotated ? ` · photo rotated ${rd.rotated}°` : ""}`
+      : retry ? `Only ${retry.anchors} anchors matched; trying other photo orientations…` : undefined });
 
   const checks = enabled.map((name) => {
     const d = find("check", "done", (e) => e.check === name);

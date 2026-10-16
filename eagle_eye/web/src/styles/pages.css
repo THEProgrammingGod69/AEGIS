@@ -711,19 +711,16 @@
   pointer-events: none;
 }
 
+.svg-chip {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  pointer-events: none;
+}
+
 .svg-marker {
   fill: #fff;
   font-family: var(--font-mono);
   font-weight: 700;
-  pointer-events: none;
-}
-
-.svg-caption {
-  font-family: var(--font-mono);
-  font-weight: 650;
-  paint-order: stroke;
-  stroke: rgba(5, 7, 11, 0.92);
-  stroke-linejoin: round;
   pointer-events: none;
 }
 
@@ -1519,6 +1516,39 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(104px, 1fr));
   gap: 10px;
+}
+
+.callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 16px;
+  margin: -6px 0 18px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.callout svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.callout.warn {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.callout.warn svg {
+  color: var(--review);
+}
+
+.callout.info svg {
+  color: var(--accent);
 }
 
 .workbench {

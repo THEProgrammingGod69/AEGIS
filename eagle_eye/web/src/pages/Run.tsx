@@ -278,8 +278,8 @@ export function Run({ id }: { id: string }) {
     setMode("photo");
   }, [id]);
   useEffect(() => {
-    if (p && !selected) setSelected((issues[0] ?? p.results[0]).id);
-  }, [p, issues, selected]);
+    if (p && p.meta.id === id && !selected) setSelected((issues[0] ?? p.results[0]).id);
+  }, [p, id, issues, selected]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -308,7 +308,7 @@ export function Run({ id }: { id: string }) {
   };
 
   if (error) return <div className="main"><div className="card pad empty">Could not load run: {error}<button className="btn" onClick={() => go("history")}>Open history</button></div></div>;
-  if (!p) return <div className="main"><div className="skeleton" style={{ height: 160, marginBottom: 18 }} /><div className="skeleton" style={{ height: 700 }} /></div>;
+  if (!p || p.meta.id !== id) return <div className="main"><div className="skeleton" style={{ height: 160, marginBottom: 18 }} /><div className="skeleton" style={{ height: 700 }} /></div>;
   if (job) return <div className="main"><Running job={job} photo={jobPhoto} enabled={p.meta.enabled} title={`Re-check of ${p.meta.label}`} /></div>;
 
   const sel = p.results.find((r) => r.id === selected) ?? null;
@@ -348,6 +348,12 @@ export function Run({ id }: { id: string }) {
       </div>
 
       <VerdictBanner p={p} />
+      {(p.meta.warnings ?? []).map((w) => (
+        <div key={w.code} className={`callout ${w.code === "weak_registration" ? "warn" : "info"}`}>
+          {w.code === "weak_registration" ? <ShieldQuestion /> : <RefreshCcw />}
+          <span>{w.message}</span>
+        </div>
+      ))}
 
       <div className="workbench">
         <div className="card viewer-card">
