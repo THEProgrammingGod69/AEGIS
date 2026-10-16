@@ -1,22 +1,35 @@
 """Report generation: marked-up photo, zoomed snippets (expected vs found), filled Excel checklist,
-PDF report, and re-check (before vs after) with issue history."""
-import json, datetime, os
-import numpy as np, cv2, pymupdf
-from PIL import Image, ImageDraw, ImageFont
+GA overlay for the rectified view, and re-check (before vs after) with issue history.
+The PDF report lives in ``pdf_report.py``."""
+import datetime
+import json
+import os
+import re
+
+import cv2
+import numpy as np
+import pymupdf
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from PIL import Image, ImageDraw, ImageFont
+
+import config
 from inspector import R
 
-F = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-COL = {"FAIL": (220, 38, 38), "REVIEW": (245, 158, 11), "PASS": (22, 163, 74), "SKIP": (120, 120, 120),
-       "CLOSED": (22, 163, 74), "OPEN": (220, 38, 38), "REGRESSION": (147, 51, 234)}
+F = config.font("DejaVuSans-Bold.ttf")
+FR = config.font("DejaVuSans.ttf")
+COL = {"FAIL": (225, 29, 72), "REVIEW": (245, 158, 11), "PASS": (16, 185, 129), "SKIP": (120, 120, 130),
+       "CLOSED": (16, 185, 129), "OPEN": (225, 29, 72), "REGRESSION": (147, 51, 234), "NEW": (234, 88, 12)}
+ISSUE = ("FAIL", "REVIEW", "CLOSED", "OPEN", "REGRESSION", "NEW")
+DRAWING_BLUE = (31, 79, 168)
+
 
 def to_photo(box, H):
+    """Drawing box (mm) -> 4 corner points in photo pixels."""
     x, y, w, h = box
     pts = np.float32([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]) * R
-    p = cv2.perspectiveTransform(pts[None], np.linalg.inv(np.array(H)))[0]
-    return p
+    return cv2.perspectiveTransform(pts[None], np.linalg.inv(np.array(H)))[0]
+
 
 def numbered(results):
     k = 0
@@ -25,34 +38,107 @@ def numbered(results):
             k += 1; r["marker"] = k
     return results
 
+
+def status_of(r, status_key="result"):
+    return r.get(status_key) or r["result"]
+
+
 def markup(photo_path, rep, out_path, status_key="result"):
-    im = Image.open(photo_path).convert("RGB"); d = ImageDraw.Draw(im)
-    f = ImageFont.truetype(F, 46)
+    """Box and number every issue on the photo (translucent fill, thick outline, numbered badge)."""
+    im = Image.open(photo_path).convert("RGB")
+    over = Image.new("RGBA", im.size, (0, 0, 0, 0)); d = ImageDraw.Draw(over)
+    f = ImageFont.truetype(F, 46); fs = ImageFont.truetype(F, 26)
     for r in rep["results"]:
-        st = r.get(status_key, r["result"])
-        if st not in ("FAIL", "REVIEW", "CLOSED", "OPEN", "REGRESSION") or "marker" not in r:
+        st = status_of(r, status_key)
+        if st not in ISSUE or "marker" not in r or r.get("marker") is None:
             continue
         p = to_photo(r["box"], rep["H"]); c = COL[st]
         pad = 10
         x0, y0 = p[:, 0].min() - pad, p[:, 1].min() - pad
         x1, y1 = p[:, 0].max() + pad, p[:, 1].max() + pad
-        d.rectangle([x0, y0, x1, y1], outline=c, width=9)
+        d.rectangle([x0, y0, x1, y1], fill=c + (46,), outline=c + (255,), width=9)
+        cap = f"{st} · {r['id']}"
+        tw = d.textlength(cap, font=fs)
+        ty = y1 + 8 if y1 + 50 < im.height else y0 - 46
+        d.rounded_rectangle([x0, ty, x0 + tw + 24, ty + 38], radius=10, fill=(10, 14, 20, 225))
+        d.text((x0 + 12, ty + 5), cap, fill=c + (255,), font=fs)
         cx, cy = x1 + 4, y0 - 34
-        d.ellipse([cx - 34, cy - 34, cx + 34, cy + 34], fill=c, outline=(255, 255, 255), width=5)
-        t = str(r["marker"]); tw = d.textlength(t, font=f)
-        d.text((cx - tw / 2, cy - 28), t, fill=(255, 255, 255), font=f)
+        d.ellipse([cx - 36, cy - 36, cx + 36, cy + 36], fill=c + (255,), outline=(255, 255, 255, 255), width=5)
+        t = str(r["marker"]); w_ = d.textlength(t, font=f)
+        d.text((cx - w_ / 2, cy - 28), t, fill=(255, 255, 255, 255), font=f)
+    im = Image.alpha_composite(im.convert("RGBA"), over).convert("RGB")
     im.save(out_path, quality=90)
     return out_path
 
-def snippet(photo_path, rep, r, ga_png, ga_scale, out_path):
-    """Found (zoomed photo crop) next to Expected (crop of the GA drawing)."""
-    ph = Image.open(photo_path).convert("RGB")
-    p = to_photo(r["box"], rep["H"]); m = 60
-    found = ph.crop((int(p[:, 0].min() - m), int(p[:, 1].min() - m), int(p[:, 0].max() + m), int(p[:, 1].max() + m)))
-    ga = Image.open(ga_png).convert("RGB")
-    x, y, w, h = r["box"]; s = ga_scale
-    exp = ga.crop((int(s["ox"] + (x - 15) * s["k"]), int(s["oy"] + (y - 15) * s["k"]),
-                   int(s["ox"] + (x + w + 15) * s["k"]), int(s["oy"] + (y + h + 15) * s["k"])))
+
+# ------------------------------------------------------------------ drawing rasters and crops
+def ga_png(ga_pdf, out_png, dpi=150):
+    """Rasterise page 1 of the GA; returns the mm->px mapping of the backplate (ox, oy, k px/mm)."""
+    with pymupdf.open(ga_pdf) as doc:
+        page = doc[0]
+        page.get_pixmap(dpi=dpi).save(out_png)
+        rects = [pymupdf.Rect(it[1]) for dr in page.get_drawings() for it in dr["items"] if it[0] == "re"]
+        m = re.search(r"BACKPLATE\s+(\d+)\s*x\s*(\d+)\s*mm", page.get_text())
+    bp = max(rects, key=lambda r: r.width * r.height)
+    z = dpi / 72
+    width_mm = int(m.group(1)) if m else 600
+    return dict(ox=bp.x0 * z, oy=bp.y0 * z, k=bp.width * z / width_mm)
+
+
+def ga_overlay(ga_pdf, size_mm, out_png, px_per_mm=2, rgb=(56, 189, 248)):
+    """Transparent PNG of the drawing linework, cropped to the backplate, aligned to the rectified photo."""
+    tmp = out_png + ".tmp.png"
+    s = ga_png(ga_pdf, tmp, dpi=220)
+    g = Image.open(tmp).convert("L"); os.remove(tmp)
+    W, H = size_mm
+    box = (int(round(s["ox"])), int(round(s["oy"])), int(round(s["ox"] + W * s["k"])), int(round(s["oy"] + H * s["k"])))
+    g = g.crop(box).resize((W * px_per_mm, H * px_per_mm), Image.LANCZOS)
+    a = 255 - np.asarray(g, np.float32)
+    a = np.clip(a * 1.6, 0, 255).astype(np.uint8)
+    out = np.zeros((a.shape[0], a.shape[1], 4), np.uint8); out[..., :3] = rgb; out[..., 3] = a
+    Image.fromarray(out, "RGBA").save(out_png, optimize=True)
+    return out_png
+
+
+def _outline(img, pts, color, width):
+    d = ImageDraw.Draw(img)
+    d.polygon([tuple(map(float, p)) for p in pts], outline=color, width=width)
+    return img
+
+
+def expected_crop(ga_img, s, box, margin=15, color=(14, 165, 233)):
+    """Crop of the GA drawing around an item (the drawing is the ground truth)."""
+    x, y, w, h = box
+    X0, Y0 = s["ox"] + (x - margin) * s["k"], s["oy"] + (y - margin) * s["k"]
+    X1, Y1 = s["ox"] + (x + w + margin) * s["k"], s["oy"] + (y + h + margin) * s["k"]
+    c = ga_img.crop((int(X0), int(Y0), int(X1), int(Y1))).convert("RGB")
+    k = s["k"]
+    pts = [(margin * k, margin * k), ((margin + w) * k, margin * k), ((margin + w) * k, (margin + h) * k), (margin * k, (margin + h) * k)]
+    return _outline(c, pts, color, max(2, int(k * 0.6)))
+
+
+def found_crop(photo_img, H, box, color, margin=60):
+    """Zoomed crop of the photo around where the drawing says the item is."""
+    p = to_photo(box, H)
+    x0, y0 = int(p[:, 0].min() - margin), int(p[:, 1].min() - margin)
+    x1, y1 = int(p[:, 0].max() + margin), int(p[:, 1].max() + margin)
+    c = photo_img.crop((x0, y0, x1, y1)).convert("RGB")
+    return _outline(c, p - np.float32([x0, y0]), color, 5)
+
+
+def aligned_crop(rect_img, box, color, margin=15):
+    """Same window as ``expected_crop`` but from the perspective-corrected photo (pixel-aligned with the drawing)."""
+    x, y, w, h = box
+    c = rect_img.crop((int((x - margin) * R), int((y - margin) * R), int((x + w + margin) * R), int((y + h + margin) * R))).convert("RGB")
+    pts = [(margin * R, margin * R), ((margin + w) * R, margin * R), ((margin + w) * R, (margin + h) * R), (margin * R, (margin + h) * R)]
+    return _outline(c, pts, color, 4)
+
+
+def snippet(photo_path, rep, r, ga_png_path, ga_scale, out_path):
+    """Expected (crop of the GA drawing) next to Found (zoomed photo crop), on one canvas."""
+    st = status_of(r, "recheck") if r.get("recheck") else r["result"]
+    found = found_crop(Image.open(photo_path), rep["H"], r["box"], COL.get(st, COL["FAIL"]))
+    exp = expected_crop(Image.open(ga_png_path), ga_scale, r["box"])
     Ht = 300
     found = found.resize((max(1, int(found.width * Ht / found.height)), Ht))
     exp = exp.resize((max(1, int(exp.width * Ht / exp.height)), Ht))
@@ -60,47 +146,104 @@ def snippet(photo_path, rep, r, ga_png, ga_scale, out_path):
     canvas = Image.new("RGB", (W_, Ht + 64), (255, 255, 255)); dd = ImageDraw.Draw(canvas)
     fnt = ImageFont.truetype(F, 22)
     canvas.paste(exp, (0, 50)); canvas.paste(found, (exp.width + 30, 50))
-    dd.text((4, 14), "EXPECTED (GA)", fill=(31, 79, 168), font=fnt)
-    dd.text((exp.width + 34, 14), "FOUND (photo)", fill=COL[r["result"]], font=fnt)
+    dd.text((4, 14), "EXPECTED (GA)", fill=DRAWING_BLUE, font=fnt)
+    dd.text((exp.width + 34, 14), "FOUND (photo)", fill=COL.get(st, COL["FAIL"]), font=fnt)
     canvas.save(out_path)
     return out_path
 
-def ga_png(ga_pdf, out_png, dpi=150):
-    page = pymupdf.open(ga_pdf)[0]
-    page.get_pixmap(dpi=dpi).save(out_png)
-    rects = [pymupdf.Rect(it[1]) for dr in page.get_drawings() for it in dr["items"] if it[0] == "re"]
-    bp = max(rects, key=lambda r: r.width * r.height)
-    z = dpi / 72
-    return dict(ox=bp.x0 * z, oy=bp.y0 * z, k=bp.width * z / 600)
 
-def fill_checklist(template_xlsx, rep, out_xlsx):
+# ------------------------------------------------------------------ Excel checklist
+def fill_checklist(template_xlsx, rep, out_xlsx, meta=None):
+    """Fill Emerson's QC checklist template in place (Expected / Found / Result / Evidence) and add a summary sheet."""
     wb = load_workbook(template_xlsx); ws = wb.active
     by = {r["id"]: r for r in rep["results"]}
-    fills = {"PASS": "DCFCE7", "FAIL": "FECACA", "REVIEW": "FEF3C7", "SKIP": "E5E7EB"}
+    fills = {"PASS": "DCFCE7", "FAIL": "FECACA", "REVIEW": "FEF3C7", "SKIP": "E5E7EB",
+             "CLOSED": "DCFCE7", "OPEN": "FECACA", "REGRESSION": "E9D5FF", "NEW": "FFEDD5"}
+    is_recheck = any(r.get("recheck") for r in rep["results"]) or bool(meta and meta.get("parent"))
+    thin = Side(style="thin", color="D1D5DB")
+    if is_recheck:
+        ws.cell(row=1, column=8, value="Re-check")
     for row in ws.iter_rows(min_row=2):
         r = by.get(row[0].value)
         if not r:
             continue
         row[3].value = r["expected"]; row[4].value = r["found"]; row[5].value = r["result"]
-        row[6].value = (f"Marker #{r['marker']} | " if "marker" in r else "") + "; ".join(map(str, r["evidence"]))[:200]
+        row[6].value = (f"Marker #{r['marker']} | " if r.get("marker") else "") + "; ".join(map(str, r["evidence"]))[:200]
         row[5].fill = PatternFill("solid", fgColor=fills[r["result"]]); row[5].font = Font(bold=True)
-    for c, wdt in zip("ABCDEFG", [16, 10, 34, 22, 34, 10, 60]):
+        row[5].alignment = Alignment(horizontal="center")
+        if is_recheck and r.get("recheck"):
+            c = ws.cell(row=row[0].row, column=8, value=r["recheck"])
+            c.fill = PatternFill("solid", fgColor=fills[r["recheck"]]); c.font = Font(bold=True)
+            c.alignment = Alignment(horizontal="center")
+        for c in row:
+            c.border = Border(bottom=thin)
+    for c, wdt in zip("ABCDEFGH", [16, 10, 34, 22, 34, 10, 60, 13]):
         ws.column_dimensions[c].width = wdt
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF"); c.fill = PatternFill("solid", fgColor="0F2742")
-    wb.save(out_xlsx)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
 
+    s = wb.create_sheet("Summary", 0)
+    k = {x: sum(r["result"] == x for r in rep["results"]) for x in ("PASS", "FAIL", "REVIEW", "SKIP")}
+    verdict = (meta or {}).get("verdict", {}).get("label") or ("HOLD" if k["FAIL"] else "REVIEW" if k["REVIEW"] else "PASS")
+    rows = [("EAGLE EYE · Cabinet QC", ""), ("", ""),
+            ("Cabinet", rep.get("ga", {}).get("cabinet", "")),
+            ("Photo", os.path.basename((meta or {}).get("photo_name") or rep["photo"])),
+            ("Inspected", (meta or {}).get("created", datetime.datetime.now().isoformat(timespec="seconds"))),
+            ("Verdict", verdict), ("", ""),
+            ("PASS", k["PASS"]), ("FAIL", k["FAIL"]), ("REVIEW", k["REVIEW"]), ("SKIP (root cause elsewhere)", k["SKIP"]),
+            ("Items checked", len(rep["results"]))]
+    rc = (meta or {}).get("recheck")
+    if rc:
+        rows += [("", ""), ("Re-check of run", (meta or {}).get("parent", ""))] + [(x, rc.get(x, 0)) for x in ("CLOSED", "OPEN", "REGRESSION", "NEW")]
+    for r_ in rows:
+        s.append(list(r_))
+    s["A1"].font = Font(bold=True, size=16, color="0F2742")
+    for row in s.iter_rows(min_row=3):
+        row[0].font = Font(bold=True, color="374151")
+        if row[0].value in fills:
+            row[1].fill = PatternFill("solid", fgColor=fills[row[0].value]); row[1].font = Font(bold=True)
+    vc = s["B6"]; vc.font = Font(bold=True, size=13, color="FFFFFF")
+    vc.fill = PatternFill("solid", fgColor={"HOLD": "E11D48", "REVIEW": "D97706"}.get(verdict, "059669"))
+    s.column_dimensions["A"].width = 30; s.column_dimensions["B"].width = 40
+    wb.active = 1
+    wb.save(out_xlsx)
+    return out_xlsx
+
+
+# ------------------------------------------------------------------ re-check and history
 def recheck(prev, new):
-    """Close fixed items, keep open ones, flag regressions (was PASS, now FAIL)."""
+    """Compare a new inspection with the previous one.
+
+    CLOSED     was FAIL/REVIEW, now PASS (fixed)
+    OPEN       was FAIL/REVIEW, still not PASS
+    REGRESSION was PASS, now FAIL (the fix broke something)
+    NEW        newly flagged (e.g. a label that was SKIPped while its part was missing)
+    Items keep the marker number they had in the previous report; new issues get the next numbers.
+    """
     pb = {r["id"]: r for r in prev["results"]}
+    nxt = max([r.get("marker") or 0 for r in prev["results"]] + [0])
     for r in new["results"]:
+        r.pop("marker", None)
         p = pb.get(r["id"])
         if p and p["result"] in ("FAIL", "REVIEW"):
             r["recheck"] = "CLOSED" if r["result"] == "PASS" else "OPEN"
-            r["marker"] = p.get("marker")
-        elif p and p["result"] == "PASS" and r["result"] == "FAIL":
-            r["recheck"] = "REGRESSION"
+            if p.get("marker"):
+                r["marker"] = p["marker"]
+            else:
+                nxt += 1; r["marker"] = nxt
+        elif r["result"] in ("FAIL", "REVIEW"):
+            r["recheck"] = "REGRESSION" if (p and p["result"] == "PASS" and r["result"] == "FAIL") else "NEW"
+            nxt += 1; r["marker"] = nxt
+        else:
+            continue
+        if p:
+            r["prev_result"], r["prev_found"] = p["result"], p["found"]
+    new["recheck"] = {k: sum(r.get("recheck") == k for r in new["results"]) for k in ("CLOSED", "OPEN", "REGRESSION", "NEW")}
     return new
+
 
 def history_append(path, rep, label):
     h = json.load(open(path)) if os.path.exists(path) else []

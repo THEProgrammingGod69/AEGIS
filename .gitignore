@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# EAGLE EYE runtime data (regenerated on use)
+eagle_eye/out/runs/
+eagle_eye/out/cache/
+eagle_eye/out/forge/*.jpg
+eagle_eye/out/ui_*
+eagle_eye/out/demo_photo.jpg
+
+# Web console (web/dist is committed so no Node.js is needed to run the app)
+eagle_eye/web/node_modules/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+*.log

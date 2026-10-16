@@ -1,10 +1,11 @@
 """End-to-end demo: inspect -> report -> technician fixes -> re-photo -> re-check."""
 import json, os
-from PIL import Image, ImageDraw, ImageFont
+import config
 from render import render
 from inspector import inspect
 from report import *
 
+os.chdir(config.BASE)
 IN = "inputs"; OUT = "out/demo"; os.makedirs(OUT, exist_ok=True)
 GA, WL, CL = f"{IN}/GA_EE-DEMO-01.pdf", f"{IN}/WireList_EE-DEMO-01.xlsx", f"{IN}/QC_Checklist_EE-DEMO-01.xlsx"
 

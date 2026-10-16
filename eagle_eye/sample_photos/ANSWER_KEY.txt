@@ -1,0 +1,38 @@
+EAGLE EYE sample photos: planted faults (answer key)
+====================================================
+
+01_emerson_example_4_faults.jpg
+  planted : [{"type": "missing_component", "tag": "PS12"}, {"type": "swap_breakers", "a": "CB43", "b": "CB44"}, {"type": "missing_label", "tag": "1CBP03"}, {"type": "missing_ferrule", "n": 3}]
+  expect  : 4 FAIL, 1 SKIP, 36 PASS: PS12 missing, CB43 ↔ CB44 swapped, 1CBP03 no label, X3:3 no ferrule
+  engine  : {'PASS': 36, 'FAIL': 4, 'REVIEW': 0, 'SKIP': 1}
+            FAIL   GA-PS12      Missing
+            FAIL   ORD-RAIL-1   CB43 <-> CB44 swapped
+            SKIP   LBL-PS12     —
+            FAIL   LBL-1CBP03   No label
+            FAIL   FER-X3:3     No ferrule
+
+02_clean_cabinet_no_faults.jpg
+  planted : none
+  expect  : All 41 PASS, no false alarms
+  engine  : {'PASS': 41, 'FAIL': 0, 'REVIEW': 0, 'SKIP': 0}
+
+03_wrong_ferrule_and_colour.jpg
+  planted : [{"type": "wrong_ferrule", "n": 5, "text": "X3-6/PS11-"}, {"type": "wrong_colour", "n": 7, "colour": "BK"}]
+  expect  : X3:5 wrong ferrule (reads X3-6/PS11-), X3:7 black wire instead of blue
+  engine  : {'PASS': 39, 'FAIL': 2, 'REVIEW': 0, 'SKIP': 0}
+            FAIL   FER-X3:5     Wrong ferrule: X3-6/PS11-
+            FAIL   COL-X3:7     BK
+
+04_wrong_label_and_missing_breaker.jpg
+  planted : [{"type": "wrong_label", "tag": "PS11", "text": "PS17"}, {"type": "missing_component", "tag": "CB42"}]
+  expect  : PS11 label reads PS17; CB42 missing (its label check is skipped)
+  engine  : {'PASS': 38, 'FAIL': 2, 'REVIEW': 0, 'SKIP': 1}
+            FAIL   GA-CB42      Missing
+            FAIL   LBL-PS11     Wrong label: reads 'PS17'
+            SKIP   LBL-CB42     —
+
+05_after_fix_one_left_open.jpg
+  planted : [{"type": "missing_ferrule", "n": 3}]
+  expect  : Re-check of #01: 3 CLOSED, 1 OPEN (X3:3 ferrule still missing)
+  engine  : {'PASS': 40, 'FAIL': 1, 'REVIEW': 0, 'SKIP': 0}
+            FAIL   FER-X3:3     No ferrule

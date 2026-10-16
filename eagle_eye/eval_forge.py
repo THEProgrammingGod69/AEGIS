@@ -1,26 +1,21 @@
 """FAULT FORGE self-test: random cabinets, random planted faults, random camera conditions."""
-import json, os, sys, numpy as np
+import json, os, sys, time, numpy as np
 from multiprocessing import Pool
-from render import render, random_faults
+from render import render, random_faults, expected_item as expected_items
 from inspector import inspect
-GA, WL = "inputs/GA_EE-DEMO-01.pdf", "inputs/WireList_EE-DEMO-01.xlsx"
-os.makedirs("out/forge", exist_ok=True)
-
-def expected_items(f):
-    t = f["type"]
-    if t == "missing_component": return f"GA-{f['tag']}"
-    if t == "swap_breakers": return "ORD-RAIL-1"
-    if t in ("missing_label", "wrong_label"): return f"LBL-{f['tag']}"
-    if t in ("missing_ferrule", "wrong_ferrule"): return f"FER-X3:{f['n']}"
-    if t == "wrong_colour": return f"COL-X3:{f['n']}"
+import config
+GA, WL = str(config.DEMO_GA), str(config.DEMO_WIRES)
+FORGE = config.OUT / "forge"; FORGE.mkdir(parents=True, exist_ok=True)
 
 def one(i):
     rng = np.random.default_rng(1000 + i)
     faults = random_faults(rng) if i % 5 else []          # every 5th cabinet is fault-free
     strength = float(rng.uniform(0.8, 1.4))
     p, _ = render(faults, seed=5000 + i, strength=strength)
-    path = f"out/forge/cab_{i:03d}.jpg"; p.save(path, quality=90)
+    path = str(FORGE / f"cab_{i:03d}.jpg"); p.save(path, quality=90)
+    t = time.perf_counter()
     rep, _ = inspect(path, GA, WL)
+    sec = time.perf_counter() - t
     res = {r["id"]: r["result"] for r in rep["results"]}
     exp = {expected_items(f): f["type"] for f in faults}
     caught = {k: res.get(k) == "FAIL" for k in exp}
@@ -28,28 +23,37 @@ def one(i):
     rv = [k for k, v in res.items() if v == "REVIEW" and k not in exp]
     return dict(i=i, strength=strength, faults=faults, caught=caught, false_alarms=fa, reviews=rv,
                 n_items=len(res), n_skip=sum(v == "SKIP" for v in res.values()), anchors=rep["registration"]["anchors"],
-                found={k: res.get(k) for k in exp})
+                found={k: res.get(k) for k in exp}, sec=round(sec, 2))
 
-if __name__ == "__main__":
-    N = int(sys.argv[1]) if len(sys.argv) > 1 else 40
-    S = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    with Pool(2) as pool:
-        out = []
-        for r in pool.imap_unordered(one, range(S, S + N)):
-            out.append(r); print(r["i"], "faults", len(r["faults"]), "caught", sum(r["caught"].values()), "FA", r["false_alarms"], "RV", r["reviews"], flush=True)
-    json.dump(out, open("out/forge/results.json", "w"), indent=1)
+def summarize(out):
     nf = sum(len(r["caught"]) for r in out); nc = sum(sum(r["caught"].values()) for r in out)
     correct_items = sum(r["n_items"] - r["n_skip"] - len(r["caught"]) for r in out)
     fa = sum(len(r["false_alarms"]) for r in out); rv = sum(len(r["reviews"]) for r in out)
     by = {}
     for r in out:
         for f in r["faults"]:
-            k = f["type"]; e = by.setdefault(k, [0, 0]); e[1] += 1
-            from eval_forge import expected_items as ei
-            e[0] += r["caught"][ei(f)]
-    summary = dict(cabinets=N, planted=nf, caught=nc, recall=nc / max(nf, 1), correct_items=correct_items,
-                   false_alarms=fa, false_alarm_rate=fa / correct_items, reviews=rv, review_rate=rv / correct_items,
-                   per_type=by, clean_cabinets_zero_fail=sum(1 for r in out if not r["faults"] and not r["false_alarms"]),
-                   clean_cabinets=sum(1 for r in out if not r["faults"]))
-    json.dump(summary, open("out/forge/summary.json", "w"), indent=1)
+            e = by.setdefault(f["type"], [0, 0]); e[1] += 1
+            e[0] += r["caught"][expected_items(f)]
+    secs = [r["sec"] for r in out if r.get("sec")]
+    return dict(cabinets=len(out), planted=nf, caught=nc, recall=nc / max(nf, 1), correct_items=correct_items,
+                false_alarms=fa, false_alarm_rate=fa / max(correct_items, 1), reviews=rv, review_rate=rv / max(correct_items, 1),
+                per_type=by, clean_cabinets_zero_fail=sum(1 for r in out if not r["faults"] and not r["false_alarms"]),
+                clean_cabinets=sum(1 for r in out if not r["faults"]),
+                sec_per_cabinet=round(sum(secs) / len(secs), 2) if secs else None, cpu_cores=os.cpu_count())
+
+if __name__ == "__main__":
+    if sys.argv[1:] == ["--summarize"]:          # recompute summary.json from a saved results.json
+        out = json.load(open(FORGE / "results.json"))
+    else:
+        N = int(sys.argv[1]) if len(sys.argv) > 1 else 40
+        S = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+        # inspect() already spreads OCR over every core, so one cabinet at a time is the fastest setting
+        with Pool(int(os.environ.get("FORGE_PROCS", 1))) as pool:
+            out = []
+            for r in pool.imap_unordered(one, range(S, S + N)):
+                out.append(r); print(r["i"], "faults", len(r["faults"]), "caught", sum(r["caught"].values()), "FA", r["false_alarms"], "RV", r["reviews"], flush=True)
+        out.sort(key=lambda r: r["i"])
+        json.dump(out, open(FORGE / "results.json", "w"), indent=1)
+    summary = summarize(out)
+    json.dump(summary, open(FORGE / "summary.json", "w"), indent=1)
     print(json.dumps(summary, indent=1))

@@ -7,10 +7,11 @@ import copy, random, io
 import numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from spec import base_layout, wire_list, label_box, ferrule_box, W, H
+import config
 
 PX = 4  # render px per mm
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_C = "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"
+FONT = config.font("DejaVuSans-Bold.ttf")             # bundled in assets/fonts -> identical renders on every OS
+FONT_C = config.font("DejaVuSansCondensed-Bold.ttf")
 WIRE_RGB = {"BN": (120, 66, 30), "BU": (30, 80, 190), "RD": (200, 30, 30), "BK": (25, 25, 25),
             "GNYE": None, "GY": (150, 150, 150), "VT": (130, 50, 160)}
 
@@ -209,6 +210,31 @@ def random_faults(rng, k=None):
         faults.append(f)
     return faults
 
+def expected_item(f):
+    """Checklist item that must FAIL for a planted fault (how Fault Forge scores the engine)."""
+    t = f["type"]
+    if t == "missing_component": return f"GA-{f['tag']}"
+    if t == "swap_breakers": return "ORD-RAIL-1"
+    if t in ("missing_label", "wrong_label"): return f"LBL-{f['tag']}"
+    if t in ("missing_ferrule", "wrong_ferrule"): return f"FER-X3:{f['n']}"
+    if t == "wrong_colour": return f"COL-X3:{f['n']}"
+
+COLOUR_NAME = {"BN": "brown", "BU": "blue", "RD": "red", "BK": "black", "GNYE": "green-yellow", "GY": "grey", "VT": "violet"}
+
+def describe_fault(f):
+    """Plain-English description of a planted fault."""
+    t = f["type"]
+    if t == "missing_component": return f"{f['tag']} not installed"
+    if t == "swap_breakers": return f"{f['a']} and {f['b']} swapped on the rail"
+    if t == "missing_label": return f"{f['tag']} has no device label"
+    if t == "wrong_label": return f"{f['tag']} labelled '{f['text']}'"
+    if t == "missing_ferrule": return f"No ferrule on the X3:{f['n']} wire"
+    if t == "wrong_ferrule": return f"X3:{f['n']} ferrule reads '{f['text']}'"
+    if t == "wrong_colour":
+        want = wire_list()[f["n"] - 1]["colour"]
+        return f"X3:{f['n']} wire is {COLOUR_NAME.get(f['colour'], f['colour'])} instead of {COLOUR_NAME.get(want, want)}"
+    return t
+
 def render(faults, seed=0, strength=1.0):
     rng = np.random.default_rng(seed)
     devs, terms, wires = apply_faults(faults)
@@ -218,7 +244,7 @@ def render(faults, seed=0, strength=1.0):
 
 if __name__ == "__main__":
     import os
-    os.makedirs("out", exist_ok=True)
+    os.chdir(config.BASE); os.makedirs("out", exist_ok=True)
     demo = [dict(type="missing_component", tag="PS12"), dict(type="swap_breakers", a="CB43", b="CB44"),
             dict(type="missing_label", tag="1CBP03"), dict(type="missing_ferrule", n=3)]
     p, bp = render(demo, seed=7)

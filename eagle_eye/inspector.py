@@ -1,34 +1,101 @@
-"""EAGLE EYE inspection engine (proof of concept).
+"""EAGLE EYE inspection engine.
 
 Drawing-first, closed-world verification:
   1. Parse the GA drawing PDF (vector) -> exact list of expected items + positions. No AI.
   2. Register the photo to the drawing: backplate quad (coarse) + device labels as fiducials (RANSAC refine).
   3. Run plug-in checks, each answering a narrow question about ONE expected item in ONE known region.
   4. Consensus: an item is FAIL only when evidence agrees; disagreement -> REVIEW (re-photo zone).
+
+Adding a check = one class decorated with ``@check("NAME")``; nothing else needs rewriting.
+OCR calls run in parallel (one single-threaded tesseract process per core), so a full inspection takes a
+few seconds on a laptop instead of ~20 s, with results identical to the sequential version.
 """
-import re, json, difflib
-import numpy as np, cv2, pymupdf
+import copy
+import difflib
+import os
+import re
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+import cv2
+import numpy as np
+import pymupdf
 import pytesseract
 from openpyxl import load_workbook
 
+import config
+
 R = 4  # rectified px per mm
 WL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/+:"
+
+_TESS = config.find_tesseract()
+if _TESS:
+    pytesseract.pytesseract.tesseract_cmd = _TESS
+
+# Two pools so per-item work (outer) can wait on OCR calls (inner) without ever deadlocking:
+# inner tasks never submit further work.
+_OCR = ThreadPoolExecutor(config.WORKERS, thread_name_prefix="ee-ocr")
+_ITEMS = ThreadPoolExecutor(config.WORKERS, thread_name_prefix="ee-item")
+
+
+class InspectionError(RuntimeError):
+    """A problem with the inputs that the user can fix (unreadable photo, wrong drawing format...)."""
+
+
+def pmap(fn, items):
+    """Order-preserving parallel map for independent per-item work."""
+    return list(_ITEMS.map(fn, items))
+
+
+def tesseract_info():
+    """Which tesseract binary is used and its version (for health checks and the UI status pill)."""
+    cmd = pytesseract.pytesseract.tesseract_cmd
+    try:
+        out = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=10)
+        ver = (out.stdout or out.stderr).splitlines()[0].strip()
+        return dict(ok=True, cmd=cmd, version=ver)
+    except Exception as e:  # noqa: BLE001 - surfaced to the UI as a setup hint
+        return dict(ok=False, cmd=cmd, version=None,
+                    error=f"Tesseract OCR not found ({e}). Install it or set TESSERACT_CMD.")
+
 
 # ------------------------------------------------------------------ 1. drawing parser
 TYPE_BY_PREFIX = [(r"^\d*CBP\d+", "baseplate"), (r"^CB\d+", "breaker"), (r"^PS\d+", "psu"),
                   (r"^D\d+", "controller"), (r"^PE$", "earth")]
 
+_GA_CACHE = {}
+
+
 def parse_ga(pdf_path):
-    page = pymupdf.open(pdf_path)[0]
-    rects = []
-    for d in page.get_drawings():
-        for it in d["items"]:
-            if it[0] == "re":
-                rects.append(pymupdf.Rect(it[1]))
-    words = page.get_text("words")
-    text = page.get_text()
+    """Vector GA drawing -> exact list of devices, terminals and rails (mm, origin top-left). Cached."""
+    st = os.stat(pdf_path)
+    key = (os.path.abspath(pdf_path), st.st_mtime_ns, st.st_size)
+    if key not in _GA_CACHE:
+        _GA_CACHE[key] = _parse_ga(pdf_path)
+    return copy.deepcopy(_GA_CACHE[key])
+
+
+def _parse_ga(pdf_path):
+    try:
+        doc = pymupdf.open(pdf_path)
+    except Exception as e:  # noqa: BLE001
+        raise InspectionError(f"Could not open the GA drawing PDF ({e}).") from e
+    with doc:
+        page = doc[0]
+        rects = []
+        for d in page.get_drawings():
+            for it in d["items"]:
+                if it[0] == "re":
+                    rects.append(pymupdf.Rect(it[1]))
+        words = page.get_text("words")
+        text = page.get_text()
+    if not rects:
+        raise InspectionError("The GA drawing has no vector outlines. EAGLE EYE needs a vector (CAD-exported) "
+                              "PDF; scanned drawings are not supported yet.")
     m = re.search(r"BACKPLATE\s+(\d+)\s*x\s*(\d+)\s*mm", text)
     Wmm, Hmm = (int(m.group(1)), int(m.group(2))) if m else (600, 800)
+    cab = re.search(r"CABINET\s+([A-Z0-9][A-Z0-9_.\-]*)", text)
     bp = max(rects, key=lambda r: r.width * r.height)
     k = Wmm / bp.width
     mm = lambda r: (round((r.x0 - bp.x0) * k, 1), round((r.y0 - bp.y0) * k, 1),
@@ -51,6 +118,9 @@ def parse_ga(pdf_path):
         lx, ly, lw, lh = mm(wr)
         devices.append(dict(tag=txt, type=typ, box=mm(enc[0]),
                             label_box=(lx - 2, ly - 2.5, lw + 4, lh + 5)))
+    if not devices:
+        raise InspectionError("No device tags (PS.., CB.., D.., ..CBP.., PE) were found inside the backplate "
+                              "outline of the GA drawing.")
     # group breakers sharing a rail (same top y) and sort left->right
     groups = {}
     for d in devices:
@@ -63,25 +133,42 @@ def parse_ga(pdf_path):
             d["group"] = f"RAIL-{i+1}"
         rails.append(dict(name=f"RAIL-{i+1}", tags=[d["tag"] for d in g]))
     terminals.sort(key=lambda t: t["n"])
-    return dict(size=(Wmm, Hmm), devices=devices, terminals=terminals, rails=rails)
+    return dict(size=(Wmm, Hmm), devices=devices, terminals=terminals, rails=rails,
+                cabinet=cab.group(1) if cab else os.path.splitext(os.path.basename(pdf_path))[0])
+
 
 def read_wire_list(path):
-    ws = load_workbook(path).active
-    rows = list(ws.iter_rows(values_only=True))
+    try:
+        ws = load_workbook(path, read_only=True, data_only=True).active
+        rows = list(ws.iter_rows(values_only=True))
+    except Exception as e:  # noqa: BLE001
+        raise InspectionError(f"Could not read the wire list workbook ({e}).") from e
+    if not rows:
+        raise InspectionError("The wire list is empty.")
     hdr = [str(h).lower() for h in rows[0]]
-    col = lambda key: next(i for i, h in enumerate(hdr) if key in h)
-    ti, fi, ci = col("terminal"), col("ferrule"), col("colour")
+
+    def col(*keys):
+        for key in keys:
+            for i, h in enumerate(hdr):
+                if key in h:
+                    return i
+        raise InspectionError(f"The wire list needs a column whose header contains '{keys[0]}' "
+                              f"(found headers: {', '.join(map(str, rows[0]))}).")
+    ti, fi, ci = col("terminal"), col("ferrule"), col("colour", "color")
     return [dict(terminal=r[ti], ferrule=r[fi], colour=r[ci]) for r in rows[1:] if r[ti]]
+
 
 def read_checklist(path):
     ws = load_workbook(path).active
     return [dict(id=r[0], check=r[1], desc=r[2]) for r in list(ws.iter_rows(values_only=True))[1:] if r[0]]
+
 
 # ------------------------------------------------------------------ 2. registration
 def order_quad(p):
     p = p.reshape(4, 2).astype(np.float32)
     s, d = p.sum(1), np.diff(p, axis=1).ravel()
     return np.float32([p[np.argmin(s)], p[np.argmin(d)], p[np.argmax(s)], p[np.argmax(d)]])
+
 
 def find_backplate(img):
     """Segment everything that is not the cabinet frame (colour sampled at the photo border)."""
@@ -91,7 +178,13 @@ def find_backplate(img):
     th = (np.linalg.norm(sm - bg, axis=2) > 45).astype(np.uint8) * 255
     th = cv2.morphologyEx(th, cv2.MORPH_CLOSE, np.ones((41, 41), np.uint8))
     cs, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cs:
+        raise InspectionError("Could not find the backplate in the photo. Shoot the whole backplate with some "
+                              "cabinet frame visible around it.")
     c = max(cs, key=cv2.contourArea)
+    if cv2.contourArea(c) < 0.15 * img.shape[0] * img.shape[1]:
+        raise InspectionError("The backplate covers too little of the photo. Step back so the whole backplate "
+                              "fills most of the frame.")
     hull = cv2.convexHull(c)
     for eps in np.linspace(0.005, 0.06, 24):
         ap = cv2.approxPolyDP(hull, eps * cv2.arcLength(hull, True), True)
@@ -99,9 +192,11 @@ def find_backplate(img):
             return order_quad(ap)
     return order_quad(cv2.boxPoints(cv2.minAreaRect(c)))
 
+
 def norm(s):
     s = (s or "").upper().strip()
     return re.sub(r"[^A-Z0-9]", "", s.replace("O", "0").replace("I", "1"))
+
 
 def ocr_words(img_gray, psm=11):
     d = pytesseract.image_to_data(img_gray, config=f"--psm {psm} -c tessedit_char_whitelist={WL}",
@@ -113,6 +208,11 @@ def ocr_words(img_gray, psm=11):
                             box=(d["left"][i], d["top"][i], d["width"][i], d["height"][i])))
     return out
 
+
+def _warp_pts(H, pts):
+    return cv2.perspectiveTransform(np.float32(pts).reshape(1, -1, 2), np.asarray(H, np.float64))[0]
+
+
 def register(photo, ga, wires=()):
     Wmm, Hmm = ga["size"]
     quad = find_backplate(photo)
@@ -120,40 +220,60 @@ def register(photo, ga, wires=()):
     Hc = cv2.getPerspectiveTransform(quad, dst)
     rect = cv2.warpPerspective(photo, Hc, (Wmm * R, Hmm * R), flags=cv2.INTER_CUBIC)
     # label fiducials: look for each tag near where the drawing says its label is (closed vocabulary)
-    gray = cv2.cvtColor(rect, cv2.COLOR_RGB2GRAY)
-    vocab = {norm(d["tag"]): d for d in ga["devices"]}
-    src, dstp, matched = [], [], []
-    targets = [dict(tag=d["tag"], label_box=d["label_box"]) for d in ga["devices"]]
+    targets = [dict(tag=d["tag"], label_box=d["label_box"], kind="label") for d in ga["devices"]]
     for t, w in zip(ga["terminals"], wires):   # ferrules are fiducials too (closed vocabulary from wire list)
         x, y, tw, th = t["box"]
-        targets.append(dict(tag=w["ferrule"], label_box=(x + tw + 4, y + th / 2 - 8, 66, 16)))
+        targets.append(dict(tag=w["ferrule"], label_box=(x + tw + 4, y + th / 2 - 8, 66, 16), kind="ferrule"))
     vocab = {norm(d["tag"]): d for d in targets}
-    for d in targets:
+    tags = [v["tag"] for v in vocab.values()]
+
+    def look(d):
         lx, ly, lw, lh = d["label_box"]; pad = 10
         x0, y0 = int(max(0, (lx - pad) * R)), int(max(0, (ly - pad) * R))
-        win = gray[y0:int((ly + lh + pad) * R), x0:int((lx + lw + pad) * R)]
-        win = rect[y0:int((ly + lh + pad) * R), x0:int((lx + lw + pad) * R)]; win = cv2.cvtColor(win, cv2.COLOR_RGB2GRAY)
-        best, agr, raw = vote(ocr_variants(cv2.cvtColor(win, cv2.COLOR_GRAY2RGB), fast=True), list(vocab.values()) and [v["tag"] for v in vocab.values()])
-        st = find_sticker(cv2.cvtColor(win, cv2.COLOR_GRAY2RGB))
+        win = rect[y0:int((ly + lh + pad) * R), x0:int((lx + lw + pad) * R)]
+        win = cv2.cvtColor(cv2.cvtColor(win, cv2.COLOR_RGB2GRAY), cv2.COLOR_GRAY2RGB)
+        best, agr, raw = vote(ocr_variants(win, fast=True), tags)
+        return x0, y0, best, agr, find_sticker(win)
+
+    src, dstp, matched = [], [], []
+    for x0, y0, best, agr, st in pmap(look, targets):
         if best and agr >= 1.0 and st:
             e = vocab[norm(best)]; x, y, bw, bh = st
             ex, ey, ew, eh = e["label_box"]
             src.append((x0 + x + bw / 2, y0 + y + bh / 2))
-            dstp.append(((ex + ew / 2) * R, (ey + eh / 2) * R)); matched.append(e["tag"])
-    info = dict(quad=quad.tolist(), anchors=len(src), inliers=0, outliers=[])
+            dstp.append(((ex + ew / 2) * R, (ey + eh / 2) * R)); matched.append(e)
+    info = dict(quad=quad.tolist(), anchors=len(src), inliers=0, outliers=[], refined=False, targets=len(targets))
     H = Hc
+    mask = np.ones(len(src), bool)
+    ransac = False
     if len(src) >= 6:
-        Hr, mask = cv2.findHomography(np.float32(src), np.float32(dstp), cv2.RANSAC, 6 * R)
+        Hr, m = cv2.findHomography(np.float32(src), np.float32(dstp), cv2.RANSAC, 6 * R)
         if Hr is not None:
-            mask = mask.ravel().astype(bool)
+            ransac = True
+            mask = m.ravel().astype(bool)
             info["inliers"] = int(mask.sum())
-            info["outliers"] = [t for t, m in zip(matched, mask) if not m]
+            info["outliers"] = [e["tag"] for e, k in zip(matched, mask) if not k]
             # only accept a refinement that is small (sanity guard)
             corners = cv2.perspectiveTransform(dst[None], Hr)[0]
             if np.abs(corners - dst).max() < 15 * R:
                 H = Hr @ Hc
+                info["refined"] = True
                 rect = cv2.warpPerspective(photo, H, (Wmm * R, Hmm * R), flags=cv2.INTER_CUBIC)
+    # anchor geometry for the UI: where each fiducial was found vs where the drawing expects it
+    if src:
+        found_rect = _warp_pts(H @ np.linalg.inv(Hc), src)
+        found_px = _warp_pts(np.linalg.inv(Hc), src)
+        exp_px = _warp_pts(np.linalg.inv(H), dstp)
+        info["anchor_points"] = [
+            dict(tag=e["tag"], kind=e["kind"], inlier=bool(k) if ransac else None,
+                 found_px=[round(float(v), 1) for v in fp], expected_px=[round(float(v), 1) for v in ep],
+                 found_mm=[round(float(v) / R, 1) for v in fr], expected_mm=[round(v / R, 1) for v in de],
+                 residual_mm=round(float(np.hypot(*(fr - np.float32(de)))) / R, 2))
+            for e, k, fp, ep, fr, de in zip(matched, mask, found_px, exp_px, found_rect, dstp)]
+    else:
+        info["anchor_points"] = []
     return rect, H, info
+
 
 # ------------------------------------------------------------------ helpers on the rectified image
 def crop(img, box, pad=0):
@@ -161,6 +281,7 @@ def crop(img, box, pad=0):
     x0, y0 = int(max(0, (x - pad) * R)), int(max(0, (y - pad) * R))
     x1, y1 = int(min(img.shape[1], (x + w + pad) * R)), int(min(img.shape[0], (y + h + pad) * R))
     return img[y0:y1, x0:x1]
+
 
 class Backplate:
     """Illumination-aware model of the empty backplate colour (fit on free space from the drawing)."""
@@ -177,11 +298,13 @@ class Backplate:
         A = np.c_[np.ones_like(xs), xs / 1000, ys / 1000, (xs / 1000) ** 2, (ys / 1000) ** 2, xs * ys / 1e6].astype(np.float32)
         Y = rect[ys, xs].astype(np.float32)
         self.coef, *_ = np.linalg.lstsq(A, Y, rcond=None)
+
     def predict(self, box):
         x, y, w, h = box
         xs, ys = np.meshgrid(np.arange(int(x * R), int((x + w) * R)), np.arange(int(y * R), int((y + h) * R)))
         A = np.stack([np.ones_like(xs), xs / 1000, ys / 1000, (xs / 1000) ** 2, (ys / 1000) ** 2, xs * ys / 1e6], -1).astype(np.float32)
         return A @ self.coef
+
 
 def occupancy(rect, bpm, box, shrink=0.12):
     x, y, w, h = box
@@ -190,6 +313,7 @@ def occupancy(rect, bpm, box, shrink=0.12):
     dist = np.linalg.norm(c - p, axis=2)
     return float((dist > 38).mean())
 
+
 def white_fraction(rect, bpm, box, shrink=0.15):
     x, y, w, h = box
     b = (x + w * shrink, y + h * shrink, w * (1 - 2 * shrink), h * (1 - 2 * shrink))
@@ -197,6 +321,7 @@ def white_fraction(rect, bpm, box, shrink=0.15):
     bright = c.mean(2) / np.maximum(p.mean(2), 1)
     sat = c.max(2) - c.min(2)
     return float(((bright > 1.10) & (sat < 45)).mean())
+
 
 def find_outlined(img):
     """Find a printed label by its rectangular outline (works even when label and background are both bright)."""
@@ -220,9 +345,11 @@ def find_outlined(img):
             best, bd = (x, y, w, h), dd
     return best
 
+
 def find_sticker(img):
     o = find_outlined(img)
     return o if o else find_bright(img)
+
 
 def find_bright(img):
     """Locate the printed label/sleeve (bright, low-saturation rectangle) nearest the crop centre.
@@ -243,6 +370,7 @@ def find_bright(img):
             best, bd = (x, y, w, h), dd
     return best
 
+
 def has_label(img):
     """A label/sleeve = bright low-saturation rectangle that contains dark print. Lighting-independent."""
     st = find_sticker(img)
@@ -255,14 +383,21 @@ def has_label(img):
     ink = float((inner < 0.55 * np.percentile(inner, 90)).mean())
     return (0.03 < ink < 0.6), ink
 
+
+def _tess(job):
+    img, cfg = job
+    return pytesseract.image_to_string(img, config=cfg).strip()
+
+
 def ocr_variants(img, psm=7, fast=False):
-    """Read a small crop several ways; returns list of normalised strings (for voting)."""
+    """Read a small crop several ways (in parallel); returns list of raw strings (for voting)."""
     st = find_sticker(img)
     if st:
         x, y, w, h = st; iy, ix = int(h * 0.14), int(h * 0.05)
         img = img[y + iy:y + h - iy, x + ix:x + w - ix]
     g = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    outs = []
+    cfg = f"--psm {psm} -c tessedit_char_whitelist={WL}"
+    jobs = []
     # small text (breaker tags) gets upscaled harder: target ~60 px cap height
     scales = (2.0,) if fast else (2.0, 3.0)
     for scale in scales:
@@ -272,15 +407,17 @@ def ocr_variants(img, psm=7, fast=False):
                 _, gg2 = cv2.threshold(gg, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             else:
                 gg2 = gg
-            gg2 = cv2.copyMakeBorder(gg2, 20, 20, 20, 20, cv2.BORDER_REPLICATE)
-            t = pytesseract.image_to_string(gg2, config=f"--psm {psm} -c tessedit_char_whitelist={WL}")
-            outs.append(t.strip())
-    return outs
+            jobs.append((cv2.copyMakeBorder(gg2, 20, 20, 20, 20, cv2.BORDER_REPLICATE), cfg))
+    return list(_OCR.map(_tess, jobs))
+
 
 CONF = str.maketrans({"B": "8", "S": "5", "Z": "2", "G": "6", "Q": "0", "D": "0", "L": "1", "T": "7"})
+
+
 def canon(s):
     """Confusion-aware form (OCR swaps B/8, S/5, ...). Used only to compare against the closed vocabulary."""
     return norm(s).translate(CONF)
+
 
 def vote(readings, vocab):
     """Closed-vocabulary decoding. Returns (best_vocab_item | None, agreement, raw_majority)."""
@@ -318,20 +455,29 @@ def vote(readings, vocab):
     best = max(hits, key=hits.get)
     return best, hits[best] / len(readings), maj
 
+
 # ------------------------------------------------------------------ 3. plug-in checks
 CHECKS = {}
+
+
 def check(name):
+    """Register a plug-in check. The class needs a ``run(ctx) -> list[result]`` method."""
     def deco(cls):
         CHECKS[name] = cls; return cls
     return deco
+
 
 def res(item_id, check, target, expected, found, result, box, conf, evidence, **kw):
     return dict(id=item_id, check=check, target=target, expected=expected, found=found, result=result,
                 box=box, conf=round(conf, 2), evidence=evidence, **kw)
 
+
 @check("GA")
 class GACheck:
     """Every part present in its place: slot occupancy vs backplate model + label evidence."""
+    title = "Part present"
+    question = "Is the part the drawing places here physically installed?"
+
     def run(self, ctx):
         out = []
         for d in ctx.ga["devices"]:
@@ -345,31 +491,41 @@ class GACheck:
             else:
                 r, found, conf = "REVIEW", f"Unclear (occupancy {occ:.0%})", 0.5
             out.append(res(f"GA-{d['tag']}", "GA", d["tag"], "Installed", found, r, d["box"], conf,
-                           [f"slot occupancy {occ:.0%}", f"label seen: {lab}"]))
+                           [f"slot occupancy {occ:.0%}", f"label seen: {lab}"], occupancy=round(occ, 3)))
             ctx.present[d["tag"]] = (r != "FAIL")
         return out
+
 
 @check("ORDER")
 class OrderCheck:
     """Right place / right order: read labels slot-by-slot along each rail, align with drawing sequence."""
+    title = "Rail order"
+    question = "Reading left to right along the rail, is every device in the slot the drawing gives it?"
+
     def run(self, ctx):
         out = []
         for rail in ctx.ga["rails"]:
             devs = [ctx.dev[t] for t in rail["tags"]]
-            found = []
-            for d in devs:
+
+            def read_slot(d):
                 if not ctx.present.get(d["tag"]):
-                    found.append("(empty)"); continue
+                    return "(empty)", None
                 if not has_label(crop(ctx.rect, d["label_box"], 4))[0]:
-                    found.append("(no label)"); continue        # LabelCheck owns this item
+                    return "(no label)", None                   # LabelCheck owns this item
                 best, agr, raw = vote(ocr_variants(crop(ctx.rect, d["label_box"], 4)), rail["tags"])
                 if best and agr >= 0.5:
-                    found.append(best)
+                    f = best
                 elif raw and len(raw) >= 3:
-                    found.append("(other)")                     # readable but not a rail tag -> LabelCheck
+                    f = "(other)"                               # readable but not a rail tag -> LabelCheck
                 else:
-                    found.append("?")
-                ctx.facts[("slotread", d["tag"])] = (best, agr, raw)
+                    f = "?"
+                return f, (best, agr, raw)
+
+            found = []
+            for d, (f, fact) in zip(devs, pmap(read_slot, devs)):
+                found.append(f)
+                if fact is not None:
+                    ctx.facts[("slotread", d["tag"])] = fact
             exp = rail["tags"]
             swaps, wrong = [], []
             for i in range(len(exp)):
@@ -383,45 +539,49 @@ class OrderCheck:
                         wrong.append(i)
             box_of = lambda idx: _union([devs[k]["box"] for k in idx])
             seq_e, seq_f = "-".join(exp), "-".join(found)
+            slots = [dict(slot=i + 1, expected=exp[i], read=found[i], box=devs[i]["box"]) for i in range(len(exp))]
             if swaps or wrong:
                 desc = "; ".join([f"{exp[i]} <-> {exp[j]} swapped" for i, j in swaps] +
                                  [f"slot {i+1} holds {found[i]}" for i in wrong])
                 idx = sorted({k for s in swaps for k in s} | set(wrong))
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, desc, "FAIL", box_of(idx), 0.9,
-                               [f"read along rail: {seq_f}"]))
+                               [f"read along rail: {seq_f}"], slots=slots, swaps=[[exp[i], exp[j]] for i, j in swaps]))
             elif "?" in found:
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, seq_f, "REVIEW",
-                               box_of([i for i, f in enumerate(found) if f == "?"]), 0.5, ["unreadable slot label"]))
+                               box_of([i for i, f in enumerate(found) if f == "?"]), 0.5, ["unreadable slot label"],
+                               slots=slots))
             else:
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, seq_f, "PASS",
-                               box_of(range(len(exp))), 0.9, [f"read along rail: {seq_f}"]))
+                               box_of(range(len(exp))), 0.9, [f"read along rail: {seq_f}"], slots=slots))
             for i, d in enumerate(devs):  # remember where each breaker's label actually is
                 if found[i] in exp:
                     ctx.label_at[found[i]] = d
         return out
 
+
 @check("LABEL")
 class LabelCheck:
     """Every device label present, readable and matching the drawing (closed-vocabulary OCR + voting)."""
+    title = "Device label"
+    question = "Does the label at this device read exactly the tag printed on the drawing?"
+
     def run(self, ctx):
-        out = []
         vocab = [d["tag"] for d in ctx.ga["devices"]]
-        for d in ctx.ga["devices"]:
+
+        def one(d):
             iid = f"LBL-{d['tag']}"
             if not ctx.present.get(d["tag"]):
-                out.append(res(iid, "LABEL", d["tag"], d["tag"], "—", "SKIP", d["box"], 1, [f"blocked by GA-{d['tag']}"]))
-                continue
+                return res(iid, "LABEL", d["tag"], d["tag"], "—", "SKIP", d["box"], 1, [f"blocked by GA-{d['tag']}"],
+                           root_cause=f"GA-{d['tag']}")
             if d.get("group") and d["tag"] in ctx.label_at:   # label found on the rail (maybe in swapped slot)
-                out.append(res(iid, "LABEL", d["tag"], d["tag"], d["tag"], "PASS", ctx.label_at[d["tag"]]["label_box"], 0.95,
-                               ["read on rail"]))
-                continue
+                return res(iid, "LABEL", d["tag"], d["tag"], d["tag"], "PASS", ctx.label_at[d["tag"]]["label_box"], 0.95,
+                           ["read on rail"])
             if d.get("group"):
                 own = ctx.facts.get(("slotread", d["tag"]))
                 rail = next(r for r in ctx.ga["rails"] if r["name"] == d["group"])
                 if own and own[0] in rail["tags"] and own[0] != d["tag"]:   # slot holds another rail device
-                    out.append(res(iid, "LABEL", d["tag"], d["tag"], f"slot holds {own[0]}", "SKIP", d["label_box"], 1,
-                                   [f"covered by ORD-{d['group']}"]))
-                    continue
+                    return res(iid, "LABEL", d["tag"], d["tag"], f"slot holds {own[0]}", "SKIP", d["label_box"], 1,
+                               [f"covered by ORD-{d['group']}"], root_cause=f"ORD-{d['group']}")
             lb = d["label_box"]
             lab, ink = has_label(crop(ctx.rect, lb, 4)); wf = 1.0 if lab else 0.0
             reads = ocr_variants(crop(ctx.rect, lb, 4))
@@ -436,38 +596,55 @@ class LabelCheck:
                 r, found, conf = "FAIL", "No label", 1 - wf
             else:
                 r, found, conf = "REVIEW", f"Label unreadable ('{raw}')", 0.4
-            out.append(res(iid, "LABEL", d["tag"], d["tag"], found, r, lb, conf, [f"label sticker+print found: {lab}", f"OCR votes {reads}"]))
-        return out
+            return res(iid, "LABEL", d["tag"], d["tag"], found, r, lb, conf,
+                       [f"label sticker+print found: {lab}", f"OCR votes {reads}"], votes=reads)
+
+        return pmap(one, ctx.ga["devices"])
+
 
 @check("FERRULE")
 class FerruleCheck:
     """Read each sleeve; decode against the wire list (closed vocabulary), not free text."""
+    title = "Ferrule text"
+    question = "Is there a sleeve on this wire, and does it read the wire-list string for this terminal?"
+
     def run(self, ctx):
-        out = []
         vocab = [w["ferrule"] for w in ctx.wires]
-        for t, w in zip(ctx.ga["terminals"], ctx.wires):
+        pairs = list(zip(ctx.ga["terminals"], ctx.wires))
+
+        def fbox(t):
             x, y, tw, th = t["box"]
-            fb = (x + tw + 4, y + th / 2 - 8, 66, 16)
-            ctx.facts[("fbox", t["tag"])] = fb
+            return (x + tw + 4, y + th / 2 - 8, 66, 16)
+
+        def one(tw):
+            t, w = tw
+            fb = fbox(t)
             lab, ink = has_label(crop(ctx.rect, fb, 0))
             wf = white_fraction(ctx.rect, ctx.bpm, fb, shrink=0.2)
             iid = f"FER-{t['tag']}"
             if wf < 0.2 and not lab:
-                out.append(res(iid, "FERRULE", t["tag"], w["ferrule"], "No ferrule", "FAIL", fb, 1 - wf, [f"sleeve pixels {wf:.0%}"]))
-                continue
+                return res(iid, "FERRULE", t["tag"], w["ferrule"], "No ferrule", "FAIL", fb, 1 - wf, [f"sleeve pixels {wf:.0%}"])
             reads = ocr_variants(crop(ctx.rect, fb, 0))
             best, agr, raw = vote(reads, vocab)
             if best == w["ferrule"] and agr >= 0.5:
-                out.append(res(iid, "FERRULE", t["tag"], w["ferrule"], best, "PASS", fb, agr, [f"OCR votes {reads}"]))
-            elif best and best != w["ferrule"] and agr >= 0.5:
-                out.append(res(iid, "FERRULE", t["tag"], w["ferrule"], f"Wrong ferrule: {best}", "FAIL", fb, agr, [f"OCR votes {reads}"]))
-            else:
-                out.append(res(iid, "FERRULE", t["tag"], w["ferrule"], f"Unreadable ('{raw}')", "REVIEW", fb, 0.4, [f"OCR votes {reads}"]))
-        return out
+                return res(iid, "FERRULE", t["tag"], w["ferrule"], best, "PASS", fb, agr, [f"OCR votes {reads}"], votes=reads)
+            if best and best != w["ferrule"] and agr >= 0.5:
+                return res(iid, "FERRULE", t["tag"], w["ferrule"], f"Wrong ferrule: {best}", "FAIL", fb, agr,
+                           [f"OCR votes {reads}"], votes=reads)
+            return res(iid, "FERRULE", t["tag"], w["ferrule"], f"Unreadable ('{raw}')", "REVIEW", fb, 0.4,
+                       [f"OCR votes {reads}"], votes=reads)
+
+        for t, _ in pairs:
+            ctx.facts[("fbox", t["tag"])] = fbox(t)
+        return pmap(one, pairs)
+
 
 @check("COLOUR")
 class WireColourCheck:
     """Wire colour after white-balancing on known-white references (labels/ferrules)."""
+    title = "Wire colour"
+    question = "After white-balancing on the white labels, is the wire the colour the wire list specifies?"
+
     def run(self, ctx):
         out = []
         gains = ctx.wb_gains
@@ -484,10 +661,10 @@ class WireColourCheck:
             hsv = cv2.cvtColor(px[None], cv2.COLOR_RGB2HSV)[0].astype(int)
             h, s, v = hsv[:, 0], hsv[:, 1], hsv[:, 2]
             green = ((h > 40) & (h < 85) & (s > 80)).mean(); yellow = ((h >= 20) & (h <= 35) & (s > 100) & (v > 140)).mean()
+            med = np.median(hsv, 0)
             if green > 0.15 and yellow > 0.15:
                 c = "GNYE"
             else:
-                med = np.median(hsv, 0)
                 H_, S_, V_ = med
                 if V_ < 70:
                     c = "BK"
@@ -506,9 +683,12 @@ class WireColourCheck:
                 r = "REVIEW"
             else:
                 r = "FAIL"
+            rgb = cv2.cvtColor(np.uint8([[med]]), cv2.COLOR_HSV2RGB)[0, 0]
             out.append(res(iid, "COLOUR", t["tag"], w["colour"], c, r, sb, 0.85 if r != "REVIEW" else 0.4,
-                           [f"green {green:.0%} yellow {yellow:.0%}"]))
+                           [f"green {green:.0%} yellow {yellow:.0%}"],
+                           swatch="#%02x%02x%02x" % tuple(int(v) for v in rgb)))
         return out
+
 
 def _union(boxes):
     boxes = list(boxes)
@@ -516,8 +696,10 @@ def _union(boxes):
     x1 = max(b[0] + b[2] for b in boxes); y1 = max(b[1] + b[3] for b in boxes)
     return (x0, y0, x1 - x0, y1 - y0)
 
+
 class Ctx:
     pass
+
 
 def white_balance(rect, ga, bpm):
     """Gains that make the label stickers neutral (known-white references)."""
@@ -532,26 +714,79 @@ def white_balance(rect, ga, bpm):
     ref = np.concatenate(pix).mean(0)
     return (ref.mean() / ref).astype(np.float32)
 
+
 ORDER = ["GA", "ORDER", "LABEL", "FERRULE", "COLOUR"]
 
-def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER):
-    photo = cv2.cvtColor(cv2.imread(photo_path), cv2.COLOR_BGR2RGB)
-    ga = parse_ga(ga_pdf)
-    ctx = Ctx(); ctx.ga = ga; ctx.wires = read_wire_list(wire_xlsx)
+
+def counts(results):
+    return {k: sum(r["result"] == k for r in results) for k in ("PASS", "FAIL", "REVIEW", "SKIP")}
+
+
+def load_photo(path):
+    """Decode a photo from any path (np.fromfile keeps non-ASCII Windows paths working)."""
+    try:
+        buf = np.fromfile(str(path), np.uint8)
+        img = cv2.imdecode(buf, cv2.IMREAD_COLOR) if buf.size else None
+    except OSError:
+        img = None
+    if img is None:
+        raise InspectionError("Could not read the cabinet photo. Upload a JPG or PNG image.")
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+
+def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, on_event=None):
+    """Run the full pipeline. ``on_event(dict)`` receives live stage events (for progress UIs)."""
+    t0 = time.perf_counter()
+    emit = on_event or (lambda ev: None)
+
+    def stage(name, status, **kw):
+        emit(dict(stage=name, status=status, t=round(time.perf_counter() - t0, 3), **kw))
+
+    timing = {}
+    stage("parse", "start")
+    photo = load_photo(photo_path)
+    ga = parse_ga(str(ga_pdf))
+    ctx = Ctx(); ctx.ga = ga; ctx.wires = read_wire_list(str(wire_xlsx))
+    timing["parse"] = round(time.perf_counter() - t0, 3)
+    stage("parse", "done", cabinet=ga["cabinet"], devices=len(ga["devices"]), terminals=len(ga["terminals"]),
+          rails=len(ga["rails"]), wires=len(ctx.wires))
+
+    t = time.perf_counter(); stage("register", "start")
     ctx.rect, ctx.H, ctx.reg = register(photo, ga, ctx.wires)
     ctx.bpm = Backplate(ctx.rect, ga)
     ctx.wb_gains = white_balance(ctx.rect, ga, ctx.bpm)
+    timing["register"] = round(time.perf_counter() - t, 3)
+    stage("register", "done", anchors=ctx.reg["anchors"], inliers=ctx.reg["inliers"],
+          outliers=ctx.reg["outliers"], refined=ctx.reg["refined"])
+
     ctx.dev = {d["tag"]: d for d in ga["devices"]}
     ctx.present, ctx.facts, ctx.label_at = {}, {}, {}
     results = []
+    enabled = [e for e in ORDER if e in enabled] + [e for e in enabled if e not in ORDER]
+    timing["checks"] = {}
     for name in enabled:
-        results += CHECKS[name]().run(ctx)
-    return dict(photo=photo_path, results=results, registration=ctx.reg, H=ctx.H.tolist()), ctx
+        if name not in CHECKS:
+            continue
+        t = time.perf_counter(); stage("check", "start", check=name)
+        out = CHECKS[name]().run(ctx)
+        results += out
+        timing["checks"][name] = round(time.perf_counter() - t, 3)
+        stage("check", "done", check=name, items=len(out), counts=counts(out))
+    timing["total"] = round(time.perf_counter() - t0, 3)
+    c = counts(results)
+    stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"])
+    rep = dict(photo=str(photo_path), results=results, registration=ctx.reg, H=ctx.H.tolist(),
+               photo_size=[int(photo.shape[1]), int(photo.shape[0])], rect_px_per_mm=R,
+               ga=dict(cabinet=ga["cabinet"], size=list(ga["size"]), devices=ga["devices"],
+                       terminals=ga["terminals"], rails=ga["rails"]),
+               wires=ctx.wires, enabled=enabled, counts=c, timing=timing, engine=config.VERSION)
+    return rep, ctx
+
 
 if __name__ == "__main__":
-    import sys, time
+    import sys
     t = time.time()
-    rep, ctx = inspect(sys.argv[1], "inputs/GA_EE-DEMO-01.pdf", "inputs/WireList_EE-DEMO-01.xlsx")
+    rep, ctx = inspect(sys.argv[1], config.DEMO_GA, config.DEMO_WIRES)
     for r in rep["results"]:
         if r["result"] != "PASS":
             print(r["result"], r["id"], "|", r["expected"], "->", r["found"], "|", r["evidence"][:1])

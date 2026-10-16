@@ -9,7 +9,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 18,
-  "found": {}
+  "found": {},
+  "sec": 3.79
  },
  {
   "i": 201,
@@ -51,7 +52,42 @@
    "ORD-RAIL-1": "FAIL",
    "LBL-CB42": "FAIL",
    "LBL-1CBP02": "FAIL"
-  }
+  },
+  "sec": 3.96
+ },
+ {
+  "i": 202,
+  "strength": 1.320674189676445,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB44"
+   },
+   {
+    "type": "missing_label",
+    "tag": "1CBP04"
+   },
+   {
+    "type": "missing_component",
+    "tag": "D12"
+   }
+  ],
+  "caught": {
+   "GA-CB44": true,
+   "LBL-1CBP04": true,
+   "GA-D12": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 2,
+  "anchors": 17,
+  "found": {
+   "GA-CB44": "FAIL",
+   "LBL-1CBP04": "FAIL",
+   "GA-D12": "FAIL"
+  },
+  "sec": 3.64
  },
  {
   "i": 203,
@@ -92,40 +128,8 @@
    "FER-X3:1": "FAIL",
    "LBL-PS11": "FAIL",
    "LBL-CB41": "FAIL"
-  }
- },
- {
-  "i": 202,
-  "strength": 1.320674189676445,
-  "faults": [
-   {
-    "type": "missing_component",
-    "tag": "CB44"
-   },
-   {
-    "type": "missing_label",
-    "tag": "1CBP04"
-   },
-   {
-    "type": "missing_component",
-    "tag": "D12"
-   }
-  ],
-  "caught": {
-   "GA-CB44": true,
-   "LBL-1CBP04": true,
-   "GA-D12": true
   },
-  "false_alarms": [],
-  "reviews": [],
-  "n_items": 41,
-  "n_skip": 2,
-  "anchors": 17,
-  "found": {
-   "GA-CB44": "FAIL",
-   "LBL-1CBP04": "FAIL",
-   "GA-D12": "FAIL"
-  }
+  "sec": 3.68
  },
  {
   "i": 204,
@@ -160,7 +164,8 @@
    "FER-X3:7": "FAIL",
    "ORD-RAIL-1": "FAIL",
    "FER-X3:3": "FAIL"
-  }
+  },
+  "sec": 3.89
  },
  {
   "i": 205,
@@ -174,7 +179,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 17,
-  "found": {}
+  "found": {},
+  "sec": 3.88
  },
  {
   "i": 206,
@@ -196,7 +202,8 @@
   "anchors": 20,
   "found": {
    "ORD-RAIL-1": "FAIL"
-  }
+  },
+  "sec": 3.64
  },
  {
   "i": 207,
@@ -232,7 +239,8 @@
    "ORD-RAIL-1": "FAIL",
    "LBL-CB41": "FAIL",
    "FER-X3:6": "FAIL"
-  }
+  },
+  "sec": 3.9
  },
  {
   "i": 208,
@@ -268,7 +276,8 @@
    "LBL-CB43": "FAIL",
    "FER-X3:7": "FAIL",
    "COL-X3:1": "FAIL"
-  }
+  },
+  "sec": 3.85
  },
  {
   "i": 209,
@@ -289,7 +298,8 @@
   "anchors": 18,
   "found": {
    "LBL-PS11": "FAIL"
-  }
+  },
+  "sec": 3.81
  },
  {
   "i": 210,
@@ -301,7 +311,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 19,
-  "found": {}
+  "found": {},
+  "sec": 3.73
  },
  {
   "i": 211,
@@ -342,7 +353,8 @@
    "COL-X3:7": "FAIL",
    "LBL-D12": "FAIL",
    "LBL-PE": "FAIL"
-  }
+  },
+  "sec": 4.16
  },
  {
   "i": 212,
@@ -356,7 +368,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 18,
-  "found": {}
+  "found": {},
+  "sec": 3.9
  },
  {
   "i": 213,
@@ -368,7 +381,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 19,
-  "found": {}
+  "found": {},
+  "sec": 3.92
  },
  {
   "i": 214,
@@ -390,7 +404,8 @@
   "anchors": 19,
   "found": {
    "COL-X3:8": "FAIL"
-  }
+  },
+  "sec": 3.78
  },
  {
   "i": 215,
@@ -402,7 +417,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 20,
-  "found": {}
+  "found": {},
+  "sec": 3.58
  },
  {
   "i": 216,
@@ -423,7 +439,8 @@
   "anchors": 19,
   "found": {
    "GA-CB43": "FAIL"
-  }
+  },
+  "sec": 3.84
  },
  {
   "i": 217,
@@ -455,7 +472,8 @@
   "found": {
    "LBL-D12": "FAIL",
    "FER-X3:7": "FAIL"
-  }
+  },
+  "sec": 3.5
  },
  {
   "i": 218,
@@ -477,7 +495,8 @@
   "anchors": 17,
   "found": {
    "LBL-PS12": "FAIL"
-  }
+  },
+  "sec": 3.75
  },
  {
   "i": 219,
@@ -518,7 +537,8 @@
    "LBL-1CBP01": "FAIL",
    "LBL-PE": "FAIL",
    "LBL-CB44": "FAIL"
-  }
+  },
+  "sec": 3.71
  },
  {
   "i": 220,
@@ -530,7 +550,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 20,
-  "found": {}
+  "found": {},
+  "sec": 4.08
  },
  {
   "i": 221,
@@ -552,7 +573,8 @@
   "anchors": 19,
   "found": {
    "FER-X3:2": "FAIL"
-  }
+  },
+  "sec": 3.71
  },
  {
   "i": 222,
@@ -573,7 +595,8 @@
   "anchors": 19,
   "found": {
    "GA-CB43": "FAIL"
-  }
+  },
+  "sec": 3.57
  },
  {
   "i": 223,
@@ -585,7 +608,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 19,
-  "found": {}
+  "found": {},
+  "sec": 3.65
  },
  {
   "i": 224,
@@ -606,7 +630,8 @@
   "anchors": 19,
   "found": {
    "LBL-PS11": "FAIL"
-  }
+  },
+  "sec": 3.83
  },
  {
   "i": 225,
@@ -618,7 +643,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 20,
-  "found": {}
+  "found": {},
+  "sec": 4.37
  },
  {
   "i": 226,
@@ -630,7 +656,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 16,
-  "found": {}
+  "found": {},
+  "sec": 6.03
  },
  {
   "i": 227,
@@ -673,7 +700,8 @@
    "LBL-1CBP03": "FAIL",
    "LBL-D12": "FAIL",
    "ORD-RAIL-1": "FAIL"
-  }
+  },
+  "sec": 6.2
  },
  {
   "i": 228,
@@ -715,7 +743,8 @@
    "GA-1CBP03": "FAIL",
    "LBL-CB42": "FAIL",
    "FER-X3:3": "FAIL"
-  }
+  },
+  "sec": 4.19
  },
  {
   "i": 229,
@@ -736,7 +765,8 @@
   "anchors": 17,
   "found": {
    "LBL-CB43": "FAIL"
-  }
+  },
+  "sec": 4.07
  },
  {
   "i": 230,
@@ -748,7 +778,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 20,
-  "found": {}
+  "found": {},
+  "sec": 3.8
  },
  {
   "i": 231,
@@ -777,28 +808,8 @@
   "found": {
    "COL-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL"
-  }
- },
- {
-  "i": 233,
-  "strength": 0.8776623709360194,
-  "faults": [
-   {
-    "type": "missing_ferrule",
-    "n": 3
-   }
-  ],
-  "caught": {
-   "FER-X3:3": true
   },
-  "false_alarms": [],
-  "reviews": [],
-  "n_items": 41,
-  "n_skip": 0,
-  "anchors": 17,
-  "found": {
-   "FER-X3:3": "FAIL"
-  }
+  "sec": 3.8
  },
  {
   "i": 232,
@@ -820,7 +831,30 @@
   "anchors": 19,
   "found": {
    "COL-X3:8": "FAIL"
-  }
+  },
+  "sec": 3.9
+ },
+ {
+  "i": 233,
+  "strength": 0.8776623709360194,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   }
+  ],
+  "caught": {
+   "FER-X3:3": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 0,
+  "anchors": 17,
+  "found": {
+   "FER-X3:3": "FAIL"
+  },
+  "sec": 3.77
  },
  {
   "i": 234,
@@ -861,7 +895,8 @@
    "ORD-RAIL-1": "FAIL",
    "GA-D12": "FAIL",
    "GA-CB41": "FAIL"
-  }
+  },
+  "sec": 3.48
  },
  {
   "i": 235,
@@ -873,7 +908,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 18,
-  "found": {}
+  "found": {},
+  "sec": 3.78
  },
  {
   "i": 236,
@@ -907,7 +943,8 @@
    "FER-X3:2": "FAIL",
    "COL-X3:6": "FAIL",
    "LBL-1CBP01": "FAIL"
-  }
+  },
+  "sec": 3.68
  },
  {
   "i": 237,
@@ -948,7 +985,8 @@
    "FER-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL",
    "LBL-PS11": "FAIL"
-  }
+  },
+  "sec": 3.56
  },
  {
   "i": 238,
@@ -977,7 +1015,8 @@
   "found": {
    "COL-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL"
-  }
+  },
+  "sec": 4.1
  },
  {
   "i": 239,
@@ -1018,7 +1057,8 @@
    "FER-X3:8": "FAIL",
    "GA-1CBP01": "FAIL",
    "COL-X3:4": "FAIL"
-  }
+  },
+  "sec": 3.58
  },
  {
   "i": 240,
@@ -1030,7 +1070,8 @@
   "n_items": 41,
   "n_skip": 0,
   "anchors": 18,
-  "found": {}
+  "found": {},
+  "sec": 3.73
  },
  {
   "i": 241,
@@ -1065,28 +1106,8 @@
    "FER-X3:5": "FAIL",
    "FER-X3:8": "FAIL",
    "GA-CB41": "FAIL"
-  }
- },
- {
-  "i": 243,
-  "strength": 0.885672338427445,
-  "faults": [
-   {
-    "type": "missing_component",
-    "tag": "CB44"
-   }
-  ],
-  "caught": {
-   "GA-CB44": true
   },
-  "false_alarms": [],
-  "reviews": [],
-  "n_items": 41,
-  "n_skip": 1,
-  "anchors": 17,
-  "found": {
-   "GA-CB44": "FAIL"
-  }
+  "sec": 3.49
  },
  {
   "i": 242,
@@ -1115,21 +1136,30 @@
   "found": {
    "ORD-RAIL-1": "FAIL",
    "FER-X3:3": "FAIL"
-  }
+  },
+  "sec": 4.51
  },
  {
-  "i": 245,
-  "strength": 1.290610859953002,
-  "faults": [],
-  "caught": {},
-  "false_alarms": [],
-  "reviews": [
-   "GA-CB44"
+  "i": 243,
+  "strength": 0.885672338427445,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "CB44"
+   }
   ],
+  "caught": {
+   "GA-CB44": true
+  },
+  "false_alarms": [],
+  "reviews": [],
   "n_items": 41,
-  "n_skip": 0,
-  "anchors": 20,
-  "found": {}
+  "n_skip": 1,
+  "anchors": 17,
+  "found": {
+   "GA-CB44": "FAIL"
+  },
+  "sec": 4.69
  },
  {
   "i": 244,
@@ -1151,48 +1181,23 @@
   "anchors": 20,
   "found": {
    "FER-X3:3": "FAIL"
-  }
+  },
+  "sec": 4.14
  },
  {
-  "i": 247,
-  "strength": 0.8112331497497266,
-  "faults": [
-   {
-    "type": "swap_breakers",
-    "a": "CB42",
-    "b": "CB43"
-   },
-   {
-    "type": "missing_ferrule",
-    "n": 3
-   },
-   {
-    "type": "missing_ferrule",
-    "n": 4
-   },
-   {
-    "type": "wrong_colour",
-    "n": 8,
-    "colour": "RD"
-   }
-  ],
-  "caught": {
-   "ORD-RAIL-1": true,
-   "FER-X3:3": true,
-   "FER-X3:4": true,
-   "COL-X3:8": true
-  },
+  "i": 245,
+  "strength": 1.290610859953002,
+  "faults": [],
+  "caught": {},
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "GA-CB44"
+  ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
-  "found": {
-   "ORD-RAIL-1": "FAIL",
-   "FER-X3:3": "FAIL",
-   "FER-X3:4": "FAIL",
-   "COL-X3:8": "FAIL"
-  }
+  "anchors": 20,
+  "found": {},
+  "sec": 6.6
  },
  {
   "i": 246,
@@ -1233,28 +1238,50 @@
    "LBL-CB41": "FAIL",
    "FER-X3:5": "FAIL",
    "GA-PS12": "FAIL"
-  }
+  },
+  "sec": 3.64
  },
  {
-  "i": 249,
-  "strength": 1.1322578869254887,
+  "i": 247,
+  "strength": 0.8112331497497266,
   "faults": [
    {
-    "type": "missing_component",
-    "tag": "1CBP01"
+    "type": "swap_breakers",
+    "a": "CB42",
+    "b": "CB43"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 4
+   },
+   {
+    "type": "wrong_colour",
+    "n": 8,
+    "colour": "RD"
    }
   ],
   "caught": {
-   "GA-1CBP01": true
+   "ORD-RAIL-1": true,
+   "FER-X3:3": true,
+   "FER-X3:4": true,
+   "COL-X3:8": true
   },
   "false_alarms": [],
   "reviews": [],
   "n_items": 41,
-  "n_skip": 1,
+  "n_skip": 0,
   "anchors": 16,
   "found": {
-   "GA-1CBP01": "FAIL"
-  }
+   "ORD-RAIL-1": "FAIL",
+   "FER-X3:3": "FAIL",
+   "FER-X3:4": "FAIL",
+   "COL-X3:8": "FAIL"
+  },
+  "sec": 3.55
  },
  {
   "i": 248,
@@ -1289,6 +1316,29 @@
    "ORD-RAIL-1": "FAIL",
    "FER-X3:6": "FAIL",
    "COL-X3:8": "FAIL"
-  }
+  },
+  "sec": 3.67
+ },
+ {
+  "i": 249,
+  "strength": 1.1322578869254887,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "1CBP01"
+   }
+  ],
+  "caught": {
+   "GA-1CBP01": true
+  },
+  "false_alarms": [],
+  "reviews": [],
+  "n_items": 41,
+  "n_skip": 1,
+  "anchors": 16,
+  "found": {
+   "GA-1CBP01": "FAIL"
+  },
+  "sec": 3.49
  }
 ]

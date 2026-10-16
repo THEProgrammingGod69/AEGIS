@@ -1,0 +1,180 @@
+[
+ {
+  "file": "01_emerson_example_4_faults.jpg",
+  "title": "Emerson's example",
+  "subtitle": "The 4 faults from the problem statement",
+  "seed": 7,
+  "faults": [
+   {
+    "type": "missing_component",
+    "tag": "PS12"
+   },
+   {
+    "type": "swap_breakers",
+    "a": "CB43",
+    "b": "CB44"
+   },
+   {
+    "type": "missing_label",
+    "tag": "1CBP03"
+   },
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   }
+  ],
+  "expect": "4 FAIL, 1 SKIP, 36 PASS: PS12 missing, CB43 ↔ CB44 swapped, 1CBP03 no label, X3:3 no ferrule",
+  "counts": {
+   "PASS": 36,
+   "FAIL": 4,
+   "REVIEW": 0,
+   "SKIP": 1
+  },
+  "issues": [
+   {
+    "id": "GA-PS12",
+    "result": "FAIL",
+    "found": "Missing"
+   },
+   {
+    "id": "ORD-RAIL-1",
+    "result": "FAIL",
+    "found": "CB43 <-> CB44 swapped"
+   },
+   {
+    "id": "LBL-PS12",
+    "result": "SKIP",
+    "found": "—"
+   },
+   {
+    "id": "LBL-1CBP03",
+    "result": "FAIL",
+    "found": "No label"
+   },
+   {
+    "id": "FER-X3:3",
+    "result": "FAIL",
+    "found": "No ferrule"
+   }
+  ]
+ },
+ {
+  "file": "02_clean_cabinet_no_faults.jpg",
+  "title": "Clean cabinet",
+  "subtitle": "Built exactly to the drawing",
+  "seed": 33,
+  "faults": [],
+  "expect": "All 41 PASS, no false alarms",
+  "counts": {
+   "PASS": 41,
+   "FAIL": 0,
+   "REVIEW": 0,
+   "SKIP": 0
+  },
+  "issues": []
+ },
+ {
+  "file": "03_wrong_ferrule_and_colour.jpg",
+  "title": "Ferrule + colour",
+  "subtitle": "Wrong sleeve and wrong wire colour",
+  "seed": 58,
+  "faults": [
+   {
+    "type": "wrong_ferrule",
+    "n": 5,
+    "text": "X3-6/PS11-"
+   },
+   {
+    "type": "wrong_colour",
+    "n": 7,
+    "colour": "BK"
+   }
+  ],
+  "expect": "X3:5 wrong ferrule (reads X3-6/PS11-), X3:7 black wire instead of blue",
+  "counts": {
+   "PASS": 39,
+   "FAIL": 2,
+   "REVIEW": 0,
+   "SKIP": 0
+  },
+  "issues": [
+   {
+    "id": "FER-X3:5",
+    "result": "FAIL",
+    "found": "Wrong ferrule: X3-6/PS11-"
+   },
+   {
+    "id": "COL-X3:7",
+    "result": "FAIL",
+    "found": "BK"
+   }
+  ]
+ },
+ {
+  "file": "04_wrong_label_and_missing_breaker.jpg",
+  "title": "Label + missing breaker",
+  "subtitle": "Mislabelled PSU and an empty rail slot",
+  "seed": 91,
+  "faults": [
+   {
+    "type": "wrong_label",
+    "tag": "PS11",
+    "text": "PS17"
+   },
+   {
+    "type": "missing_component",
+    "tag": "CB42"
+   }
+  ],
+  "expect": "PS11 label reads PS17; CB42 missing (its label check is skipped)",
+  "counts": {
+   "PASS": 38,
+   "FAIL": 2,
+   "REVIEW": 0,
+   "SKIP": 1
+  },
+  "issues": [
+   {
+    "id": "GA-CB42",
+    "result": "FAIL",
+    "found": "Missing"
+   },
+   {
+    "id": "LBL-PS11",
+    "result": "FAIL",
+    "found": "Wrong label: reads 'PS17'"
+   },
+   {
+    "id": "LBL-CB42",
+    "result": "SKIP",
+    "found": "—"
+   }
+  ]
+ },
+ {
+  "file": "05_after_fix_one_left_open.jpg",
+  "title": "After the fix",
+  "subtitle": "Re-photo of #01 with one fault left",
+  "seed": 21,
+  "faults": [
+   {
+    "type": "missing_ferrule",
+    "n": 3
+   }
+  ],
+  "expect": "Re-check of #01: 3 CLOSED, 1 OPEN (X3:3 ferrule still missing)",
+  "counts": {
+   "PASS": 40,
+   "FAIL": 1,
+   "REVIEW": 0,
+   "SKIP": 0
+  },
+  "issues": [
+   {
+    "id": "FER-X3:3",
+    "result": "FAIL",
+    "found": "No ferrule"
+   }
+  ]
+ }
+]
