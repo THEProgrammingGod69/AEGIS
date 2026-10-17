@@ -154,7 +154,9 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
                       "(a missing part is one FAIL, not five). Numbers match the boxes on the photo.", S["small"])]
     lt = Table([[x] for x in left], colWidths=[92 * mm])
     lt.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0)]))
-    right = img(marked_path, 84 * mm, 118 * mm)
+    small = out_pdf + ".marked.jpg"               # ~1100 px is plenty at 84 mm wide; keeps the PDF small
+    m = PILImage.open(marked_path).convert("RGB"); m.thumbnail((1100, 1500), PILImage.LANCZOS); m.save(small, quality=85)
+    right = img(small, 84 * mm, 118 * mm)
     two = Table([[lt, right]], colWidths=[94 * mm, 84 * mm])
     two.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0),
                              ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
@@ -225,4 +227,5 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
               Paragraph(f"Generated {datetime.datetime.now().isoformat(timespec='seconds').replace('T', ' ')} by EAGLE EYE. "
                         "Every result is traceable to the drawing item it checks and to the evidence listed above.", S["small"])]
     doc.build(story, onFirstPage=first, onLaterPages=later)
+    os.remove(small)
     return out_pdf

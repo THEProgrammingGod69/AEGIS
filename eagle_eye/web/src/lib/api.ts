@@ -1,4 +1,8 @@
+import { staticApi, staticUrl } from "./static";
 import type { CheckInfo, ForgeLive, Health, JobView, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+
+/** True in the hosted showcase build (npm run build:static): recorded runs, no live engine. */
+export const STATIC = import.meta.env.VITE_STATIC === "1";
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -25,7 +29,7 @@ export interface InspectInput {
   parent?: string | null;
 }
 
-export const api = {
+const liveApi = {
   health: () => req<Health>("/api/health"),
   checks: () => req<CheckInfo[]>("/api/checks"),
   samples: () => req<Sample[]>("/api/samples"),
@@ -52,7 +56,7 @@ export const api = {
   },
 };
 
-export const url = {
+const liveUrl = {
   sample: (id: string, w = 0) => `/api/samples/${id}/image${w ? `?w=${w}` : ""}`,
   file: (run: string, name: string, w = 0) => `/api/runs/${run}/files/${name}${w ? `?w=${w}` : ""}`,
   download: (run: string, name: string) => `/api/runs/${run}/files/${name}?download=1`,
@@ -61,6 +65,9 @@ export const url = {
   input: (key: string) => `/api/inputs/${key}`,
   gaPreview: () => "/api/inputs/ga/preview",
 };
+
+export const api: typeof liveApi = STATIC ? (staticApi as unknown as typeof liveApi) : liveApi;
+export const url: typeof liveUrl = STATIC ? (staticUrl as unknown as typeof liveUrl) : liveUrl;
 
 /** Poll a job until it finishes, streaming events to `onUpdate`. */
 export async function followJob(id: string, onUpdate: (j: JobView) => void, signal?: { stop: boolean }): Promise<JobView> {

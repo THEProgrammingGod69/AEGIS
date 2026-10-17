@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, FileImage, Layers, ScanLine } from "lucide-react";
 import { useState } from "react";
-import { url } from "../lib/api";
-import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, explain, statusOf } from "../lib/format";
-import type { Item } from "../lib/types";
+import { STATIC, url } from "../lib/api";
+import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf } from "../lib/format";
+import { gaRaster } from "../lib/static";
+import type { Item, Pt } from "../lib/types";
+import { CropView } from "./CropView";
 import { Marker, Meter, Seg, StatusBadge } from "./ui";
 
 function RailDiagram({ it }: { it: Item }) {
@@ -43,7 +45,31 @@ function Swatch({ code, hex, label }: { code: string; hex?: string; label: strin
   );
 }
 
-export function ProofCard({ run, it }: { run: string; it: Item }) {
+export interface Geo {
+  photoSize: [number, number];
+  sizeMm: [number, number];
+}
+
+/** Proof crop built in the browser (hosted showcase): same windows as report.py's expected/found/aligned crops. */
+function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expected" | "found" | "aligned"; geo: Geo }) {
+  const [x, y, w, h] = it.box;
+  const m = 15;
+  const quad = (f: (v: number, a: "x" | "y") => number): Pt[] => [[f(x, "x"), f(y, "y")], [f(x + w, "x"), f(y, "y")], [f(x + w, "x"), f(y + h, "y")], [f(x, "x"), f(y + h, "y")]];
+  if (kind === "expected") {
+    const g = gaRaster();
+    const T = (v: number, a: "x" | "y") => (a === "x" ? g.ox : g.oy) + v * g.k;
+    return <CropView src={g.src} size={[g.w, g.h]} rect={[T(x - m, "x"), T(y - m, "y"), T(x + w + m, "x"), T(y + h + m, "y")]} outline={quad(T)} color="#0ea5e9" bg="#fff" />;
+  }
+  if (kind === "aligned") {
+    const T = (v: number) => v * 4;
+    return <CropView src={url.file(run, "rectified")} size={[geo.sizeMm[0] * 4, geo.sizeMm[1] * 4]} rect={[T(x - m), T(y - m), T(x + w + m), T(y + h + m)]} outline={quad(T)} color={STATUS_HEX[statusOf(it)]} />;
+  }
+  const xs = it.quad.map((p) => p[0]);
+  const ys = it.quad.map((p) => p[1]);
+  return <CropView src={url.file(run, "photo")} size={geo.photoSize} rect={[Math.min(...xs) - 60, Math.min(...ys) - 60, Math.max(...xs) + 60, Math.max(...ys) + 60]} outline={it.quad} color={STATUS_HEX[statusOf(it)]} />;
+}
+
+export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }) {
   const [found, setFound] = useState<"found" | "aligned">("found");
   const s = statusOf(it);
   const isPass = it.result === "PASS" && !it.recheck;
@@ -68,7 +94,7 @@ export function ProofCard({ run, it }: { run: string; it: Item }) {
           <figure>
             <figcaption><FileImage size={13} /> Expected · GA drawing</figcaption>
             <div className="proof-img drawing">
-              <img src={url.crop(run, it.id, "expected")} alt={`Drawing crop for ${it.id}`} />
+              {STATIC && geo ? <StaticCrop run={run} it={it} kind="expected" geo={geo} /> : <img src={url.crop(run, it.id, "expected")} alt={`Drawing crop for ${it.id}`} />}
             </div>
           </figure>
           <figure>
@@ -77,7 +103,7 @@ export function ProofCard({ run, it }: { run: string; it: Item }) {
               <Seg value={found} onChange={setFound} options={[{ value: "found", label: "Photo", title: "Zoomed crop of the original photo" }, { value: "aligned", label: <><Layers size={12} />Aligned</>, title: "Perspective-corrected, pixel-aligned with the drawing" }]} />
             </figcaption>
             <div className="proof-img" style={{ ["--c" as string]: STATUS_COLOR[s] }}>
-              <img key={found} src={url.crop(run, it.id, found)} alt={`Photo crop for ${it.id}`} />
+              {STATIC && geo ? <StaticCrop key={found} run={run} it={it} kind={found} geo={geo} /> : <img key={found} src={url.crop(run, it.id, found)} alt={`Photo crop for ${it.id}`} />}
             </div>
           </figure>
         </div>

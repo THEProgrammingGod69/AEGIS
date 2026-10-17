@@ -19,3 +19,6 @@ eagle_eye/web/node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# hosted showcase build output (built by Vercel from web/static-public)
+eagle_eye/web/dist-static/

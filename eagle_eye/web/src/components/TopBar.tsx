@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Cpu, FlaskConical, History, LayoutGrid, Puzzle, ScanEye } from "lucide-react";
 import { Brand } from "./Logo";
+import { STATIC } from "../lib/api";
 import type { Health } from "../lib/types";
 
 const NAV = [
@@ -30,8 +31,8 @@ export function TopBar({ page, health }: { page: string; health: Health | null }
         <div className="topbar-right">
           <div className="status-pill" title={health ? (ok ? health.tesseract.version ?? "" : health.tesseract.error) : "Connecting…"}>
             <span className={`dot${ok ? " pulse" : ""}`} style={{ ["--c" as string]: health == null ? "var(--text-3)" : ok ? "var(--pass)" : "var(--fail)" }} />
-            {health == null ? "Connecting…" : ok ? "Engine ready" : "Tesseract missing"}
-            {health && (
+            {health == null ? "Connecting…" : STATIC ? "Showcase · recorded engine runs" : ok ? "Engine ready" : "Tesseract missing"}
+            {health && !STATIC && (
               <span className="hide-sm faint row" style={{ ["--gap" as string]: "5px" }}>
                 · <Cpu size={13} /> {health.workers} OCR lanes
               </span>

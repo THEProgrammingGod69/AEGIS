@@ -10,7 +10,8 @@ import { PhotoViewer, type ViewerAnchor, type ViewerItem } from "../components/P
 import { ProofCard } from "../components/ProofCard";
 import { Running } from "../components/Running";
 import { Kpi, Marker, Seg, StatusBadge, useToast } from "../components/ui";
-import { api, followJob, url } from "../lib/api";
+import { STATIC, api, followJob, url } from "../lib/api";
+import { recheckOptions } from "../lib/static";
 import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
@@ -226,7 +227,8 @@ function TimingCard({ p }: { p: RunPayload }) {
 function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | null, sample: string | null) => void }) {
   const [photo, setPhoto] = useState<File | null>(null);
   const samples = useAsync(api.samples);
-  const suggested = p.meta.photo_name.startsWith("01_") ? "05" : null;
+  const suggested = p.meta.photo_name.startsWith("01_") && !p.meta.parent ? "05" : null;
+  const recorded = STATIC ? recheckOptions(p.meta.id) : null;
   return (
     <div className="card pad recheck">
       <div className="card-head">
@@ -236,20 +238,30 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
         </div>
       </div>
       <div className="recheck-grid">
-        <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop the photo taken after the fix" hint="Same cabinet, any angle" icon={<Camera />} />
+        {STATIC ? (
+          <div className="card flat pad small muted">
+            This hosted showcase replays re-checks recorded from the real engine. Uploading a new photo needs the live engine
+            (<span className="mono">run.bat</span> / <span className="mono">python server.py</span>).
+            {recorded && !recorded.length && <div style={{ marginTop: 8 }}>No re-check was recorded for this run; open <b>Sample 01</b> to try one.</div>}
+          </div>
+        ) : (
+          <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop the photo taken after the fix" hint="Same cabinet, any angle" icon={<Camera />} />
+        )}
         <div className="stack" style={{ ["--gap" as string]: "8px" }}>
           <div className="tiny faint">…or re-check with a sample photo</div>
           <div className="row wrap" style={{ ["--gap" as string]: "6px" }}>
-            {samples.data?.map((s) => (
+            {samples.data?.filter((s) => !recorded || recorded.includes(s.id)).map((s) => (
               <button key={s.id} className="chip" aria-pressed={s.id === suggested} onClick={() => onStart(null, s.id)} title={s.subtitle}>
                 {s.id} · {s.title}
               </button>
             ))}
           </div>
           {suggested && <div className="tiny muted">Suggested: <b>05 · After the fix</b>, a re-photo of sample 01 with one fault left.</div>}
-          <button className="btn btn-primary btn-lg" disabled={!photo} onClick={() => onStart(photo, null)} style={{ marginTop: "auto" }}>
-            <RefreshCcw /> Re-check with uploaded photo
-          </button>
+          {!STATIC && (
+            <button className="btn btn-primary btn-lg" disabled={!photo} onClick={() => onStart(photo, null)} style={{ marginTop: "auto" }}>
+              <RefreshCcw /> Re-check with uploaded photo
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -400,7 +412,7 @@ export function Run({ id }: { id: string }) {
 
         <div className="side">
           <div className="card pad">
-            {sel ? <ProofCard run={id} it={sel} /> : <div className="empty">Select an item</div>}
+            {sel ? <ProofCard run={id} it={sel} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm }} /> : <div className="empty">Select an item</div>}
           </div>
           <div className="card side-tabs">
             <div className="tabs">

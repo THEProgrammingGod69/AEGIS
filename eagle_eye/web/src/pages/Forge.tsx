@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PhotoViewer } from "../components/PhotoViewer";
 import { Running } from "../components/Running";
 import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
-import { api, followJob, url } from "../lib/api";
+import { STATIC, api, followJob, url } from "../lib/api";
 import { STATUS_COLOR, isIssue, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import type { JobView, RunPayload } from "../lib/types";
@@ -236,6 +236,9 @@ export function Forge() {
               <button className="btn btn-icon" onClick={() => setSeed(String(10000 + Math.floor(Math.random() * 89999)))} title="Random seed"><Dices /></button>
             </div>
           </label>
+          {STATIC && (
+            <div className="tiny muted">Showcase: picks one of the unseen cabinets Fault Forge generated and the real engine inspected (recorded), matching your fault count. Live forging with any seed and camera runs in the local engine.</div>
+          )}
           <button className="btn btn-primary btn-xl btn-block" onClick={go} disabled={busy}>
             <Play /> {busy ? "Forging…" : count > 1 ? `Forge & inspect ${count} cabinets` : "Forge & inspect"}
           </button>

@@ -1,6 +1,7 @@
 import { Boxes, Code2, Cpu, ExternalLink, FileCode2, Network, Puzzle, ServerCog, Wrench } from "lucide-react";
 import { Reveal } from "../components/ui";
-import { api } from "../lib/api";
+import { STATIC, api } from "../lib/api";
+import { REPO_URL } from "../lib/static";
 import { useAsync } from "../lib/hooks";
 
 const FILES = [
@@ -81,7 +82,7 @@ export function Engine() {
           </div>
         </Reveal>
         <Reveal className="card pad" delay={0.06}>
-          <div className="card-title" style={{ marginBottom: 14 }}><ServerCog /> This machine</div>
+          <div className="card-title" style={{ marginBottom: 14 }}><ServerCog /> {STATIC ? "Recorded on" : "This machine"}</div>
           <div className="kv">
             <span>Engine</span><b className="mono">EAGLE EYE {h?.version ?? "…"}</b>
             <span>OCR</span><b className="mono" style={{ color: h ? (h.tesseract.ok ? "var(--pass)" : "var(--fail)") : undefined }}>{h ? h.tesseract.version ?? h.tesseract.error : "…"}</b>
@@ -111,7 +112,7 @@ export function Engine() {
         <Reveal className="card pad" delay={0.06}>
           <div className="card-head">
             <div className="card-title"><Network /> REST API</div>
-            <a className="btn btn-sm" href="/docs" target="_blank" rel="noreferrer"><ExternalLink /> OpenAPI docs</a>
+            <a className="btn btn-sm" href={STATIC ? REPO_URL + "/eagle_eye#rest-api" : "/docs"} target="_blank" rel="noreferrer"><ExternalLink /> {STATIC ? "API reference" : "OpenAPI docs"}</a>
           </div>
           <div className="api-list">
             {API.map(([m, p, d]) => (

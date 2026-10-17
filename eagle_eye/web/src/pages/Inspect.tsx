@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DropZone } from "../components/DropZone";
 import { Running } from "../components/Running";
 import { StatusBadge, useToast } from "../components/ui";
-import { api, followJob, url } from "../lib/api";
+import { STATIC, api, followJob, url } from "../lib/api";
+import { LIVE_ONLY, REPO_URL } from "../lib/static";
 import { CHECK_TITLE } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
@@ -34,6 +35,16 @@ export function SampleCard({ s, active, onClick }: { s: Sample; active: boolean;
 function InputRow({ icon, label, accept, file, onFile, demo, dl }: {
   icon: React.ReactNode; label: string; accept: string; file: File | null; onFile: (f: File | null) => void; demo?: string; dl: string;
 }) {
+  if (STATIC)
+    return (
+      <div className="input-row">
+        <div className="drop compact has" style={{ cursor: "default", flex: 1 }}>
+          <div className="drop-icon">{icon}</div>
+          <div className="drop-text"><div className="drop-title">{label}</div><div className="drop-hint mono">{demo}</div></div>
+        </div>
+        <a className="btn btn-sm btn-icon btn-ghost" href={dl} title={`Download ${demo}`}><Download /></a>
+      </div>
+    );
   return (
     <div className="input-row">
       <DropZone compact accept={accept} file={file} onFile={onFile} title={label} icon={icon}
@@ -123,6 +134,13 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
         </button>
       </div>
 
+      {STATIC && (
+        <div className="callout info">
+          <Sparkles />
+          <span>{LIVE_ONLY} <a href={REPO_URL} target="_blank" rel="noreferrer">Get the code →</a></span>
+        </div>
+      )}
+
       <div className="setup">
         <div className="stack" style={{ ["--gap" as string]: "18px" }}>
           <motion.div className="card pad" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -138,7 +156,7 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
                 <span className="photo-preview-tag">{photo ? "Your upload" : `Sample ${sample}`}</span>
               </div>
               <div className="stack" style={{ ["--gap" as string]: "12px" }}>
-                <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop your own cabinet photo" hint="…or pick one of the samples below" icon={<ImageIcon />} />
+                {!STATIC && <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop your own cabinet photo" hint="…or pick one of the samples below" icon={<ImageIcon />} />}
                 {activeSample && !photo && (
                   <div className="card flat pad sample-expect">
                     <div className="tiny faint" style={{ marginBottom: 6 }}>Planted faults (answer key)</div>
@@ -209,6 +227,7 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
                 const active = on.includes(c.name);
                 return (
                   <button key={c.name} className={`check-tile${active ? " on" : ""}`} aria-pressed={active}
+                    disabled={STATIC} title={STATIC ? "Recorded runs use all five checks; toggling needs the live engine" : undefined}
                     onClick={() => setEnabled(active ? on.filter((x) => x !== c.name) : [...on, c.name])}>
                     <span className="switch" role="switch" aria-checked={active} />
                     <div className="grow">

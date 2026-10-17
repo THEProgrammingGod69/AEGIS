@@ -1897,6 +1897,7 @@
 }
 
 .proof-img {
+  position: relative;
   height: 190px;
   border-radius: 12px;
   overflow: hidden;
