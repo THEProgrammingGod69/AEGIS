@@ -33,7 +33,7 @@ from render import describe_fault, expected_item, random_faults, render
 
 FILES = dict(marked="marked.jpg", rectified="rectified.jpg", overlay="ga_overlay.png", json="report.json",
              checklist="QC_Checklist_FILLED.xlsx", pdf="EAGLE_EYE_QC_Report.pdf")
-CACHE = config.OUT / "cache"
+CACHE = config.DATA / "cache"
 CACHE.mkdir(parents=True, exist_ok=True)
 _ID = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 
@@ -170,22 +170,32 @@ def resolve_inputs(d, ga=None, wires=None, checklist=None, names=None):
 
 # ------------------------------------------------------------------ the pipeline
 def run_inspection(photo, ga=None, wires=None, checklist=None, enabled=None, parent=None, label=None,
-                   source="upload", photo_name=None, input_names=None, forge=None, on_event=None):
-    """Inspect one photo end to end and store every artefact. Returns the run's meta dict."""
+                   source="upload", photo_name=None, input_names=None, forge=None, on_event=None,
+                   parent_data=None, reports=True):
+    """Inspect one photo end to end and store every artefact. Returns the run's meta dict.
+
+    ``parent`` re-checks a stored run; ``parent_data=(meta, report)`` re-checks a run held by the caller
+    (the stateless cloud API, where the browser keeps the history). ``reports=False`` skips the Excel and
+    PDF so a caller can return results first and call ``build_reports`` afterwards.
+    """
     emit = on_event or (lambda ev: None)
     rid = new_id(); d = config.RUNS / rid; d.mkdir(parents=True)
     try:
         return _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, photo_name,
-                    input_names, forge, emit)
+                    input_names, forge, emit, parent_data, reports)
     except Exception:
         shutil.rmtree(d, ignore_errors=True)
         raise
 
 
-def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, photo_name, input_names, forge, emit):
+def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, photo_name, input_names, forge, emit,
+         parent_data=None, reports=True):
     enabled = [c for c in (enabled or ORDER) if c in CHECKS] or list(ORDER)
     prev_meta = prev_rep = None
-    if parent:
+    if parent_data:
+        prev_meta, prev_rep = parent_data
+        parent = prev_meta.get("id") or parent
+    elif parent:
         prev_meta = get_meta(parent)
         prev_rep = read_json(run_dir(parent) / FILES["json"])
         if not (ga or wires or checklist):     # a re-check reuses the drawing set of the run it re-checks
@@ -226,16 +236,47 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
         forge["score"] = score_forge(rep, forge["faults"])
         meta["forge"] = forge
     write_json(d / FILES["json"], rep)
-    rp.fill_checklist(inputs["checklist"]["path"], rep, str(d / FILES["checklist"]), meta=meta)
-    pdf_report.build_pdf(str(d / FILES["pdf"]), rep, meta, str(d / FILES["marked"]),
-                         lambda r: (item_crop(rid, r["id"], "expected", rep=rep, meta=meta),
-                                    item_crop(rid, r["id"], "found", rep=rep, meta=meta)))
+    if reports:
+        _reports(rid, rep, meta)
     meta["timing"] = dict(rep["timing"], report=round((datetime.datetime.now() - t).total_seconds(), 3))
     write_json(d / "meta.json", meta)
     emit(dict(stage="report", status="done", t=rep["timing"]["total"] + meta["timing"]["report"],
               files=list(FILES.values())))
     if prev_meta:
         emit(dict(stage="recheck", status="done", t=rep["timing"]["total"] + meta["timing"]["report"], **rep["recheck"]))
+    return meta
+
+
+def _reports(rid, rep, meta):
+    d = run_dir(rid)
+    rp.fill_checklist(meta["inputs"]["checklist"]["path"], rep, str(d / FILES["checklist"]), meta=meta)
+    pdf_report.build_pdf(str(d / FILES["pdf"]), rep, meta, str(d / FILES["marked"]),
+                         lambda r: (item_crop(rid, r["id"], "expected", rep=rep, meta=meta),
+                                    item_crop(rid, r["id"], "found", rep=rep, meta=meta)))
+
+
+def build_reports(rid):
+    """PDF report + filled Excel checklist for a run stored with ``reports=False``."""
+    meta, rep = get_meta(rid), get_report(rid)
+    _reports(rid, rep, meta)
+    return artefact(rid, "pdf"), artefact(rid, "checklist")
+
+
+def save_review(rid, item_id, decision, note="", by="Inspector"):
+    """Record a human decision on an item (REVIEW items mostly): the audit trail keeps who, what and when."""
+    if decision not in ("PASS", "FAIL", "CLEAR"):
+        raise ValueError("decision must be PASS, FAIL or CLEAR")
+    d = run_dir(rid)
+    meta = get_meta(rid)
+    rep = get_report(rid)
+    if not any(r["id"] == item_id for r in rep["results"]):
+        raise KeyError(item_id)
+    reviews = meta.setdefault("reviews", {})
+    if decision == "CLEAR":
+        reviews.pop(item_id, None)
+    else:
+        reviews[item_id] = dict(decision=decision, note=str(note)[:500], by=str(by)[:80], at=now())
+    write_json(d / "meta.json", meta)
     return meta
 
 
@@ -370,14 +411,15 @@ def score_forge(rep, faults):
                 false_alarms=fa, reviews=rv, correct_items=len(rep["results"]) - skip - len(planted))
 
 
-def run_forge(k=None, strength=1.0, seed=None, faults=None, on_event=None):
+def run_forge(k=None, strength=1.0, seed=None, faults=None, on_event=None, **kw):
     tmp = CACHE / f"forge_{uuid.uuid4().hex[:8]}.jpg"
     try:
         path, faults, seed = forge_photo(tmp, k=k, strength=strength, seed=seed, faults=faults)
         if on_event:
             on_event(dict(stage="forge", status="done", seed=seed, planted=len(faults)))
         return run_inspection(path, label=f"Fault Forge #{seed}", source="forge", photo_name=f"forge_{seed}.jpg",
-                              forge=dict(seed=seed, strength=round(float(strength), 2), faults=faults), on_event=on_event)
+                              forge=dict(seed=seed, strength=round(float(strength), 2), faults=faults), on_event=on_event,
+                              **kw)
     finally:
         tmp.unlink(missing_ok=True)
 

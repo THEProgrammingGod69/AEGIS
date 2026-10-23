@@ -1,0 +1,23 @@
+# EAGLE EYE engine for the hosted console (Vercel container runtime; also runs anywhere Docker does).
+#   docker build -f Dockerfile.vercel -t eagle-eye-engine . && docker run -p 8080:8080 -e PORT=8080 eagle-eye-engine
+# Ubuntu 24.04 ships Tesseract 5.3.4: the same OCR build the showcase runs and the self-test were recorded with.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv tesseract-ocr tesseract-ocr-eng \
+       fonts-dejavu-core libglib2.0-0t64 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+COPY requirements-engine.txt /tmp/requirements-engine.txt
+RUN pip install -r /tmp/requirements-engine.txt
+
+WORKDIR /app
+COPY . /app
+# Containers may only write under /tmp. EAGLE_EYE_CLOUD=1 serves the stateless /api/v2 (the console is hosted separately).
+ENV EAGLE_EYE_DATA=/tmp/eagle_eye EAGLE_EYE_CLOUD=1 OMP_THREAD_LIMIT=1
+EXPOSE 8080
+CMD ["sh", "-c", "exec python server.py --host 0.0.0.0 --port ${PORT:-8080} --no-browser"]

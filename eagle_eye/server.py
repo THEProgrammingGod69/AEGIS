@@ -4,8 +4,14 @@
     python server.py --port 9000 --host 0.0.0.0 --no-browser
 
 Inspections run one at a time on a background worker; the UI follows them live through /api/jobs/{id}.
+
+/api/v2 is the stateless cloud API used by the hosted console: one request inspects and streams every result
+and artefact back (NDJSON), nothing is kept on the server, so any container instance can serve any request.
 """
 import argparse
+import base64
+import io
+import json
 import os
 import queue
 import shutil
@@ -15,12 +21,14 @@ import traceback
 import uuid
 import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel, Field
 
 import config
@@ -29,6 +37,9 @@ from inspector import ORDER, InspectionError, tesseract_info
 
 UPLOADS = service.CACHE / "uploads"
 MAX_UPLOAD = 60 * 1024 * 1024
+CLOUD = os.environ.get("EAGLE_EYE_CLOUD") == "1"          # hosted engine container: stateless API only
+CONSOLE_URL = os.environ.get("EAGLE_EYE_CONSOLE", "https://eagle-eye-enigma.vercel.app")
+STARTED = time.time()
 KINDS = {"photo": (".jpg", ".jpeg", ".png"), "ga": (".pdf",), "wires": (".xlsx",), "checklist": (".xlsx",)}
 
 
@@ -102,7 +113,15 @@ class Jobs:
 JOBS = Jobs()
 app = FastAPI(title="EAGLE EYE", version=config.VERSION,
               description="Drawing-first control-cabinet QC: photo + GA drawing + wire list -> filled QC checklist with proof.")
-app.add_middleware(GZipMiddleware, minimum_size=2048)
+try:                                    # never gzip the NDJSON stream: compression would hold back progress lines
+    from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
+    app.add_middleware(GZipMiddleware, minimum_size=2048,
+                       exclude_content_types=DEFAULT_EXCLUDED_CONTENT_TYPES + ("application/x-ndjson",))
+except ImportError:                     # older Starlette: progress lines may arrive in bursts
+    app.add_middleware(GZipMiddleware, minimum_size=2048)
+# The cloud API is public and cookie-free, so any origin may call it (the hosted console lives on another domain).
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"],
+                   max_age=86400)
 
 
 def _err(status, msg):
@@ -307,6 +326,23 @@ def run_item_crop(rid: str, item_id: str, kind: str):
         _err(404, "unknown item")
 
 
+class ReviewRequest(BaseModel):
+    item: str = Field(..., max_length=80)
+    decision: Literal["PASS", "FAIL", "CLEAR"]
+    note: str = Field("", max_length=500)
+    by: str = Field("Inspector", max_length=80)
+
+
+@app.post("/api/runs/{rid}/review")
+def run_review(rid: str, req: ReviewRequest):
+    """Human-in-the-loop: an inspector confirms or overrides an item (REVIEW items mostly). Kept as an audit trail."""
+    _meta_or_404(rid)
+    try:
+        return service.save_review(rid, req.item, req.decision, req.note, req.by)
+    except KeyError:
+        _err(404, f"Unknown item '{req.item}'")
+
+
 @app.get("/api/forge/live")
 def forge_live():
     return service.forge_live()
@@ -317,8 +353,206 @@ def forge_selftest():
     return service.selftest()
 
 
+# ------------------------------------------------------------------ stateless cloud API (/api/v2)
+GATE = threading.BoundedSemaphore(max(1, int(os.environ.get("EAGLE_EYE_CONCURRENCY", "1"))))
+_waiting = [0]
+_waiting_lock = threading.Lock()
+
+
+def _jpeg_b64(path, max_side, quality=82):
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((max_side, max_side), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _file_b64(path):
+    return base64.b64encode(Path(path).read_bytes()).decode()
+
+
+def _pack(meta):
+    """Everything the browser needs to keep a run on its own: payload, report and every artefact."""
+    rid = meta["id"]
+    d = service.run_dir(rid)
+    F = service.FILES
+    files = dict(photo=_jpeg_b64(d / meta["photo"], 2000, 84), rectified=_jpeg_b64(d / F["rectified"], 1600),
+                 marked=_jpeg_b64(d / F["marked"], 1600), pdf=_file_b64(d / F["pdf"]),
+                 checklist=_file_b64(d / F["checklist"]))
+    if not meta["inputs"]["ga"]["demo"]:                  # the demo drawing's overlay ships with the console
+        files["overlay"] = _file_b64(d / F["overlay"])
+    payload = service.run_payload(rid)
+    for k in ("ga", "wires", "checklist"):                 # server paths mean nothing to the browser
+        payload["meta"]["inputs"][k].pop("path", None)
+    return dict(payload=payload, report=service.get_report(rid), files=files)
+
+
+def _stream(work, cleanup=None):
+    """Run ``work(emit) -> [meta, ...]`` on a worker thread; stream progress, then each packed run, as NDJSON."""
+    q = queue.Queue()
+
+    def runner():
+        made = []
+        with _waiting_lock:
+            _waiting[0] += 1
+            ahead = _waiting[0] - 1
+        if ahead:
+            q.put(dict(type="queued", position=ahead))
+        try:
+            with GATE:
+                with _waiting_lock:
+                    _waiting[0] -= 1
+                ahead = None
+
+                def emit(ev):
+                    q.put(dict(type="event", event=ev))
+
+                for meta in work(emit, made):
+                    q.put(dict(type="result", **_pack(meta)))
+        except InspectionError as e:
+            q.put(dict(type="error", detail=str(e)))
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            q.put(dict(type="error", detail=f"Unexpected error: {e}"))
+        finally:
+            if ahead is not None:
+                with _waiting_lock:
+                    _waiting[0] -= 1
+            for rid in made:
+                shutil.rmtree(config.RUNS / rid, ignore_errors=True)
+            if cleanup:
+                cleanup()
+            q.put(None)
+
+    threading.Thread(target=runner, name="ee-v2", daemon=True).start()
+
+    def lines():
+        while True:
+            try:
+                msg = q.get(timeout=8)
+            except queue.Empty:
+                msg = dict(type="ping")                   # keeps proxies from closing a quiet connection
+            if msg is None:
+                return
+            yield json.dumps(msg, separators=(",", ":"), default=str) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
+
+def _parent_data(raw):
+    try:
+        data = json.loads(raw)
+        meta, rep = data["meta"], data["report"]
+        assert isinstance(meta, dict) and isinstance(rep.get("results"), list)
+    except Exception:  # noqa: BLE001
+        _err(400, "parent: expected JSON {meta, report} of the run being re-checked")
+    return meta, rep
+
+
+@app.get("/api/v2/health")
+def health_v2():
+    t = tesseract_info()
+    return dict(ok=t["ok"], version=config.VERSION, tesseract=t, workers=config.WORKERS, cpu=os.cpu_count(),
+                checks=list(service.CHECKS), mode="cloud" if CLOUD else "local", stateless=True,
+                uptime=round(time.time() - STARTED, 1), busy=_waiting[0])
+
+
+@app.post("/api/v2/inspect")
+async def inspect_v2(photo: Optional[UploadFile] = File(None), sample: Optional[str] = Form(None),
+                     ga: Optional[UploadFile] = File(None), wires: Optional[UploadFile] = File(None),
+                     checklist: Optional[UploadFile] = File(None), checks: Optional[str] = Form(None),
+                     parent: Optional[UploadFile] = File(None), label: Optional[str] = Form(None)):
+    """Inspect one photo and stream progress + the complete run back. ``parent`` = JSON {meta, report} of the run
+    being re-checked (the browser keeps the history). Without GA / wire list / checklist the demo set is used."""
+    folder = UPLOADS / uuid.uuid4().hex[:12]
+    try:
+        photo_path, photo_name = await _save_upload(photo, "photo", folder)
+        ga_p, ga_n = await _save_upload(ga, "ga", folder)
+        wl_p, wl_n = await _save_upload(wires, "wires", folder)
+        cl_p, cl_n = await _save_upload(checklist, "checklist", folder)
+        parent_data = _parent_data(await parent.read()) if parent is not None and parent.filename else None
+    except HTTPException:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    src, name, source, default_label = _photo_source(sample, photo_path, photo_name)
+    label = (label or "").strip()[:120] or (("Re-check · " + default_label) if parent_data else default_label)
+    enabled = [c.strip().upper() for c in checks.split(",") if c.strip()] if checks else list(ORDER)
+    names = {k: n for k, n in (("ga", ga_n), ("wires", wl_n), ("checklist", cl_n)) if n}
+
+    def work(emit, made):
+        meta = service.run_inspection(src, ga_p, wl_p, cl_p, enabled=enabled, label=label, source=source,
+                                      photo_name=name, input_names=names, on_event=emit, parent_data=parent_data)
+        made.append(meta["id"])
+        yield meta
+
+    return _stream(work, cleanup=lambda: shutil.rmtree(folder, ignore_errors=True))
+
+
+class ForgeOne(BaseModel):
+    faults: Optional[int] = Field(None, ge=0, le=5)
+    strength: float = Field(1.0, ge=0.5, le=1.6)
+    seed: Optional[int] = Field(None, ge=0, le=10_000_000)
+
+
+@app.post("/api/v2/forge")
+def forge_v2(req: ForgeOne):
+    """Fault Forge: build an unseen cabinet with hidden faults, inspect it, score it against the answer key."""
+    def work(emit, made):
+        meta = service.run_forge(k=req.faults, strength=req.strength, seed=req.seed, on_event=emit)
+        made.append(meta["id"])
+        yield meta
+
+    return _stream(work)
+
+
+def _diag(fn):
+    with GATE:
+        return fn()
+
+
+@app.get("/api/v2/diag/samples")
+def diag_samples(ids: str = "01,02,03,04,05"):
+    """Parity check: inspect the shipped sample photos and report counts (compare with the local engine)."""
+    def run():
+        out = []
+        for sid in [x.strip() for x in ids.split(",") if x.strip()][:5]:
+            try:
+                p = service.sample_path(sid)
+            except KeyError:
+                _err(404, f"Unknown sample '{sid}'")
+            meta = service.run_inspection(p, label=f"diag {sid}", source="sample", reports=False)
+            shutil.rmtree(config.RUNS / meta["id"], ignore_errors=True)
+            out.append(dict(sample=sid, counts=meta["counts"], verdict=meta["verdict"]["label"],
+                            issues=[(i["id"], i["result"]) for i in meta["issues"]], seconds=meta["timing"]["total"]))
+        return dict(version=config.VERSION, tesseract=tesseract_info().get("version"), cpu=os.cpu_count(), runs=out)
+    return _diag(run)
+
+
+@app.get("/api/v2/diag/forge")
+def diag_forge(start: int = 200, n: int = 3, strength: float = 1.0):
+    """Parity check on held-out Fault Forge seeds: planted / caught / false alarms per cabinet."""
+    n = max(1, min(int(n), 10))
+
+    def run():
+        out = []
+        for seed in range(start, start + n):
+            meta = service.run_forge(seed=seed, strength=strength, reports=False)
+            shutil.rmtree(config.RUNS / meta["id"], ignore_errors=True)
+            s = meta["forge"]["score"]
+            out.append(dict(seed=seed, planted=s["n_planted"], caught=s["caught"], false_alarms=len(s["false_alarms"]),
+                            reviews=len(s["reviews"]), seconds=meta["timing"]["total"]))
+        tot = {k: sum(r[k] for r in out) for k in ("planted", "caught", "false_alarms", "reviews")}
+        return dict(version=config.VERSION, cpu=os.cpu_count(), total=tot, cabinets=out)
+    return _diag(run)
+
+
 # ------------------------------------------------------------------ web UI
-if (config.WEB_DIST / "index.html").exists():
+if CLOUD:
+    @app.get("/", include_in_schema=False)
+    def cloud_root():
+        return RedirectResponse(CONSOLE_URL)
+elif (config.WEB_DIST / "index.html").exists():
     app.mount("/assets", StaticFiles(directory=config.WEB_DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)

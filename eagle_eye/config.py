@@ -10,8 +10,10 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 INPUTS = BASE / "inputs"
-OUT = BASE / "out"
-RUNS = OUT / "runs"
+OUT = BASE / "out"                       # shipped results (demo outputs, Fault Forge self-test)
+# Where runs and caches are written. Containers (Vercel, Docker) only allow writes under /tmp.
+DATA = Path(os.environ.get("EAGLE_EYE_DATA") or OUT)
+RUNS = DATA / "runs"
 SAMPLES = BASE / "sample_photos"
 FONTS = BASE / "assets" / "fonts"
 WEB_DIST = BASE / "web" / "dist"
@@ -21,7 +23,7 @@ DEMO_WIRES = INPUTS / "WireList_EE-DEMO-01.xlsx"
 DEMO_CHECKLIST = INPUTS / "QC_Checklist_EE-DEMO-01.xlsx"
 DEMO_PHOTO = OUT / "demo" / "photo_v1.jpg"
 
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 
 # One tesseract process per core is the sweet spot; each process is kept single-threaded so that
 # parallel OCR calls do not fight each other for cores (Tesseract's own OpenMP threads oversubscribe).
@@ -61,5 +63,5 @@ def find_tesseract():
     return next((c for c in candidates if Path(c).exists()), None)
 
 
-for _d in (OUT, RUNS):
+for _d in (DATA, RUNS):
     _d.mkdir(parents=True, exist_ok=True)

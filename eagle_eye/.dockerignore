@@ -1,0 +1,12 @@
+# keep the engine image small: no web sources, recorded showcase, run store or tests
+web/
+out/runs/
+out/cache/
+out/forge/*.jpg
+tests/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+app.py
