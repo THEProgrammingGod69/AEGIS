@@ -82,6 +82,13 @@ try:
     _BACKEND, _IMPORT_ERROR = "rapidocr", None
 except Exception as e:  # noqa: BLE001 - ImportError or a broken ONNX Runtime DLL
     _BACKEND, _IMPORT_ERROR = "tesseract", f"{type(e).__name__}: {e}"
+    # reports name the engine that actually reads the photo: Tesseract finds far fewer labels on real photos
+    ENGINE = "Tesseract (fallback: PP-OCRv4 not loaded)"
+
+
+def fallback_reason():
+    """Why PP-OCRv4 is not used (the import error), or None when it is."""
+    return _IMPORT_ERROR if _BACKEND != "rapidocr" else None
 
 _local = threading.local()
 _pools = {}
@@ -195,7 +202,7 @@ def engine_info():
         except Exception as e:  # noqa: BLE001 - surfaced as a setup hint
             info["error"] = f"{type(e).__name__}: {e}"
         return info
-    info.update(engine="Tesseract (fallback)", fallback="tesseract", import_error=_IMPORT_ERROR)
+    info.update(fallback="tesseract", import_error=_IMPORT_ERROR)
     try:
         import subprocess
         _engine()

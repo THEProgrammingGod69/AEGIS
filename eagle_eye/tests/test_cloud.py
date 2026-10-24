@@ -44,7 +44,8 @@ def test_v2_inspect_then_stateless_recheck(runs_dir):
     files = r1["files"]
     assert base64.b64decode(files["pdf"])[:4] == b"%PDF"
     assert base64.b64decode(files["checklist"])[:2] == b"PK"
-    assert not {"photo", "marked", "preview"} & set(files)         # metadata only: the browser has its own photo
+    assert not {"photo", "marked"} & set(files)                    # metadata only: the browser has its own photo
+    assert "preview" in files                                      # ... except a server sample's, which it never had
     assert r1["storage"] == "metadata" and len(meta["photo_meta"]["sha256"]) == 64
     assert "overlay" not in files                                 # demo drawing: the console ships its overlay
     assert not list(runs_dir.iterdir())                            # nothing kept server-side
