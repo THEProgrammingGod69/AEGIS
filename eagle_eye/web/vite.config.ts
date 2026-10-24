@@ -8,6 +8,6 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: mode === "static" ? "./" : "/",
   publicDir: mode === "static" ? "static-public" : "public",
-  server: { port: 5173, proxy: { "/api": "http://127.0.0.1:8000" } },
+  server: { port: 5173, proxy: { "/api": "http://127.0.0.1:8000" }, fs: { allow: [".."] } },
   build: { outDir: mode === "static" ? "dist-static" : "dist", emptyOutDir: true, chunkSizeWarningLimit: 900 },
 }));

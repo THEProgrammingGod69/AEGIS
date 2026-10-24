@@ -23,7 +23,11 @@ DEMO_WIRES = INPUTS / "WireList_EE-DEMO-01.xlsx"
 DEMO_CHECKLIST = INPUTS / "QC_Checklist_EE-DEMO-01.xlsx"
 DEMO_PHOTO = OUT / "demo" / "photo_v1.jpg"
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
+
+# Wire-colour profile for drawing sets without their own colour legend (wire_profiles.json id, e.g. "iec-60204-1"). A
+# project setting, never a default: unset, only the universal green-and-yellow rule is checked on such cabinets.
+COLOUR_PROFILE = (os.environ.get("EAGLE_COLOUR_PROFILE") or "").strip() or None
 
 # One tesseract process per core is the sweet spot; each process is kept single-threaded so that
 # parallel OCR calls do not fight each other for cores (Tesseract's own OpenMP threads oversubscribe).

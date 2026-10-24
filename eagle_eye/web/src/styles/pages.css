@@ -2647,3 +2647,237 @@
   color: var(--accent);
   border: 1px solid var(--accent);
 }
+
+/* calibrated confidence on the run page (components/Confidence.tsx) */
+.conf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--c);
+}
+.conf-meter {
+  display: inline-block;
+  width: 36px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line-2);
+}
+.conf-chip.wide .conf-meter {
+  width: 60px;
+}
+.conf-meter b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c);
+}
+.photo-conf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text-2);
+}
+.photo-conf > svg {
+  color: var(--c);
+}
+.photo-conf-score {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--c);
+}
+
+/* fault Pareto on Analytics (components/FaultPareto.tsx) */
+.pareto-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 20px;
+  align-items: start;
+}
+.pareto-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pareto-grid {
+  stroke: var(--line);
+}
+.pareto-axis {
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.pareto-n {
+  fill: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.pareto-bar rect {
+  fill: var(--fail);
+  opacity: 0.78;
+  cursor: pointer;
+  transition: opacity 0.15s var(--ease);
+}
+.pareto-bar:hover rect,
+.pareto-bar.on rect {
+  opacity: 1;
+}
+.pareto-bar.on rect {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+.pareto-bar.other rect {
+  fill: var(--text-4);
+  cursor: default;
+}
+.pareto-cum {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.pareto-dot {
+  fill: var(--accent);
+}
+.pareto-80 {
+  stroke: var(--text-3);
+  stroke-dasharray: 4 4;
+}
+.pareto .table tr.pareto-other td {
+  color: var(--text-3);
+  cursor: default;
+}
+.heat-spot.dim {
+  opacity: 0.12;
+}
+
+/* confidence calibration on Fault Forge (components/CalibrationPanel.tsx) */
+.calib-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 22px;
+  align-items: start;
+}
+.calib-plot {
+  display: grid;
+  gap: 8px;
+  max-width: 460px;
+}
+.calib-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.calib-gridline {
+  stroke: var(--line);
+}
+.calib-axis {
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.calib-label {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+.calib-diag {
+  stroke: var(--text-3);
+  stroke-dasharray: 5 4;
+}
+.calib-raw {
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.calib-raw-dot {
+  fill: var(--panel-solid);
+  stroke: var(--text-2);
+  stroke-width: 1.5;
+}
+.calib-cal {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.calib-cal-dot {
+  fill: var(--accent);
+  fill-opacity: 0.85;
+}
+.calib-sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+.calib-sw.raw {
+  border: 1.5px solid var(--text-2);
+}
+.calib-sw.cal {
+  background: var(--accent);
+}
+.calib-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .pareto-grid-2,
+  .calib-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pareto-break {
+  fill: none;
+  stroke: var(--panel-solid);
+  stroke-width: 3;
+}
+
+/* ---- wire colour rule (wire_rules.py) */
+.wire-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.wire-code i {
+  width: 16px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-3);
+  display: inline-block;
+}
+.wire-rule { display: flex; flex-direction: column; gap: 10px; }
+.wire-rows { display: grid; gap: 6px; }
+.wire-row { display: grid; grid-template-columns: 112px 1fr; align-items: center; gap: 8px; }
+.wire-tally { display: flex; flex-direction: column; gap: 3px; }
+.wire-standards summary { cursor: pointer; color: var(--text-2, inherit); }
+.wire-standards p { margin: 8px 0; }
+.wire-table { width: 100%; border-collapse: collapse; }
+.wire-table th { text-align: left; font-weight: 500; font-size: 10.5px; color: var(--text-3); padding: 4px 4px; border-bottom: 1px solid var(--line); }
+.wire-table td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.wire-table tr.on td { background: rgba(56, 189, 248, 0.07); }
+@media (max-width: 720px) {
+  .wire-row { grid-template-columns: 1fr; }
+}
+
+/* ---- measured camera angle (real cabinet) */
+.angle-chip { gap: 5px; }
+.angle-chip.oblique { color: var(--review); border-color: rgba(251, 191, 36, 0.4); }
+.angle-chip.steep { color: var(--fail); border-color: rgba(251, 113, 133, 0.45); }

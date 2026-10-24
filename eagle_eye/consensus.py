@@ -112,6 +112,9 @@ def decide(findings, decisions=None, agent_on=False, strong_alone=None, registra
         for k in ("swaps", "found_box"):
             if f.get(k):
                 item[k] = f[k] if k != "found_box" else _xywh(f[k])
+        for k in ("swatch", "colour", "allowed", "wire_class", "rule_source"):       # wire colour by circuit class
+            if f.get(k) is not None:
+                item[k] = f[k]
         items.append(item)
     return items
 

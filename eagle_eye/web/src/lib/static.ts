@@ -49,6 +49,7 @@ const MAX_LIVE = 40;
 
 const MIME: Record<string, string> = {
   photo: "image/jpeg", preview: "image/jpeg", rectified: "image/jpeg", marked: "image/jpeg", ga: "image/jpeg", overlay: "image/png",
+  drawing: "image/png",
   pdf: "application/pdf", checklist: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", json: "application/json",
 };
 

@@ -1,21 +1,25 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Compass, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
   GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
   Timer, UserCheck, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CompareSlider } from "../components/CompareSlider";
+import { ConfidenceChip, PhotoConfidenceLine } from "../components/Confidence";
 import { DropZone } from "../components/DropZone";
 import { PhotoViewer, type ViewerAnchor, type ViewerItem } from "../components/PhotoViewer";
 import { ProofCard } from "../components/ProofCard";
 import { Running } from "../components/Running";
+import { WireRuleCard } from "../components/WireRule";
 import { Kpi, Marker, Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, dl, followJob, url, useCanLive } from "../lib/api";
 import { inspectorName, reviewSummary } from "../lib/reviews";
 import { recheckOptions } from "../lib/static";
 import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
+import { straightener } from "../lib/geometry";
 import { useAsync } from "../lib/hooks";
+import { engineOf, type Engine } from "../lib/confidence";
 import { approvalBlocker, reviewReason, safeInspection } from "../lib/inspection";
 import { go } from "../lib/router";
 import type { Item, JobView, Pt, Result, Review, RunMeta, RunPayload } from "../lib/types";
@@ -47,6 +51,7 @@ function VerdictBanner({ p }: { p: RunPayload }) {
             ? (real ? "REQUIRED VISUAL CHECKS VERIFIED" : "SYNTHETIC DEMO · SELECTED CHECKS VERIFIED") : invalid ? "BLOCKED · CHECK INPUTS AND ALIGNMENT" : "INCOMPLETE · REVIEW REQUIRED"}</div>
           <h2 className="verdict-head">{v.headline.split(" · ")[1] ?? v.headline}</h2>
           <p className="verdict-detail">{v.detail}</p>
+          <PhotoConfidenceLine p={p} />
           <div className="verdict-meta">
             {p.meta.origin === "cloud" && <span style={{ color: "var(--accent)" }}><Cloud size={13} /> Live cloud engine</span>}
             {p.meta.origin === "recorded" && <span><Cloud size={13} /> Recorded engine run</span>}
@@ -109,8 +114,8 @@ function Chain({ chain, current }: { chain: RunMeta[]; current: string }) {
   );
 }
 
-function IssueList({ items, selected, hovered, onSelect, onHover }: {
-  items: Item[]; selected: string | null; hovered: string | null; onSelect: (id: string) => void; onHover: (id: string | null) => void;
+function IssueList({ items, eng, selected, hovered, onSelect, onHover }: {
+  items: Item[]; eng: Engine; selected: string | null; hovered: string | null; onSelect: (id: string) => void; onHover: (id: string | null) => void;
 }) {
   if (!items.length)
     return (
@@ -134,7 +139,10 @@ function IssueList({ items, selected, hovered, onSelect, onHover }: {
                 <StatusBadge s={s} />
               </div>
               <div className="issue-found ellipsis">{it.found}</div>
-              <div className="tiny faint">{CHECK_TITLE[it.check]} · expected <span className="mono">{it.expected}</span></div>
+              <div className="row between" style={{ ["--gap" as string]: "8px" }}>
+                <div className="tiny faint ellipsis">{CHECK_TITLE[it.check]} · expected <span className="mono">{it.expected}</span></div>
+                <ConfidenceChip it={it} eng={eng} />
+              </div>
               {(it.result === "REVIEW" || it.result === "NOT_IN_VIEW") && <div className="tiny muted" style={{ marginTop: 7 }}>{reviewReason(it)}</div>}
             </div>
           </motion.button>
@@ -144,7 +152,7 @@ function IssueList({ items, selected, hovered, onSelect, onHover }: {
   );
 }
 
-function Checklist({ items, selected, onSelect }: { items: Item[]; selected: string | null; onSelect: (id: string) => void }) {
+function Checklist({ items, eng, selected, onSelect }: { items: Item[]; eng: Engine; selected: string | null; onSelect: (id: string) => void }) {
   const [f, setF] = useState<"ALL" | Result>("ALL");
   const [q, setQ] = useState("");
   const counts = useMemo(() => {
@@ -169,7 +177,7 @@ function Checklist({ items, selected, onSelect }: { items: Item[]; selected: str
       <div className="table-wrap">
         <table className="table">
           <thead>
-            <tr><th>Item</th><th>Expected</th><th>Found</th><th>Result</th></tr>
+            <tr><th>Item</th><th>Expected</th><th>Found</th><th>Result</th><th className="tip" data-tip="Calibrated on Fault Forge runs. PASS/FAIL: chance the verdict is right. REVIEW: chance the item is faulty.">Confidence</th></tr>
           </thead>
           <tbody>
             {rows.map((it) => (
@@ -183,6 +191,7 @@ function Checklist({ items, selected, onSelect }: { items: Item[]; selected: str
                     {it.recheck && <StatusBadge s={it.recheck} />}
                   </div>
                 </td>
+                <td><ConfidenceChip it={it} eng={eng} /></td>
               </tr>
             ))}
           </tbody>
@@ -434,16 +443,24 @@ export function Run({ id }: { id: string }) {
   if (job) return <div className="main"><Running job={job} photo={jobPhoto} enabled={p.meta.enabled} title={`Re-check of ${p.meta.label}`} /></div>;
 
   const sel = p.results.find((r) => r.id === selected) ?? null;
-  const rect = mode === "rect";
-  const space: [number, number] = rect ? [p.size_mm[0] * R, p.size_mm[1] * R] : p.photo_size;
-  const vItems: ViewerItem[] = issues.map((it) => ({ id: it.id, quad: rect ? mmQuad(it.box) : it.quad, status: statusOf(it), marker: it.marker, caption: `${it.id} · ${it.found}` }));
-  const vLayout = p.layout.map((l) => ({ tag: l.tag, kind: l.kind, quad: rect ? mmQuad(l.box) : l.quad }));
+  // real cabinet: the straightened photo (rectified.jpg) is the photo seen through the fitted perspective onto the
+  // primary GA view, so a photo taken at an angle is shown as if taken straight on, with the drawing on top
+  const straight = (p.engine_kind ?? p.meta.engine_kind) === "real" && p.rectify ? straightener(p.rectify) : null;
+  const rect = mode === "rect" && (p.rectified !== false || !!straight);
+  const toRect = (q: Pt[]): Pt[] => (straight ? q.map((pt) => straight(pt as [number, number])) : q);
+  const onView = (it: Item) => !straight || !it.view || it.view === p.rectify!.view;
+  const space: [number, number] = rect ? (straight ? p.rectify!.size : [p.size_mm[0] * R, p.size_mm[1] * R]) : p.photo_size;
+  const quadOf = (it: Item) => (rect ? (straight ? toRect(it.quad) : mmQuad(it.box)) : it.quad);
+  const vItems: ViewerItem[] = issues.filter((it) => !rect || onView(it)).map((it) => ({ id: it.id, quad: quadOf(it), status: statusOf(it), marker: it.marker, caption: `${it.id} · ${it.found}` }));
+  const vLayout = p.layout.map((l) => ({ tag: l.tag, kind: l.kind, quad: rect ? (straight ? toRect(l.quad) : mmQuad(l.box)) : l.quad }));
   const vAnchors: ViewerAnchor[] = p.registration.anchor_points.map((a) => ({
     tag: a.tag, inlier: a.inlier,
-    found: rect ? [a.found_mm[0] * R, a.found_mm[1] * R] : a.found_px,
-    expected: rect ? [a.expected_mm[0] * R, a.expected_mm[1] * R] : a.expected_px,
+    found: rect ? (straight ? straight(a.found_px as [number, number]) : [a.found_mm[0] * R, a.found_mm[1] * R]) : a.found_px,
+    expected: rect ? (straight ? straight(a.expected_px as [number, number]) : [a.expected_mm[0] * R, a.expected_mm[1] * R]) : a.expected_px,
   }));
-  const selQuad = sel ? (rect ? mmQuad(sel.box) : sel.quad) : null;
+  const selQuad = sel ? quadOf(sel) : null;
+  const angle = p.registration.angle;
+  const drawingOverlay = !rect && !!straight && layers.drawing;
   const parent = chain.data?.find((m) => m.id === p.meta.parent);
 
   return (
@@ -489,14 +506,21 @@ export function Run({ id }: { id: string }) {
           <div className="viewer-toolbar">
             <Seg value={mode} onChange={setMode} options={[
               { value: "photo", label: <><ImageIcon /> Photo</>, title: "The photo as taken, with every issue boxed" },
-              ...(p.rectified === false || p.registration.valid === false ? [] : [{ value: "rect" as const, label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing" }]),
+              ...((p.rectified === false && !straight) || p.registration.valid === false ? [] : [straight
+                ? { value: "rect" as const, label: <><SquareDashed /> Straightened</>, title: "The photo seen straight on: warped onto the GA view through the camera angle measured from the labels" }
+                : { value: "rect" as const, label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing" }]),
             ]} />
+            {angle && angle.tilt >= 8 && (
+              <span className={`chip angle-chip${angle.tilt >= 50 ? " steep" : angle.tilt >= 25 ? " oblique" : ""}`} title={`Measured from the fitted perspective (focal length ${angle.focal_source}). The drawing is laid onto the photo at this angle, not flat.`}>
+                <Compass /> {Math.round(angle.tilt)}° {Math.abs(angle.yaw) >= Math.abs(angle.pitch) ? (angle.yaw > 0 ? "from the right" : "from the left") : angle.pitch > 0 ? "from below" : "from above"}
+              </span>
+            )}
             <div className="row" style={{ ["--gap" as string]: "6px" }}>
               <button className="chip" aria-pressed={layers.issues} onClick={() => setLayers({ ...layers, issues: !layers.issues })}><ScanLine /> Issues</button>
               <button className="chip" disabled={p.registration.valid === false} title={p.registration.valid === false ? "Drawing overlay requires valid alignment" : undefined} aria-pressed={layers.drawing} onClick={() => setLayers({ ...layers, drawing: !layers.drawing })}><Layers /> Drawing</button>
               <button className="chip" aria-pressed={layers.anchors} onClick={() => setLayers({ ...layers, anchors: !layers.anchors })}><Crosshair /> Anchors</button>
             </div>
-            {rect && (
+            {(rect || drawingOverlay) && (
               <div className="row opacity-ctl" style={{ ["--gap" as string]: "8px" }}>
                 <span className="tiny faint nowrap">GA overlay</span>
                 <input className="range" type="range" min={0} max={1} step={0.01} value={opacity} onChange={(e) => setOpacity(+e.target.value)} style={{ ["--p" as string]: `${opacity * 100}%`, width: 110 }} />
@@ -513,7 +537,7 @@ export function Run({ id }: { id: string }) {
             anchors={vAnchors}
             backplate={rect ? [[0, 0], [space[0], 0], [space[0], space[1]], [0, space[1]]] : p.backplate_quad}
             layers={layers}
-            overlaySrc={rect ? url.file(id, "overlay") : undefined}
+            overlaySrc={rect ? url.file(id, "overlay") : drawingOverlay ? url.file(id, "drawing") : undefined}
             overlayOpacity={opacity}
             selected={selected}
             selectedQuad={selQuad}
@@ -549,14 +573,15 @@ export function Run({ id }: { id: string }) {
             <div className="tab-body">
               <AnimatePresence mode="wait">
                 <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-                  {tab === "issues" && <IssueList items={issues} selected={selected} hovered={hovered} onSelect={pick} onHover={setHovered} />}
-                  {tab === "checklist" && <Checklist items={p.results} selected={selected} onSelect={pick} />}
+                  {tab === "issues" && <IssueList items={issues} eng={engineOf(p)} selected={selected} hovered={hovered} onSelect={pick} onHover={setHovered} />}
+                  {tab === "checklist" && <Checklist items={p.results} eng={engineOf(p)} selected={selected} onSelect={pick} />}
                   {tab === "registration" && <Registration p={p} />}
                   {tab === "coverage" && <CoveragePanel p={p} onSelect={pick} />}
                 </motion.div>
               </AnimatePresence>
             </div>
           </div>
+          {p.wire_rule && <WireRuleCard rule={p.wire_rule} />}
         </div>
       </div>
 

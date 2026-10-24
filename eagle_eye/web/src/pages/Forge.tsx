@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Dices, Eye, EyeOff, FlaskConical, Gauge, Play, ShieldCheck, Target, Terminal, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { AnglePanel } from "../components/AnglePanel";
+import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ForgeGap } from "../components/ForgeGap";
 import { PhotoViewer } from "../components/PhotoViewer";
 import { Running } from "../components/Running";
@@ -342,6 +344,24 @@ export function Forge({ auto = false }: { auto?: boolean }) {
           <p>Fault Forge plants the same kinds of fault in generated cabinets and in images of Emerson's real cabinet (photos, or renders of its GA drawing when no photos are available), and scores both the same way: confirmed (FAIL), referred (REVIEW), incorrect PASS, or not assessed. The gap shows what the real cabinet costs.</p>
         </Reveal>
         <ForgeGap />
+      </section>
+
+      <section className="section">
+        <Reveal className="section-head">
+          <span className="eyebrow">Confidence calibration</span>
+          <h2>When the engine says 90%, is it right 90% of the time?</h2>
+          <p>Fault Forge knows the answer for every item it plants, so it can check the engine's own confidence. Each verdict's raw score is compared with how often such verdicts turned out right, on images the calibration never saw. The calibrated confidence is what every inspection shows, per item and per photo.</p>
+        </Reveal>
+        <CalibrationPanel />
+      </section>
+
+      <section className="section">
+        <Reveal className="section-head">
+          <span className="eyebrow">Camera angle</span>
+          <h2>A photo from the side still lands on the drawing.</h2>
+          <p>Technicians cannot always stand square to an open cabinet. Each GA view of the real cabinet is seen through a virtual camera turned sideways and inspected with the flat registration alone and with the perspective search, which lays the drawing on at the photo's own angle and measures that angle.</p>
+        </Reveal>
+        <AnglePanel />
       </section>
       <div className="tiny faint row" style={{ ["--gap" as string]: "6px", marginTop: 18 }}><Terminal size={13} /> Live tally and history are stored {STATIC ? "in this browser (IndexedDB); the cloud engine keeps nothing" : <>in <span className="mono">out/runs/</span></>}.</div>
     </div>

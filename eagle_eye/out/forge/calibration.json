@@ -1,0 +1,406 @@
+{
+ "schema": "eagle-eye-calibration/1",
+ "created": "2026-10-24T18:44:54+00:00",
+ "engine_version": "3.1.0",
+ "method": "histogram binning of the raw item score per engine and verdict with Laplace's rule (right + 1) / (items + 2), monotonic (pool-adjacent-violators); fitted on even-numbered images, scored on odd ones, then refitted on all",
+ "engines": {
+  "demo": {
+   "label": "Demo-cabinet engine on generated cabinets (synthetic Fault Forge)",
+   "images": 100,
+   "items": 4076,
+   "checks": [
+    "COLOUR",
+    "FERRULE",
+    "GA",
+    "LABEL",
+    "ORDER"
+   ],
+   "measures": [
+    "colour",
+    "text"
+   ],
+   "counts": {
+    "PASS": 3902,
+    "FAIL": 153,
+    "REVIEW": 21
+   },
+   "maps": {
+    "PASS": [
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 2,
+      "k": 2,
+      "p": 0.75
+     },
+     {
+      "lo": 0.6,
+      "hi": 0.7,
+      "n": 8,
+      "k": 8,
+      "p": 0.9
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 42,
+      "k": 42,
+      "p": 0.9773
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 885,
+      "k": 885,
+      "p": 0.9983
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 272,
+      "k": 272,
+      "p": 0.9983
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 593,
+      "k": 593,
+      "p": 0.9983
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 2100,
+      "k": 2100,
+      "p": 0.9995
+     }
+    ],
+    "FAIL": [
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 3,
+      "k": 3,
+      "p": 0.8
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 49,
+      "k": 49,
+      "p": 0.961
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 18,
+      "k": 18,
+      "p": 0.961
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 4,
+      "k": 4,
+      "p": 0.961
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 79,
+      "k": 79,
+      "p": 0.9877
+     }
+    ],
+    "REVIEW": [
+     {
+      "lo": 0.0,
+      "hi": 0.5,
+      "n": 6,
+      "k": 0,
+      "p": 0.08
+     },
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 15,
+      "k": 0,
+      "p": 0.08
+     }
+    ]
+   },
+   "heldout": {
+    "items": 2021,
+    "accuracy": 1.0,
+    "ece_raw": 0.0512,
+    "ece_cal": 0.0051,
+    "raw": [
+     {
+      "lo": 0.6,
+      "hi": 0.7,
+      "n": 3,
+      "stated": 0.62,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 24,
+      "stated": 0.7521,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 480,
+      "stated": 0.8521,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 145,
+      "stated": 0.9135,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 310,
+      "stated": 0.9605,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 1059,
+      "stated": 0.9994,
+      "observed": 1.0
+     }
+    ],
+    "cal": [
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 1,
+      "stated": 0.75,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 3,
+      "stated": 0.8571,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 41,
+      "stated": 0.9167,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 66,
+      "stated": 0.9663,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 1910,
+      "stated": 0.9979,
+      "observed": 1.0
+     }
+    ]
+   },
+   "review": {
+    "n": 21,
+    "fault_rate": 0.0
+   }
+  },
+  "real": {
+   "label": "Real-cabinet engine on forged images of a real cabinet",
+   "images": 16,
+   "items": 1064,
+   "checks": [
+    "LABEL",
+    "MISSING",
+    "ORDER"
+   ],
+   "measures": [
+    "text"
+   ],
+   "counts": {
+    "PASS": 1013,
+    "FAIL": 6,
+    "REVIEW": 45
+   },
+   "maps": {
+    "PASS": [
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 10,
+      "k": 8,
+      "p": 0.75
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 72,
+      "k": 70,
+      "p": 0.9595
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 245,
+      "k": 245,
+      "p": 0.996
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 686,
+      "k": 686,
+      "p": 0.9985
+     }
+    ],
+    "FAIL": [
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 6,
+      "k": 6,
+      "p": 0.875
+     }
+    ],
+    "REVIEW": [
+     {
+      "lo": 0.5,
+      "hi": 0.6,
+      "n": 2,
+      "k": 2,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.6,
+      "hi": 0.7,
+      "n": 2,
+      "k": 2,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 6,
+      "k": 2,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 6,
+      "k": 0,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 15,
+      "k": 0,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 9,
+      "k": 0,
+      "p": 0.2203
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 5,
+      "k": 0,
+      "p": 0.2203
+     }
+    ]
+   },
+   "heldout": {
+    "items": 502,
+    "accuracy": 0.992,
+    "ece_raw": 0.0189,
+    "ece_cal": 0.007,
+    "raw": [
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 11,
+      "stated": 0.8409,
+      "observed": 0.8182
+     },
+     {
+      "lo": 0.9,
+      "hi": 0.95,
+      "n": 52,
+      "stated": 0.9165,
+      "observed": 0.9615
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 161,
+      "stated": 0.9724,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 278,
+      "stated": 0.9911,
+      "observed": 1.0
+     }
+    ],
+    "cal": [
+     {
+      "lo": 0.7,
+      "hi": 0.8,
+      "n": 8,
+      "stated": 0.75,
+      "observed": 0.75
+     },
+     {
+      "lo": 0.8,
+      "hi": 0.9,
+      "n": 3,
+      "stated": 0.8,
+      "observed": 1.0
+     },
+     {
+      "lo": 0.95,
+      "hi": 0.99,
+      "n": 213,
+      "stated": 0.9801,
+      "observed": 0.9906
+     },
+     {
+      "lo": 0.99,
+      "hi": 1.0,
+      "n": 278,
+      "stated": 0.9976,
+      "observed": 1.0
+     }
+    ]
+   },
+   "review": {
+    "n": 45,
+    "fault_rate": 0.1333
+   }
+  }
+ }
+}

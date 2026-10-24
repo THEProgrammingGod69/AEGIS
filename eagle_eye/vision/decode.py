@@ -292,7 +292,8 @@ def classify_tokens(tokens, vocab):
         f = parse_ferrule(t, vocab) if ("/" in r["norm"] or "-" in r["norm"]) else None
         if f and (("/" in r["norm"] and (f["from"]["known"] or f["to"]["known"]))
                   or (not f["partial"] and f["from"]["known"] and f["to"]["known"])):
-            out["ferrules"].append(dict(base, **{k: f[k] for k in ("norm", "from", "to", "partial")}))
+            # the text's own quadrilateral: the wire runs along it (wire colour samples along the sleeve)
+            out["ferrules"].append(dict(base, quad=t.get("quad"), **{k: f[k] for k in ("norm", "from", "to", "partial")}))
             continue
         if r["tag"] and not r["ambiguous"]:
             out["reads"].append(dict(base, tag=r["tag"], method=r["method"], norm=r["norm"],

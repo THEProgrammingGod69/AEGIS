@@ -37,25 +37,21 @@ export const CHECK_TITLE: Record<string, string> = {
 };
 
 export const COLOUR_NAME: Record<string, string> = {
-  BN: "Brown",
-  BU: "Blue",
-  RD: "Red",
-  BK: "Black",
-  GNYE: "Green-yellow",
-  GY: "Grey",
-  VT: "Violet",
+  BK: "Black", BN: "Brown", RD: "Red", OG: "Orange", YE: "Yellow", GN: "Green", BU: "Blue", VT: "Violet", GY: "Grey",
+  WH: "White", PK: "Pink", TQ: "Turquoise", GNYE: "Green-yellow", "GN/YE": "Green-and-yellow", "WH/BU": "White, blue stripe",
   "?": "Unclear",
 };
 
+const GNYE_HEX = "linear-gradient(90deg,#28a03c 0 50%,#e1cd1e 50% 100%)";
 export const COLOUR_HEX: Record<string, string> = {
-  BN: "#7a4320",
-  BU: "#1e50be",
-  RD: "#c81e1e",
-  BK: "#191919",
-  GNYE: "linear-gradient(90deg,#28a03c 0 50%,#e1cd1e 50% 100%)",
-  GY: "#969696",
-  VT: "#8232a0",
+  BK: "#191919", BN: "#7a4320", RD: "#c81e1e", OG: "#ee7a1a", YE: "#e8cc1e", GN: "#1f8f45", BU: "#1e50be", VT: "#8232a0",
+  GY: "#969696", WH: "#f1f1ec", PK: "#f09ab2", TQ: "#22b0bc", GNYE: GNYE_HEX, "GN/YE": GNYE_HEX,
+  "WH/BU": "linear-gradient(180deg,#f1f1ec 0 38%,#1e50be 38% 62%,#f1f1ec 62% 100%)",
 };
+
+export const WIRE_CLASS_NAME: Record<string, string> = { AC: "AC mains", DC: "DC distribution", ALARM: "Alarm wiring", PE: "Protective earth" };
+/** The class name inside a sentence ("AC mains", "alarm wiring"). */
+export const wireClassPhrase = (c: string) => (c === "AC" || c === "DC" ? WIRE_CLASS_NAME[c] : (WIRE_CLASS_NAME[c] ?? c).toLowerCase());
 
 /** Status shown for an item: its re-check status when the run is a re-check. */
 export function statusOf(it: Item): Status {
@@ -106,6 +102,13 @@ export function explain(it: Item): string {
   if (it.check === "REGISTRATION" || it.id === "REG-DRAWING") return `Inspection is blocked because the photo cannot be reliably placed on the drawing. ${ev} This is one input or alignment problem, rather than evidence of separate component defects.`;
   if (it.result === "SKIP") return `Not evaluated on its own${it.root_cause ? `: resolve ${it.root_cause} first` : ": this check was skipped"}. ${ev}`;
   if (it.result === "NOT_IN_VIEW") return `This required item is not visible enough in this photograph to judge. Capture the relevant cabinet view; it has neither passed nor failed. ${ev}`;
+  if (it.check === "COLOUR" && it.colour) {
+    const seen = `${COLOUR_NAME[it.colour] ?? it.colour} after white balance`;
+    const cls = it.wire_class ? wireClassPhrase(it.wire_class) : "its circuit";
+    const rule = it.rule_source ?? "the universal rule (green-and-yellow for protective earth only)";
+    if (it.result === "PASS") return `The wire beside ferrule ${it.target} reads ${seen}; ${rule} allows it for ${cls}.`;
+    return `The wire beside ferrule ${it.target} reads ${seen}, which ${rule} does not allow for ${cls}. A colour measured in a photo never fails a cabinet on its own, so a person confirms it. ${ev}`;
+  }
   if (it.verified_by !== undefined || it.check === "MISSING" || it.check === "UNKNOWN_LABEL") return explainReal(it);
   switch (it.check) {
     case "GA":

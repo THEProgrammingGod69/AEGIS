@@ -2,10 +2,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Bot, Camera, FileImage, Layers, ScanLine } from "lucide-react";
 import { useState } from "react";
 import { STATIC, url } from "../lib/api";
-import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf } from "../lib/format";
+import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf, wireClassPhrase } from "../lib/format";
 import { gaFor } from "../lib/static";
 import type { Item, Pt } from "../lib/types";
+import { ConfidenceChip } from "./Confidence";
 import { CropView } from "./CropView";
+import { WireCode } from "./WireRule";
 import { Marker, Meter, Seg, StatusBadge } from "./ui";
 
 function RailDiagram({ it }: { it: Item }) {
@@ -143,7 +145,22 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
         </div>
 
         {it.slots && <RailDiagram it={it} />}
-        {it.check === "COLOUR" && (
+        {it.check === "COLOUR" && it.colour && (
+          <div className="stack" style={{ ["--gap" as string]: "8px" }}>
+            <div className="row wrap" style={{ ["--gap" as string]: "18px" }}>
+              <div>
+                <div className="tiny faint">Allowed for {it.wire_class ? wireClassPhrase(it.wire_class) : "this wire"}</div>
+                <div className="row wrap" style={{ ["--gap" as string]: "5px", marginTop: 4 }}>
+                  {(it.allowed ?? []).map((c) => <WireCode key={c} c={c} />)}
+                  {!(it.allowed ?? []).length && <span className="tiny">anything but green-and-yellow</span>}
+                </div>
+              </div>
+              <Swatch code={it.colour} hex={it.swatch} label="Measured after white balance" />
+            </div>
+            <div className="tiny faint">Rule: {it.rule_source ?? "universal (green-and-yellow for protective earth only)"}</div>
+          </div>
+        )}
+        {it.check === "COLOUR" && !it.colour && it.id.startsWith("COL-") && (
           <div className="row wrap" style={{ ["--gap" as string]: "18px" }}>
             <Swatch code={it.expected} label="Wire list says" />
             <Swatch code={it.found} hex={it.swatch} label="Measured after white balance" />
@@ -187,7 +204,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
         )}
         <div className="row between tiny faint">
           <span className="mono ellipsis" title={it.evidence.join("; ")}>{it.evidence.join(" · ")}</span>
-          <span className="nowrap">conf {Math.round(it.conf * 100)}%</span>
+          <ConfidenceChip it={it} eng={isReal(it, geo) ? "real" : "demo"} wide />
         </div>
       </motion.div>
     </AnimatePresence>

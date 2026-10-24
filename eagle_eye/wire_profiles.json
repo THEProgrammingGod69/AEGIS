@@ -1,0 +1,61 @@
+{
+  "about": "Wire-colour profiles for cabinets whose drawing set has no wire-colour legend. A profile is used only when someone chooses it for the project; the cabinet's own wire list or drawing legend always comes first (wire_rules.py). Colour codes are IEC 60757 (BK black, BN brown, RD red, OG orange, YE yellow, GN green, BU blue, VT violet, GY grey, WH white, PK pink, TQ turquoise; 'GN/YE' green-and-yellow, 'WH/BU' white with a blue stripe). Classes: AC and DC are the cabinet's mains and DC distribution, ALARM the signalling contacts, PE protective earth. The values summarise secondary sources; each profile names the edition to check against the standard itself.",
+  "profiles": {
+    "iec-60204-1": {
+      "name": "IEC 60204-1 (machinery, international / EU)",
+      "region": "International, EU",
+      "edition": "IEC 60204-1:2016+A1:2021, clause 13.2",
+      "classes": {"AC": ["BK", "RD", "BU"], "DC": ["BU", "BK"], "ALARM": ["RD", "BU", "OG"], "PE": ["GN/YE"]},
+      "meaning": {"BK": "AC and DC power circuits", "RD": "AC control circuits", "BU": "DC control circuits (light blue: neutral)",
+                  "OG": "circuits fed from an external source that stay live with the main switch off", "GN/YE": "protective conductor only"},
+      "verify": "IEC 60204-1 recommends these colours where colour coding is used; only green-and-yellow for the protective conductor is mandatory. Check the edition named in the project specification."
+    },
+    "nfpa-79": {
+      "name": "NFPA 79 (industrial machinery, USA)",
+      "region": "USA",
+      "edition": "NFPA 79 (2024 edition), chapter 13 conductor identification; UL 508A has parallel rules",
+      "classes": {"AC": ["BK", "RD", "WH", "GY"], "DC": ["BK", "BU", "WH/BU"], "ALARM": ["RD", "BU", "YE", "OG"], "PE": ["GN", "GN/YE"]},
+      "meaning": {"BK": "ungrounded AC and DC power", "RD": "ungrounded AC control", "BU": "ungrounded DC control",
+                  "WH": "grounded AC conductor (neutral), also GY", "WH/BU": "grounded DC control conductor",
+                  "YE": "control circuits that stay live with the disconnect off (also OG)", "GN": "equipment grounding conductor (with or without yellow stripes)"},
+      "verify": "Section numbers differ between NFPA 79 editions; check the edition and any UL 508A listing the project requires."
+    },
+    "iec-60445": {
+      "name": "IEC 60445 harmonised (BS 7671, current Indian and Australian practice)",
+      "region": "UK, EU installations, India (current), Australia / NZ (2018 edition)",
+      "edition": "IEC 60445:2021; BS 7671:2018 Table 51; IS 732 current edition; AS/NZS 3000:2018",
+      "classes": {"AC": ["BN", "BK", "GY", "BU"], "DC": ["BN", "GY", "BU"], "PE": ["GN/YE"]},
+      "meaning": {"BN": "line L1 (single phase: line); DC positive L+", "BK": "line L2", "GY": "line L3; DC negative L-",
+                  "BU": "neutral (light blue); DC mid-wire or earthed conductor M", "GN/YE": "protective conductor only"},
+      "verify": "IEC 60445 sets no colours for control or alarm circuits, so alarm wiring is only checked for the green-and-yellow rule. The Indian and Australian editions are reported to follow these colours; confirm against the standard in force for the project."
+    },
+    "is-732-legacy": {
+      "name": "India, legacy practice (IS 732:1989 era)",
+      "region": "India (older installations)",
+      "edition": "IS 732:1989 practice; current Indian practice follows the IEC 60445 colours",
+      "classes": {"AC": ["RD", "YE", "BU", "BK"], "PE": ["GN", "GN/YE"]},
+      "meaning": {"RD": "phase R (single phase: line)", "YE": "phase Y", "BU": "phase B", "BK": "neutral", "GN": "earth"},
+      "verify": "Legacy scheme: black is the NEUTRAL here but a phase under IEC 60445, so never mix the two profiles. Use it only for older cabinets or where the client specifies it."
+    },
+    "as-nzs-3000-legacy": {
+      "name": "Australia / NZ, legacy practice (AS/NZS 3000:2000)",
+      "region": "Australia, New Zealand (older installations)",
+      "edition": "AS/NZS 3000:2000 Table 3.5; the 2018 edition is reported to use the IEC 60445 colours",
+      "classes": {"AC": ["RD", "WH", "BU", "BK"], "PE": ["GN/YE"]},
+      "meaning": {"RD": "active (three phase: red, white, blue)", "WH": "active", "BU": "active (light blue: alternative neutral)", "BK": "neutral", "GN/YE": "earth and bonding"},
+      "verify": "Recommended colours of the 2000 edition; confirm against the purchased AS/NZS 3000 edition the project is built to."
+    }
+  },
+  "sources": [
+    "https://aleks.wevolver.com/article/control.panel.wiring.colour.codes",
+    "https://industrialmonitordirect.com/blogs/knowledgebase/european-control-panel-wire-colour-codes-per-iec-60204-1",
+    "https://www.rowse-automation.co.uk/blog/post/control-panel-wiring-colour-codes",
+    "https://industrialmonitordirect.com/blogs/knowledgebase/nfpa-79-wire-color-codes-for-240v-industrial-control-panels",
+    "https://www.ecmweb.com/content/wiring-methods-industrial-machinery",
+    "https://www.scribd.com/document/518642318/BS7671-wires-color-coding",
+    "https://www.studiomatrx.org/guides/electrical-wire-colour-codes-india",
+    "https://infralens.in/code/IS-732-1989",
+    "https://au.rs-online.com/web/content/discovery/ideas-and-advice/wiring-colours-guide",
+    "https://www.plctalk.net/threads/nz-wiring-code.8228/"
+  ]
+}

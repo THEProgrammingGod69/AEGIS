@@ -3,6 +3,7 @@ import { ArrowRight, FlaskConical, History as HistoryIcon, ImageIcon, RefreshCcw
 import { useMemo, useState } from "react";
 import { Seg, StatusBadge, useToast } from "../components/ui";
 import { api, url } from "../lib/api";
+import { pct } from "../lib/confidence";
 import { STATUS_COLOR, runDate } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
@@ -83,7 +84,7 @@ export function History() {
                         <b className="mono">v{m.version}</b>
                         <StatusBadge s={m.verdict.label} />
                       </div>
-                      <div className="tiny muted">{m.counts.FAIL} FAIL · {m.counts.REVIEW} REVIEW · {m.counts.PASS} PASS</div>
+                      <div className="tiny muted">{m.counts.FAIL} FAIL · {m.counts.REVIEW} REVIEW · {m.counts.PASS} PASS{m.confidence ? ` · ${pct(m.confidence.score)} confidence` : ""}</div>
                       {m.recheck && <div className="tiny" style={{ color: "var(--closed)" }}>{m.recheck.CLOSED} closed · <span style={{ color: "var(--open)" }}>{m.recheck.OPEN} open</span></div>}
                       {m.forge && <div className="tiny" style={{ color: m.forge.score.caught === m.forge.score.n_planted && !m.forge.score.false_alarms.length ? "var(--pass)" : "var(--fail)" }}>{m.forge.score.caught}/{m.forge.score.n_planted} planted caught</div>}
                       <div className="tiny faint">{runDate(m.created)}</div>

@@ -523,7 +523,7 @@ def run_file(rid: str, name: str, w: int = 0, download: int = 0):
     return FileResponse(p, filename=fname, headers={"Cache-Control": "max-age=86400"})
 
 
-@app.get("/api/runs/{rid}/items/{item_id}/{kind}")
+@app.get("/api/runs/{rid}/items/{item_id:path}/{kind}")      # ':path': ferrule and wire ids carry a '/' (A-1/B-2)
 def run_item_crop(rid: str, item_id: str, kind: str):
     _meta_or_404(rid)
     try:
@@ -557,6 +557,17 @@ def forge_live():
 @app.get("/api/forge/selftest")
 def forge_selftest():
     return service.selftest()
+
+
+@app.get("/api/forge/calibration")
+@app.get("/api/v2/forge/calibration")
+def forge_calibration():
+    """Confidence calibration from Fault Forge runs (python calibration.py): reliability curves and the maps."""
+    import calibration
+    cal = calibration.load()
+    if not cal:
+        _err(404, "No calibration yet: run python calibration.py")
+    return cal
 
 
 @app.get("/api/forge/gap")
@@ -610,6 +621,10 @@ def _pack(meta):
                 payload["ga_raster"] = dict(w=im.width, h=im.height, **scale)
             files["ga"] = _jpeg_b64(png, 2400, 88)
     else:
+        # the drawing through the photo's perspective and the straightened photo (small; the browser cannot warp them)
+        for key in ("drawing", "overlay", "rectified"):
+            if (d / F[key]).exists():
+                files[key] = _file_b64(d / F[key])
         # one drawing crop per checklist target (MISS-X and LBL-X share it); photo crops are made by the browser
         seen = {}
         for r in report["results"]:

@@ -5,6 +5,7 @@ import datetime
 import json
 import os
 import re
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -104,6 +105,68 @@ def ga_overlay(ga_pdf, size_mm, out_png, px_per_mm=2, rgb=(56, 189, 248)):
     out = np.zeros((a.shape[0], a.shape[1], 4), np.uint8); out[..., :3] = rgb; out[..., 3] = a
     Image.fromarray(out, "RGBA").save(out_png, optimize=True)
     return out_png
+
+
+def _view_linework(pdf, view, k):
+    """Alpha mask of one GA view's linework rendered at k px per drawing pt, and the raster's origin in pt."""
+    x0, y0, x1, y1 = view["bbox"]
+    with pymupdf.open(pdf) as doc:
+        page = doc[view["page"] - 1]
+        clip = pymupdf.Rect(x0, y0, x1, y1) & page.rect
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(k, k), clip=clip, alpha=False, colorspace=pymupdf.csGRAY)
+        g = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width)
+    return np.clip((255 - g.astype(np.float32)) * 1.6, 0, 255).astype(np.uint8), (clip.x0, clip.y0)
+
+
+def _rgba(alpha, rgb):
+    out = np.zeros((alpha.shape[0], alpha.shape[1], 4), np.uint8)
+    out[..., :3] = rgb
+    out[..., 3] = alpha
+    return Image.fromarray(out, "RGBA")
+
+
+def real_overlays(pdf, views, fits, preview, photo_size, out_dir, rgb=(56, 189, 248), side=1400):
+    """Drawing overlays of a real-cabinet run, both through the fitted perspective (a photo taken at an angle gets
+    the drawing at that angle, not a flat copy laid on top):
+
+        drawing_overlay.png   every fitted view's linework warped onto the photo (preview size)
+        rectified.jpg         the photo straightened onto the primary view: as if taken straight on
+        ga_overlay.png        that view's linework at the straightened photo's scale
+
+    Returns how the straightened photo maps to the photo ({"view", "H", "k", "origin", "size", "angle"}) or None."""
+    out_dir = Path(out_dir)
+    ph, pw = preview.shape[:2]
+    W, H = photo_size
+    P = np.diag([pw / W, ph / H, 1.0])                                # full-size photo px -> preview px
+    alpha = np.zeros((ph, pw), np.uint8)
+    for f in fits:
+        v = views.get(f["view"]) or {}
+        if not v.get("bbox"):
+            continue
+        k = float(np.clip(1.5 * f["scale_px_per_pt"] * pw / W, 1.0, 4.0))
+        a, (ox, oy) = _view_linework(pdf, v, k)
+        S = np.array([[1 / k, 0, ox], [0, 1 / k, oy], [0, 0, 1.0]])   # raster px -> drawing pt
+        alpha = np.maximum(alpha, cv2.warpPerspective(a, P @ np.asarray(f["H"]) @ S, (pw, ph), flags=cv2.INTER_LINEAR))
+    _rgba(alpha, rgb).save(out_dir / "drawing_overlay.png", optimize=True)
+    f = next((f for f in fits if (views.get(f["view"]) or {}).get("bbox")), None)
+    if f is None:
+        return None
+    v = views[f["view"]]
+    x0, y0, x1, y1 = v["bbox"]
+    k = side / max(x1 - x0, y1 - y0, 1e-6)
+    size = (max(1, int(round((x1 - x0) * k))), max(1, int(round((y1 - y0) * k))))
+    Kr = np.array([[k, 0, -k * x0], [0, k, -k * y0], [0, 0, 1.0]])   # drawing pt -> straightened px
+    M = Kr @ np.linalg.inv(np.asarray(f["H"])) @ np.linalg.inv(P)
+    rect = cv2.warpPerspective(np.ascontiguousarray(preview), M, size, flags=cv2.INTER_LINEAR, borderValue=(20, 22, 26))
+    Image.fromarray(rect).save(out_dir / "rectified.jpg", quality=85)
+    a, (ox, oy) = _view_linework(pdf, v, k)
+    canvas = np.zeros((size[1], size[0]), np.uint8)
+    dx, dy = int(round((ox - x0) * k)), int(round((oy - y0) * k))
+    h, w = max(0, min(a.shape[0], size[1] - dy)), max(0, min(a.shape[1], size[0] - dx))
+    canvas[dy:dy + h, dx:dx + w] = a[:h, :w]
+    _rgba(canvas, rgb).save(out_dir / "ga_overlay.png", optimize=True)
+    return {"view": f["view"], "H": [[float(x) for x in row] for row in f["H"]], "k": round(k, 6),
+            "origin": [float(x0), float(y0)], "size": list(size), "angle": f.get("angle")}
 
 
 def _outline(img, pts, color, width):

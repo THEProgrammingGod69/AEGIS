@@ -16,6 +16,8 @@ python demo.py                       # CLI: inspect -> fix -> re-photo -> re-che
 python inspector.py <photo.jpg>      # inspect one photo against the demo drawing set
 python eval_forge.py 50 200          # Fault Forge self-test: 50 held-out cabinets (seeds 200-249)
 python eval_forge.py --summarize     # recompute out/forge/summary.json from results.json
+python calibration.py --reuse        # refit the confidence calibration (out/forge/calibration.json)
+python eval_angle.py                 # angle sweep of the real-cabinet registration (out/forge/angle_sweep.json)
 python make_samples.py               # regenerate sample_photos/ + ANSWER_KEY.txt + manifest.json
 python spec.py                       # regenerate the demo inputs/ (GA PDF, wire list, checklist)
 python -m pytest tests -q            # engine regression, robustness guards, OCR parity, service, REST + cloud API
@@ -31,6 +33,7 @@ python export_static.py              # re-record the hosted console's replay run
 | `EAGLE_EYE_OCR` | in-process | `cli` forces the tesseract subprocess instead of libtesseract's C API. |
 | `TESSERACT_LIB` | auto | Path to `libtesseract` if it is not found automatically. |
 | `EAGLE_EYE_CLOUD` | off | `1` = hosted engine container: `/` redirects to the console, `/api/v2` serves it. |
+| `EAGLE_COLOUR_PROFILE` | none | Wire-colour profile for drawing sets without their own colour legend (`iec-60204-1`, `nfpa-79`, `iec-60445`, `is-732-legacy`, `as-nzs-3000-legacy`; see `wire_profiles.json`). Never a default. |
 
 ## Pipeline
 
@@ -53,6 +56,35 @@ The Robustness Lab (and `tests/test_robustness.py`) degrades photos with tilt, k
 - *No label* is not proven when OCR reads a piece of the expected tag (`B43` at `CB43`): the label is there, just unclear → REVIEW.
 - *Missing part* needs occupancy below 35 % (planted missing parts read ≤ 28 %, installed parts ≥ 41 %); 35–60 % without a label is REVIEW.
 - *Black vs a dark colour* on a dim wire is REVIEW; *no ferrule* with some sleeve pixels gets a closer OCR look; zone guards (above).
+
+### Wire colour by circuit class (real cabinets)
+
+Colour codes are not universal: black is a phase under IEC 60445 but the neutral in India's legacy scheme, white is the
+neutral under NFPA 79, and panel builders add house rules. `wire_rules.py` therefore takes the rule from the cabinet's
+own documents and never assumes one: the drawing set's wire-colour legend first (read rotation-aware from any sheet by
+`kb/drawing_kb.py`), else a profile chosen for the project (`EAGLE_COLOUR_PROFILE`, `wire_profiles.json`, each naming
+the edition to check), else only the universal rule that green-and-yellow is protective earth. A wire's circuit class
+(AC, DC, alarm, earth) comes from the drawing's power schematics, never from its colour: pin names seed it (L/N, +/-,
+PE, breaker contacts 91-98), it spreads along wires, buses and breaker poles, power supplies and earth points are
+boundaries, and conflicting circuits stay unclassified. `vision/wire_colour.py` measures the insulation beside each
+ferrule along the sleeve's own axis (OCR's text quadrilateral), white-balanced on the sleeve, and refuses to judge a
+colour that does not stand out from its surroundings. Colour findings go to REVIEW, never FAIL on their own.
+
+### Photos taken at an angle (real cabinets)
+
+A photo from the side is not a scaled copy of the drawing. When the flat (similarity) fit leaves read labels
+unexplained, `vision/register.py` searches the perspective directly (seeded 4-point RANSAC, sanity-checked) and keeps
+it when it explains clearly more labels, or the same labels clearly better. The fitted perspective gives the camera's
+viewing angle (reported, with a re-photo warning above 50°) and each label's local scale, so letter sizes follow the
+foreshortening. The console lays the drawing on through that perspective and can show the photo straightened. Angle
+sweep on GA-drawing renders of the real cabinet (4 views, turned left and right; `python eval_angle.py`):
+
+| Turned | Read labels placed: flat → perspective | Labels verified (PASS) | Angle measured | False FAILs |
+|---|---|---|---|---|
+| 0° | 117 → 117 of 174 | 262 → 262 | 2.2° | 0 |
+| 20° | 231 → 233 of 360 | 523 → 523 | 16.5° | 0 |
+| 35° | 166 → 225 of 347 | 482 → 500 | 35.0° | 0 |
+| 50° | 106 → 177 of 269 | 332 → 362 | 47.3° | 0 |
 
 ## Adding a check
 

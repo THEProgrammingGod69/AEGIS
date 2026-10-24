@@ -33,6 +33,13 @@ export interface Item {
   votes?: string[];
   occupancy?: number;
   root_cause?: string;
+  /** calibrated probability that this verdict is right (PASS/FAIL) or that the item is faulty (REVIEW) */
+  confidence?: number | null;
+  /* wire colour by circuit class (real-cabinet COLOUR items) */
+  colour?: string;
+  allowed?: string[];
+  wire_class?: WireClass | null;
+  rule_source?: string | null;
   /* real-cabinet engine */
   view?: string | null;
   hint?: string | null;
@@ -141,7 +148,12 @@ export interface RunMeta {
   verdict: Verdict;
   timing: Timing;
   registration: { anchors: number; inliers: number; outliers: string[]; refined: boolean; targets: number; valid?: boolean; localised?: boolean; invalid_reason?: string | null; fits?: { view: string }[]; views?: string[] };
-  issues: { id: string; result: Result; found: string; marker: number; recheck?: Recheck }[];
+  issues: {
+    id: string; result: Result; found: string; marker: number; recheck?: Recheck;
+    /** where the finding belongs on the assembly line (runs saved since the fault Pareto) */
+    check?: string; target?: string; family?: string; area?: string; station?: string; confidence?: number | null;
+  }[];
+  confidence?: PhotoConfidence | null;
   parent: string | null;
   root: string;
   version: number;
@@ -205,8 +217,10 @@ export interface RunPayload {
     valid?: boolean;
     localised?: boolean;
     invalid_reason?: string | null;
-    fits?: { view: string }[];
+    fits?: { view: string; model?: string; angle?: ViewAngle | null }[];
     views?: string[];
+    /** viewing angle of the camera measured from the fitted perspective (real cabinet) */
+    angle?: ViewAngle | null;
   };
   photo_size: [number, number];
   size_mm: [number, number];
@@ -226,6 +240,31 @@ export interface RunPayload {
   quality?: { blur: number; brightness: number; glare: number; score: number; issues: string[] };
   notes?: string[];
   photo_meta?: PhotoMeta;
+  /** where this run's wire-colour rule came from and what it allows per circuit class */
+  wire_rule?: WireRule | null;
+  /** real cabinet: how the straightened photo (rectified.jpg) maps to the photo */
+  rectify?: { view: string; H: number[][]; k: number; origin: [number, number]; size: [number, number]; angle?: ViewAngle | null } | null;
+}
+
+export interface ViewAngle { tilt: number; yaw: number; pitch: number; focal_px: number; focal_source: "estimated" | "assumed" | "given" }
+
+export type WireClass = "AC" | "DC" | "ALARM" | "PE";
+
+export interface WireRule {
+  source: string | null;
+  kind: "legend" | "profile" | "wire_list" | null;
+  profile?: string | null;
+  classes: Partial<Record<WireClass, string[]>>;
+  notes: string[];
+  universal?: string;
+  /** circuit classes inferred from the drawing's wiring */
+  circuits?: { wires: number; classified: Partial<Record<WireClass, number>>; conflicts: number };
+  ferrules?: number;
+  judged?: number;
+  not_measured?: number;
+  no_rule?: number;
+  /** wire-list rule: number of wires with their own colour */
+  wires?: number;
 }
 
 export interface Preset {
@@ -408,4 +447,36 @@ export interface Evaluation {
   schema: string;
   metrics: Record<string, string>;
   datasets: EvaluationDataset[];
+}
+
+/** Per-photo confidence: mean calibrated confidence of its PASS/FAIL verdicts (calibration.py). */
+export interface PhotoConfidence {
+  score: number;
+  decided: number;
+  expected_errors: number;
+  review: number;
+  lowest: { id: string; result: Result; confidence: number }[];
+}
+
+/** Confidence calibration from Fault Forge runs (out/forge/calibration.json). */
+export interface CalBin { lo: number; hi: number; n: number; k: number; p: number }
+export interface CurvePoint { lo: number; hi: number; n: number; stated: number; observed: number }
+export interface CalEngine {
+  label: string;
+  images: number;
+  items: number;
+  checks?: string[];
+  /** kinds of measurement the fit saw ("text", "colour"); items of other kinds have no calibrated confidence */
+  measures?: string[];
+  counts: Record<"PASS" | "FAIL" | "REVIEW", number>;
+  maps: Partial<Record<"PASS" | "FAIL" | "REVIEW", CalBin[]>>;
+  heldout: { items: number; accuracy: number | null; ece_raw: number | null; ece_cal: number | null; raw: CurvePoint[]; cal: CurvePoint[] };
+  review: { n: number; fault_rate: number | null };
+}
+export interface Calibration {
+  schema: string;
+  created: string;
+  engine_version: string;
+  method: string;
+  engines: Partial<Record<"demo" | "real", CalEngine>>;
 }

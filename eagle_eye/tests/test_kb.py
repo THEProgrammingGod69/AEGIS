@@ -177,7 +177,7 @@ def test_demo_drawing_is_not_a_real_drawing_set(tmp_path):
     kb = build_kb(config.DEMO_GA, cache_dir=tmp_path)
     assert kb["schema"] == "eagle-eye-kb/1" and kb["views"] == {} and kb["groups"] == []
     assert kb["cabinet"] == "EE-DEMO-01"
-    assert kb["wire_colours"] == dkb.DEFAULT_WIRE_COLOURS
+    assert kb["wire_colours"] is None and kb["stats"]["wire_colours_source"] == "none"   # never a silent default
     assert any("not a real" in w for w in kb["stats"]["warnings"])
 
 

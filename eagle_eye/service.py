@@ -7,8 +7,10 @@ A *run* is one inspection of one photo, stored in ``out/runs/<run_id>/`` as meta
                           EXIF orientation, quality) - the photo itself is read once and discarded
     preview.jpg           small display copy (<= 1600 px) the console draws the boxes on
     marked.jpg            the preview with every issue boxed and numbered
-    rectified.jpg         demo engine only: photo warped onto the drawing, kept at 2 px/mm
-    ga_overlay.png        demo engine only: GA linework aligned with rectified.jpg
+    rectified.jpg         photo warped onto the drawing (demo: 2 px/mm; real cabinet: straightened onto the primary
+                          GA view through the fitted perspective)
+    ga_overlay.png        GA linework aligned with rectified.jpg
+    drawing_overlay.png   real cabinet: the fitted GA views' linework laid onto the photo through the perspective
     crops/                expected-vs-found proof images (issue crops are cut from the full-resolution photo while
                           it is in memory; the others are made on demand from the preview / the drawing)
     QC_Checklist_FILLED.xlsx, EAGLE_EYE_QC_Report.pdf
@@ -32,6 +34,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageOps
 
+import assembly
+import calibration
 import config
 import pdf_report
 import report as rp
@@ -39,7 +43,8 @@ from inspector import CHECKS, ORDER, R, InspectionError, counts, inspect, unregi
 from render import describe_fault, expected_item, random_faults, render
 
 FILES = dict(marked="marked.jpg", rectified="rectified.jpg", overlay="ga_overlay.png", json="report.json",
-             checklist="QC_Checklist_FILLED.xlsx", pdf="EAGLE_EYE_QC_Report.pdf", preview="preview.jpg")
+             checklist="QC_Checklist_FILLED.xlsx", pdf="EAGLE_EYE_QC_Report.pdf", preview="preview.jpg",
+             drawing="drawing_overlay.png")
 CACHE = config.DATA / "cache"
 CACHE.mkdir(parents=True, exist_ok=True)
 INPUTS = CACHE / "inputs"                  # drawing sets / wire lists / checklists, content-addressed (sha256)
@@ -394,7 +399,8 @@ def result_key(photo_sha, inputs, enabled, kind):
     payload = dict(schema=RESULT_SCHEMA, photo=photo_sha, kind=kind, version=config.VERSION, enabled=sorted(enabled),
                    inputs={k: (v.get("sha256") or (f"demo:{v['name']}" if v.get("demo") else None))
                            for k, v in inputs.items()},
-                   agent=_agent_signature(kind), ocr=os.environ.get("EAGLE_OCR_MODE", ""))
+                   agent=_agent_signature(kind), ocr=os.environ.get("EAGLE_OCR_MODE", ""),
+                   colour=config.COLOUR_PROFILE or "")
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -494,6 +500,13 @@ def _engine(kind, photo, inputs, enabled, emit, work, d, rec):
             raise WrongDrawing(REAL_MISMATCH.format(name=inputs["ga"]["name"], cab=rep["ga"]["cabinet"]))
         rgb = ctx.photo["rgb"]
     _, scale = save_preview(rgb, art / FILES["preview"])
+    if kind == "real" and rep["registration"].get("localised") and rep["registration"].get("fits"):
+        try:                                   # the drawing through the photo's perspective, and the photo straightened
+            prev = np.asarray(Image.open(art / FILES["preview"]).convert("RGB"))
+            rep["rectify"] = rp.real_overlays(inputs["ga"]["path"], ctx.kb.get("views") or {}, rep["registration"]["fits"],
+                                              prev, rep["photo_size"], art)
+        except Exception:  # noqa: BLE001 - overlays are a view aid; the inspection result stands without them
+            rep["rectify"] = None
     full = Image.fromarray(np.ascontiguousarray(rgb))
     for r in rep["results"]:
         if r["result"] in ("FAIL", "REVIEW") or (kind == "real" and r.get("candidate") in ("CANDIDATE_FAULT", "UNCERTAIN")):
@@ -503,8 +516,8 @@ def _engine(kind, photo, inputs, enabled, emit, work, d, rec):
 
 
 def _install(src, d):
-    """Copy a result's stored artefacts (preview, rectified, crops) into a run folder."""
-    for name in (FILES["preview"], FILES["rectified"]):
+    """Copy a result's stored artefacts (preview, rectified, overlays, crops) into a run folder."""
+    for name in (FILES["preview"], FILES["rectified"], FILES["overlay"], FILES["drawing"]):
         if (Path(src) / name).exists():
             shutil.copyfile(Path(src) / name, d / name)
     if (Path(src) / "crops").is_dir():
@@ -595,6 +608,7 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
     rp.markup(str(d / FILES["preview"]), rep, str(d / FILES["marked"]), status_key=status_key, scale=scale)
     if kind == "legacy":
         rp.ga_overlay(inputs["ga"]["path"], rep["ga"]["size"], str(d / FILES["overlay"]))
+    calibration.apply(rep)                    # calibrated confidence per item and for the photo
     c = rep["counts"]
     judged = len(rep["results"]) - c.get("NOT_IN_VIEW", 0)
     created = now()
@@ -607,8 +621,7 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
                 warnings=rep.get("warnings", []),
                 registration={k: rep["registration"].get(k) for k in
                               ("anchors", "inliers", "outliers", "refined", "targets", "valid", "invalid_reason")},
-                issues=[dict(id=r["id"], result=r["result"], found=r["found"], marker=r.get("marker"),
-                             recheck=r.get("recheck")) for r in rep["results"] if r.get("marker")],
+                issues=issue_rows(rep), confidence=rep.get("confidence"),
                 parent=parent, root=(prev_meta.get("root") or parent) if prev_meta else rid, version=version,
                 recheck=rep.get("recheck"), engine=config.VERSION, engine_kind=kind, cached=bool(hit))
     if kind == "real":
@@ -791,14 +804,28 @@ def _guard_real_item_report(rep, meta=None):
     return rep
 
 
+def issue_rows(rep):
+    """The numbered issues of a report as stored in the run's metadata, with where each belongs on the assembly line
+    (device family, cabinet area, line station) and its calibrated confidence, for QC analytics."""
+    rows = []
+    for r in rep["results"]:
+        if not r.get("marker"):
+            continue
+        dims = {k: r[k] for k in ("family", "area", "station") if r.get(k)} or assembly.dims(r, rep)
+        rows.append(dict(id=r["id"], result=r["result"], found=r["found"], marker=r.get("marker"),
+                         recheck=r.get("recheck"), check=r.get("check"), target=r.get("target"),
+                         family=dims.get("family"), area=dims.get("area"), station=dims.get("station"),
+                         confidence=r.get("confidence")))
+    return rows
+
+
 def get_meta(rid):
     meta = read_json(run_dir(rid) / "meta.json")
     rep = get_report(rid, meta=meta)
     if rep.get("registration_guard") or rep.get("evidence_guard"):
         meta.update(counts=rep["counts"], items=len(rep["results"]),
                     verdict=verdict(rep["counts"], len(rep["results"]), rep.get("warnings"), rep),
-                    issues=[{k: r.get(k) for k in ("id", "result", "found", "marker")} for r in rep["results"]
-                            if r.get("marker")], warnings=rep["warnings"],
+                    issues=issue_rows(rep), warnings=rep["warnings"],
                     historical_guard=rep.get("safety_schema") != SAFETY_SCHEMA, recheck=None)
         if rep.get("registration_guard"):
             meta.setdefault("registration", {}).update(valid=False, invalid_reason=rep["registration"]["invalid_reason"])
@@ -855,6 +882,8 @@ def run_payload(rid):
     if rep.get("engine_kind") == "real":
         out.update(coverage=rep.get("coverage"), views=rep.get("views"), agent=rep.get("agent"), ocr=rep.get("ocr"),
                    quality=rep.get("quality"), notes=rep.get("notes") or [], photo_meta=rep.get("photo_meta"))
+    out["wire_rule"] = rep.get("wire_rule")
+    out["rectify"] = rep.get("rectify")
     return out
 
 

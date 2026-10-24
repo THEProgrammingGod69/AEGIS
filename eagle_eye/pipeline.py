@@ -12,16 +12,18 @@ The report is legacy-compatible (spec section 9): items carry ``box`` = [x, y, w
 import time
 from pathlib import Path
 
+import assembly
 import config
 import consensus
 from checks import ORDER as CHECK_ORDER
-from checks import CHECKS, Context, finding, run_checks
+from checks import Context, finding, run_checks
+from checks.builtin import wire_list_requirement
 from inspector import R, InspectionError
 from kb import drawing_kb
 from kb.tags import tag_sort_key
 from vision import ocr
 from vision.preprocess import load_photo
-from vision.register import register
+from vision.register import OBLIQUE_DEG, STEEP_DEG, register
 
 LEGACY_TO_REAL = {"GA": ["MISSING"], "ORDER": ["ORDER"], "LABEL": ["LABEL", "UNKNOWN_LABEL"], "FERRULE": ["FERRULE"],
                   "COLOUR": ["COLOUR"]}
@@ -89,13 +91,14 @@ def _registration(reg, ctx):
         pts.append({"tag": fr["norm"], "kind": "ferrule", "inlier": None, "found_px": [round(v, 1) for v in fr["center"]],
                     "expected_px": [round(v, 1) for v in fr["center"]], "found_mm": [0, 0], "expected_mm": [0, 0],
                     "residual_mm": 0})
-    fits = [{k: f[k] for k in ("view", "page", "model", "H", "scale_px_per_pt", "rms_px", "tol_px", "inliers",
-                               "outliers", "coverage_photo", "coverage_drawing")} for f in reg["fits"]]
+    fits = [{k: f.get(k) for k in ("view", "page", "model", "H", "scale_px_per_pt", "rms_px", "tol_px", "inliers",
+                                   "outliers", "coverage_photo", "coverage_drawing", "angle")} for f in reg["fits"]]
     targets = sum(1 for t in reg["in_view"] if ctx.label_expected(t))
     primary = reg["fits"][0]["coverage_photo"] if reg["fits"] else []
     return {"anchors": reg["anchors"], "inliers": reg["inliers"], "outliers": sorted(set(outl), key=tag_sort_key),
             "refined": any(f["model"] == "homography" for f in reg["fits"]), "targets": targets,
             "localised": reg["localised"], "valid": reg["localised"],
+            "angle": next((f["angle"] for f in reg["fits"] if f.get("angle")), None),
             "invalid_reason": None if reg["localised"] else reg["hint"] or "The photo could not be placed on this drawing",
             "hint": reg["hint"], "views": [f["view"] for f in reg["fits"]],
             "candidates": reg["candidates"], "fits": fits, "quad": primary, "anchor_points": pts,
@@ -119,6 +122,18 @@ def _warnings(reg, photo, agent_st, items, kb):
         w.append({"code": "weak_registration",
                   "message": (reg["hint"] or "The photo could not be placed on the drawing.") +
                              " Positions were not judged, so nothing can FAIL on position or absence."})
+    for f in reg["fits"]:
+        a = f.get("angle")
+        if a and a["tilt"] >= OBLIQUE_DEG:
+            side = (("from the right" if a["yaw"] > 0 else "from the left") if abs(a["yaw"]) >= abs(a["pitch"])
+                    else ("from below" if a["pitch"] > 0 else "from above"))
+            w.append({"code": "oblique_photo", "angle": a,
+                      "message": f"The {f['view']} view was photographed about {a['tilt']:.0f} degrees {side}. The drawing "
+                                 f"is laid onto the photo through the measured perspective, so positions still line up, "
+                                 f"but labels on the far side are foreshortened" +
+                                 (": re-photograph straight on (within about 25 degrees) for a reliable read."
+                                  if a["tilt"] >= STEEP_DEG else "; small labels there are judged NOT_IN_VIEW, not FAIL.")})
+            break
     q = photo.get("quality") or {}
     if q.get("issues") and q.get("score", 1) < 0.55:
         w.append({"code": "photo_quality", "message": "Photo quality: " + "; ".join(q["issues"]) +
@@ -143,7 +158,7 @@ def _document_requirements(ctx, findings):
     ferrule checks intact, and add a separate unresolved document requirement rather than silently dropping the file.
     """
     if ctx.wires and not any(f["id"] == "DOC-WIRELIST" for f in findings):
-        findings.extend(CHECKS["COLOUR"]().run(ctx))
+        findings.append(wire_list_requirement())
     if ctx.checklist:
         findings.append(finding("DOC-CHECKLIST", "CHECKLIST", "Uploaded inspection checklist",
                                 "Every uploaded checklist requirement verified",
@@ -208,7 +223,7 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
         stage("register", "start", **multi)
         reg = register(tokens, kb, photo)
         ctx = Context(kb, str(ga_pdf), photo, tokens, reg, wires=wires, checklist=checklist,
-                      workers=max(1, min(8, ocr.WORKERS)))
+                      cfg={"colour_profile": config.COLOUR_PROFILE}, workers=max(1, min(8, ocr.WORKERS)))
         t_reg = round(time.perf_counter() - t, 3)
         stage("register", "done", anchors=reg["anchors"], inliers=reg["inliers"],
               outliers=sorted({o["tag"] for f in reg["fits"] for o in f["outliers"]}, key=tag_sort_key),
@@ -243,6 +258,9 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
               model=agent_out.get("model"), **multi)
 
         items = consensus.decide(findings, agent_out.get("decisions") or {}, agent_on, registration=reg)
+        for it in items:                    # device family, cabinet area and line station (QC analytics)
+            dims = assembly.dims(it, {"engine_kind": "real"}, kb.get("groups"))
+            it.update(family=dims["family"], area=dims["area"], station=dims["station"])
         c = consensus.counts(items)
         stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"], **multi)
         W, H = photo["size"]
@@ -267,6 +285,7 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
             "photo_meta": {"sha": photo["sha"], "size": [W, H], "exif_orientation": photo.get("exif_orientation"),
                            "name": photo.get("name")},
             "notes": [n for n in (ctx.facts.get("colour_note"),) if n],
+            "wire_rule": ctx.facts.get("wire_rule"),
         }
         out.append((rep, ctx))
     return out

@@ -4,8 +4,11 @@ Every label read with certainty is an *anchor*: its photo position (OCR box cent
 tag on a GA view form a correspondence (one per in-drawing instance of the tag). Per view, an exhaustive 2-point
 RANSAC over anchor pairs finds the similarity transform drawing (pt) -> photo (px) supported by the most distinct tags;
 it is refined by least squares and, with >= 6 well-spread inliers, upgraded to a homography only when that fits clearly
-better. Outliers are kept and reported: a label far from where the drawing puts it is a misplaced or mislabelled part
-candidate, not noise.
+better. A photo taken at an angle is not similar to the drawing (the far side is foreshortened, parallel rails
+converge), so when the similarity leaves anchors unexplained a 4-point RANSAC searches the perspective model directly
+and keeps it when it explains clearly more labels. The fitted perspective gives the camera's viewing angle (``angle``),
+and every in-view tag gets its local scale, so letter sizes and tolerances follow the foreshortening. Outliers are
+kept and reported: a label far from where the drawing puts it is a misplaced or mislabelled part candidate, not noise.
 
 The *coverage* of a fit is the hull of its inliers, expanded by the local label spacing and clipped to the photo frame
 (ignore bands excluded). Only drawing items inside it are judged; everything else is NOT_IN_VIEW. Fewer than 3 inliers:
@@ -30,6 +33,12 @@ TOL_PT = 7.0                 # inlier tolerance in drawing points (labels sit wi
 TOL_MIN_PX = 18.0            # ... but never tighter than this many photo pixels
 MAX_ROT_DEG = 35.0           # photos are EXIF-upright; a steeper fit is a coincidence
 MIN_TEXT_PX = 9.0            # expected letter height below which absence cannot be judged (too small to read)
+PERSPECTIVE = True           # search the perspective model when the flat one leaves anchors unexplained (eval_angle.py
+                             # turns it off to measure the flat registration alone)
+PERSPECTIVE_MIN = 5          # inliers a perspective (4-point RANSAC) fit needs
+PERSPECTIVE_ITERS = 1500     # 4-point samples tried (seeded: the same photo always gives the same fit)
+OBLIQUE_DEG = 25.0           # viewing angle above which the report warns that labels are foreshortened
+STEEP_DEG = 50.0             # ... and above which it asks for a straighter photo
 
 
 # ------------------------------------------------------------------ transforms
@@ -68,6 +77,120 @@ def _ls_similarity(d, p, w=None):
         return None
     a = np.sum(w * pp * np.conj(dd)) / den
     return a, pm - a * dm
+
+
+def local_scale(H, xy):
+    """Photo px per drawing pt at a drawing point: sqrt of the Jacobian determinant of the projective map there."""
+    H = np.asarray(H, np.float64)
+    x, y = float(xy[0]), float(xy[1])
+    w = H[2, 0] * x + H[2, 1] * y + H[2, 2]
+    if abs(w) < 1e-12:
+        return 0.0
+    u = (H[0, 0] * x + H[0, 1] * y + H[0, 2]) / w
+    v = (H[1, 0] * x + H[1, 1] * y + H[1, 2]) / w
+    J = np.array([[H[0, 0] - u * H[2, 0], H[0, 1] - u * H[2, 1]], [H[1, 0] - v * H[2, 0], H[1, 1] - v * H[2, 1]]]) / w
+    return float(math.sqrt(abs(np.linalg.det(J))))
+
+
+def view_angle(H, size, focal=None):
+    """Viewing angle of the camera against the cabinet plane from a fit drawing -> photo.
+
+    The homography of a plane is K [r1 r2 t] up to scale; with square pixels and the principal point at the photo
+    centre, r1 . r2 = 0 and |r1| = |r2| give the focal length when the perspective is strong enough; otherwise a phone
+    camera's typical one (about 65 degrees across the long side) is assumed. A focal length off by 15 % moves the
+    angle by about 3 degrees at 35 degrees, so the angle is shown rounded, as "about". Returns {"tilt", "yaw", "pitch",
+    "focal_px", "focal_source"}: tilt is the angle between the line of sight and the plane's normal; yaw > 0 means the
+    photo was taken from the right of the cabinet, pitch > 0 from below.
+    """
+    W, Hh = float(size[0]), float(size[1])
+    M = np.array([[1.0, 0.0, -W / 2], [0.0, 1.0, -Hh / 2], [0.0, 0.0, 1.0]]) @ np.asarray(H, np.float64)
+    h1, h2 = M[:, 0], M[:, 1]
+    long_side = max(W, Hh)
+    cands = []
+    if abs(h1[2] * h2[2]) > 1e-14:
+        cands.append(-(h1[0] * h2[0] + h1[1] * h2[1]) / (h1[2] * h2[2]))
+    if abs(h1[2] ** 2 - h2[2] ** 2) > 1e-14:
+        cands.append((h2[0] ** 2 + h2[1] ** 2 - h1[0] ** 2 - h1[1] ** 2) / (h1[2] ** 2 - h2[2] ** 2))
+    assumed = 0.8 * long_side
+    # the estimate is noisy with a few label positions: trusted only near a phone camera's focal length, and then
+    # shrunk towards it (an estimate far off is more likely noise than an unusual lens)
+    est = [math.sqrt(c) for c in cands if c > 0 and 0.75 * assumed < math.sqrt(c) < 1.33 * assumed]
+    if focal:
+        f, src = float(focal), "given"
+    elif est:
+        f, src = math.sqrt(float(np.median(est)) * assumed), "estimated"
+    else:
+        f, src = assumed, "assumed"
+    Ki = np.diag([1.0 / f, 1.0 / f, 1.0])
+    r1, r2 = Ki @ h1, Ki @ h2
+    lam = (np.linalg.norm(r1) + np.linalg.norm(r2)) / 2.0
+    if lam < 1e-12:
+        return None
+    n = np.cross(r1 / lam, r2 / lam)
+    n /= max(np.linalg.norm(n), 1e-12)
+    if n[2] < 0:
+        n = -n
+    return {"tilt": round(math.degrees(math.acos(min(1.0, abs(n[2])))), 1),
+            "yaw": round(math.degrees(math.atan2(n[0], n[2])), 1), "pitch": round(math.degrees(math.atan2(n[1], n[2])), 1),
+            "focal_px": round(f, 1), "focal_source": src}
+
+
+def _degenerate(pts, frac=0.015):
+    """Four points of which three are (nearly) on one line: no perspective can be fitted to them."""
+    pts = np.asarray(pts, np.float64)
+    span = max(np.ptp(pts[:, 0]), np.ptp(pts[:, 1]), 1e-9) ** 2
+    for a, b, c in ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)):
+        if abs(_cross2(pts[b] - pts[a], pts[c] - pts[a])) / 2.0 < frac * span:
+            return True
+    return False
+
+
+def _cross2(u, v):
+    """z of the cross product of two 2-D vectors."""
+    return float(u[0] * v[1] - u[1] * v[0])
+
+
+def _perspective(corr, vrec, size, seed=0):
+    """Best sane homography from 4-point samples of distinct tags, scored by distinct inlier tags; refined on its
+    inliers. Returns (H, inliers, local scale at the inliers' centre) or None."""
+    by_tag = {}
+    for k, c in enumerate(corr):
+        by_tag.setdefault(c[2], []).append(k)
+    tags = sorted(by_tag)
+    if len(tags) < 4:
+        return None
+    rng = np.random.default_rng(seed)
+    P = np.float32([c[0] for c in corr])
+    D = np.float32([c[1] for c in corr])
+    best = None
+    for _ in range(PERSPECTIVE_ITERS):
+        pick = rng.choice(len(tags), 4, replace=False)
+        ks = [by_tag[tags[t]][int(rng.integers(len(by_tag[tags[t]])))] for t in pick]
+        if _degenerate(D[ks]) or _degenerate(P[ks]):
+            continue
+        Hh = cv2.getPerspectiveTransform(D[ks], P[ks])
+        if not _sane(Hh, vrec, size):
+            continue
+        sc = local_scale(Hh, D[ks].mean(0))
+        n, w, inl = _score(Hh, corr, max(TOL_MIN_PX, TOL_PT * sc))
+        if best is None or (n, w) > best[0]:
+            best = ((n, w), Hh, inl, sc)
+    if best is None:
+        return None
+    _, Hh, inl, sc = best
+    for _ in range(2):                                    # refine on the inliers (least squares), re-collect
+        cs = [c for _r, c in inl.values()]
+        if len(cs) < 4:
+            break
+        Hr, _m = cv2.findHomography(np.float32([c[1] for c in cs]), np.float32([c[0] for c in cs]), 0)
+        if Hr is None or not _sane(Hr, vrec, size):
+            break
+        sc = float(np.median([local_scale(Hr, c[1]) for c in cs]))
+        n2, _w2, inl2 = _score(Hr, corr, max(TOL_MIN_PX, TOL_PT * sc))
+        if n2 < len(inl):
+            break
+        Hh, inl = Hr, inl2
+    return Hh, inl, sc
 
 
 # ------------------------------------------------------------------ correspondences
@@ -169,6 +292,15 @@ def _fit_view(view, reads, kb, size):
             n2, _w2, inl2 = _score(Hh, corr, tol)
             if n2 >= len(inl) and _rms(inl2) < 0.8 * rms:
                 Hm, inl, rms, model = Hh, inl2, _rms(inl2), "homography"
+    if PERSPECTIVE and len(tags) - len(inl) >= 2 and len(tags) >= PERSPECTIVE_MIN:
+        # anchors the flat model cannot explain: the photo may be taken at an angle, search the perspective directly
+        per = _perspective(corr, kb["views"][view], size)
+        # kept when it explains clearly more labels, or the same labels clearly better (a steep photo with few labels
+        # read: the flat fit still catches them within its tolerance, but places everything between them wrongly)
+        better = per and (len(per[1]) >= len(inl) + 2 or (len(per[1]) >= len(inl) and _rms(per[1]) < 0.7 * rms))
+        if better and len(per[1]) >= PERSPECTIVE_MIN and _spread(per[1], size) >= 0.02:
+            Hm, inl, s, model = per[0], per[1], per[2], "perspective"
+            tol, rms = max(TOL_MIN_PX, TOL_PT * s), _rms(per[1])
     cand["inliers"] = len(inl)
     return {"view": view, "H": Hm, "inl": inl, "corr": corr, "model": model, "scale": float(s), "tol": float(tol),
             "rms": float(rms)}, cand
@@ -197,7 +329,7 @@ def _sane(Hh, vrec, size):
         if np.any(q[:, 2] <= 0):
             return False
         q = q[:, :2] / q[:, 2:3]
-        cross = [np.cross(q[(k + 1) % 4] - q[k], q[(k + 2) % 4] - q[(k + 1) % 4]) for k in range(4)]
+        cross = [_cross2(q[(k + 1) % 4] - q[k], q[(k + 2) % 4] - q[(k + 1) % 4]) for k in range(4)]
         if not (all(c > 0 for c in cross) or all(c < 0 for c in cross)):
             return False
         sides = [np.linalg.norm(q[(k + 1) % 4] - q[k]) for k in range(4)]
@@ -340,7 +472,8 @@ def register(tokens, kb, photo):
             "anchored_drawing": [round(v, 2) for v in anchored],
             "coverage_drawing": np.round(_apply(Hinv, cov), 2).tolist() if len(cov) else [],
             "scale_px_per_pt": round(f["scale"], 4), "rms_px": round(f["rms"], 2), "tol_px": round(f["tol"], 1),
-            "margin_px": round(margin, 1)})
+            "margin_px": round(margin, 1),
+            "angle": view_angle(f["H"], size) if f["model"] != "similarity" else None})
 
     # what each fit can see: tags predicted inside the coverage, or read near their prediction
     read_by_tag = {}
@@ -362,11 +495,14 @@ def register(tokens, kb, photo):
             near = [r for r in read_by_tag.get(tag, [])
                     if min(np.hypot(*(preds - np.array(r["center"])).T)) <= 2.5 * fo["tol_px"]]
             if margin > 0 or near:
+                # letters shrink towards the far side of a photo taken at an angle: the local scale, not the mean
+                ls = local_scale(fo["H"], rec.get("center") or dpts[0]) if fo["model"] != "similarity" else s
                 out["in_view"][tag] = {"view": fo["view"], "predicted": [round(float(v), 1) for v in centre],
                                        "instances": [[round(float(x), 1), round(float(y), 1)] for x, y in preds],
                                        "margin_px": round(margin, 1), "read_near": bool(near),
-                                       "anchored": any(_in_box(fo["anchored_drawing"], p) for p in dpts)}
-                out["text_px"][tag] = round(tag_text_pt(rec) * s, 1)
+                                       "anchored": any(_in_box(fo["anchored_drawing"], p) for p in dpts),
+                                       "scale_px_per_pt": round(ls, 4)}
+                out["text_px"][tag] = round(tag_text_pt(rec) * ls, 1)
     # Labels of a fitted view read with certainty but away from the fit (the drawing is not to scale everywhere, and a
     # close-up is strongly perspective-distorted): in view, and their position is judged by the drawing's layout order
     # relative to the anchored labels (above/below, left/right) instead of by distance.

@@ -930,7 +930,11 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
                ga=dict(cabinet=ga["cabinet"], size=list(ga["size"]), devices=ga["devices"],
                        terminals=ga["terminals"], rails=ga["rails"]),
                wires=ctx.wires, enabled=enabled, counts=c, timing=timing, engine=config.VERSION,
-               orientation=rotation * 90, warnings=warnings)
+               orientation=rotation * 90, warnings=warnings,
+               wire_rule=dict(source=f"wire list ({os.path.basename(str(wire_xlsx))})" if wire_xlsx else "wire list", kind="wire_list",
+                              wires=len(ctx.wires or []), classes={}, notes=["each terminal's wire has its own colour "
+                                                                            "in the wire list"],
+                              universal="green-and-yellow identifies protective earth only"))
     return rep, ctx
 
 

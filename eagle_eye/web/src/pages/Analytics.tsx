@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
-import { BarChart3, Clock4, Flame, ShieldAlert, ShieldCheck, ShieldQuestion, Table2, TrendingUp, Wrench } from "lucide-react";
+import { BarChart3, Clock4, Flame, ShieldAlert, ShieldCheck, ShieldQuestion, Table2, TrendingUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { FaultPareto } from "../components/FaultPareto";
 import { Kpi, Seg, StatusBadge } from "../components/ui";
 import { api, url } from "../lib/api";
+import type { ParetoBy } from "../lib/assembly";
 import { CHECK_TITLE, STATUS_COLOR, runDate } from "../lib/format";
 import { useAsync, useSize } from "../lib/hooks";
 import { go } from "../lib/router";
@@ -17,7 +19,7 @@ const VERDICT_TEXT = { PASS: "Ready to ship", HOLD: "Hold: faults to fix", REVIE
 const R = 4; // rectified px per mm
 
 /** Fault frequency drawn on the cabinet itself: one bubble per drawing item, area ∝ how often it failed. */
-function Heatmap({ base, heat, scope }: { base: RunPayload; heat: Map<string, { n: number; runs: number }>; scope: string }) {
+function Heatmap({ base, heat, scope, focus }: { base: RunPayload; heat: Map<string, { n: number; runs: number }>; scope: string; focus?: Set<string> | null }) {
   const [ref, size] = useSize<HTMLDivElement>();
   const [hover, setHover] = useState<string | null>(null);
   const W = base.size_mm[0] * R;
@@ -41,7 +43,7 @@ function Heatmap({ base, heat, scope }: { base: RunPayload; heat: Map<string, { 
             const cy = (r.box[1] + r.box[3] / 2) * R;
             const rad = 22 + 70 * Math.sqrt(v.n / max);
             return (
-              <g key={r.id} className={`heat-spot${hover === r.id ? " on" : ""}`} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)}>
+              <g key={r.id} className={`heat-spot${hover === r.id ? " on" : ""}${focus && !focus.has(r.id) ? " dim" : ""}`} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)}>
                 <circle cx={cx} cy={cy} r={rad + 24} fill="transparent" />
                 <circle cx={cx} cy={cy} r={rad} className="heat-glow" style={{ opacity: 0.25 + 0.55 * (v.n / max) }} />
                 <circle cx={cx} cy={cy} r={Math.max(14, rad * 0.42)} className="heat-core" />
@@ -70,6 +72,8 @@ export function Analytics() {
   const [manual, setManual] = useState(25);
   const [table, setTable] = useState(false);
   const [base, setBase] = useState<RunPayload | null>(null);
+  const [by, setBy] = useState<ParetoBy>("fault");
+  const [focus, setFocus] = useState<{ key: string; ids: Set<string> } | null>(null);
 
   const metas = useMemo(() => (runs.data ?? []).filter((m) => scope === "all" || (scope === "forge" ? m.source === "forge" : m.source !== "forge")), [runs.data, scope]);
   const chrono = useMemo(() => [...metas].sort((a, b) => a.created.localeCompare(b.created) || a.id.localeCompare(b.id)), [metas]);
@@ -113,7 +117,6 @@ export function Analytics() {
 
   const n = metas.length;
   const savedH = Math.max(0, (n * (manual * 60 - s.avg)) / 3600);
-  const top = [...s.heat.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 8);
   const maxCheck = Math.max(1, ...Object.values(s.byCheck));
   const maxFail = Math.max(1, ...chrono.map((m) => m.counts.FAIL));
   const L = live.data;
@@ -149,10 +152,10 @@ export function Analytics() {
               <div className="card-head">
                 <div>
                   <div className="card-title"><Flame /> Fault heatmap on the cabinet</div>
-                  <div className="card-sub">Bubble area = how often that drawing item failed. Hover a bubble for the item.</div>
+                  <div className="card-sub">Bubble area = how often that drawing item failed. Hover a bubble for the item{focus ? "; showing the Pareto row picked below" : ""}.</div>
                 </div>
               </div>
-              {base ? <Heatmap base={base} heat={s.heat} scope={scope} /> : <div className="skeleton" style={{ aspectRatio: "0.72" }} />}
+              {base ? <Heatmap base={base} heat={s.heat} scope={scope} focus={focus?.ids} /> : <div className="skeleton" style={{ aspectRatio: "0.72" }} />}
             </motion.div>
 
             <div className="stack" style={{ ["--gap" as string]: "18px" }}>
@@ -208,7 +211,12 @@ export function Analytics() {
             </div>
           </div>
 
-          <div className="an-grid2">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} style={{ marginTop: 18 }}>
+            <FaultPareto metas={metas} base={base} by={by} onBy={setBy} focus={focus?.key ?? null}
+              onFocus={(r) => setFocus(r ? { key: r.key, ids: r.ids } : null)} />
+          </motion.div>
+
+          <div style={{ marginTop: 18 }}>
             <motion.div className="card pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <div className="card-head">
                 <div>
@@ -239,29 +247,6 @@ export function Analytics() {
               <div className="row between tiny faint" style={{ marginTop: 8 }}><span>{chrono[0] ? runDate(chrono[0].created) : ""}</span><span>max {maxFail} FAIL</span><span>{chrono.length ? runDate(chrono[chrono.length - 1].created) : ""}</span></div>
             </motion.div>
 
-            <motion.div className="card pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <div className="card-head">
-                <div>
-                  <div className="card-title"><Wrench /> Recurring faults</div>
-                  <div className="card-sub">Fix these upstream (kitting, labelling, wiring station) and the yield goes up.</div>
-                </div>
-              </div>
-              {top.length ? (
-                <div className="table-wrap" style={{ maxHeight: 280 }}>
-                  <table className="table">
-                    <thead><tr><th>Item</th><th>Check</th><th>Times</th><th>Last seen</th></tr></thead>
-                    <tbody>{top.map(([id, v]) => (
-                      <tr key={id} onClick={() => go(`run/${s.last.get(id)!.id}`)}>
-                        <td className="mono small">{id}</td>
-                        <td className="tiny muted">{CHECK_TITLE[checkOf(id)] ?? checkOf(id)}</td>
-                        <td className="mono small">{v.n}</td>
-                        <td className="tiny faint nowrap">{runDate(s.last.get(id)!.created)}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              ) : <div className="small muted">No FAILs in this selection.</div>}
-            </motion.div>
           </div>
 
           {L && L.cabinets > 0 && (

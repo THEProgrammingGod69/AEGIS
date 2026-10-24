@@ -34,8 +34,11 @@ import config
 from kb.tags import FAMILIES, family_of, normalize, tag_sort_key
 
 KB_SCHEMA = "eagle-eye-kb/1"
-KB_VERSION = "1.0"
-DEFAULT_WIRE_COLOURS = {"230VAC": ["BK", "BN", "GN/YE"], "24VDC": ["BK", "WH", "GN"], "ALARM": ["OR", "WH", "BK"]}
+KB_VERSION = "1.1"
+# Wire colours come from the drawing set's own legend only: colour codes differ by standard, edition and customer (a
+# black wire is a phase under IEC 60445 and a neutral under India's legacy IS 732), so none is assumed. wire_rules.py
+# adds explicitly chosen profiles. UNNAMED holds a legend group whose table cell names no circuit.
+UNNAMED = "UNNAMED"
 
 # Page kinds by title keywords, matched on the normalised title (upper case, punctuation -> space). First match wins.
 PAGE_KINDS = [
@@ -572,9 +575,43 @@ def _nameplates(page_no, lines, width):
     return rows
 
 
+_TURN = {90: lambda x, y: (-y, x), 180: lambda x, y: (-x, -y), 270: lambda x, y: (y, -x)}
+
+
+def _turn_box(b, f):
+    pts = [f(b[0], b[1]), f(b[2], b[1]), f(b[0], b[3]), f(b[2], b[3])]
+    return (min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts))
+
+
+def _reading_frame(lines, S, rot):
+    """Lines and segments turned so that text at rotation ``rot`` reads left to right (rotated legend tables)."""
+    f = _TURN.get(rot)
+    if f is None:
+        return lines, S
+    out = [dict(ln, bbox=_turn_box(ln["bbox"], f)) for ln in lines]
+    if not len(S):
+        return out, S
+    a = np.array([f(x, y) for x, y in S[:, :2]], dtype=np.float64).reshape(-1, 2)
+    b = np.array([f(x, y) for x, y in S[:, 2:]], dtype=np.float64).reshape(-1, 2)
+    return out, np.hstack([a, b])
+
+
 def _wire_colours(lines, S):
-    """Wire colour legend: {'230VAC': ['BK', 'BN', 'GN/YE'], ...} from a 'Colour' column, or None."""
-    heads = [ln for ln in lines if re.fullmatch(r"COLOU?RS?", ln["text"].strip().upper())]
+    """Wire colour legend: {'230VAC': ['BK', 'BN', 'GN/YE'], ...} from a 'Colour' column, or None. A legend printed
+    rotated (some sheets turn the table 90 degrees) is read in its own reading frame."""
+    for head in [ln for ln in lines if re.fullmatch(r"COLOU?RS?", ln["text"].strip().upper())]:
+        rot = head.get("rot", 0)
+        same = [ln for ln in lines if ln.get("rot", 0) == rot]
+        frame, seg = _reading_frame(same, S, rot)
+        found = _legend_at(frame, seg, frame[next(i for i, ln in enumerate(same) if ln is head)])
+        if found:
+            return found
+    return None
+
+
+def _legend_at(lines, S, h):
+    """The legend under one 'Colour' header (lines and segments in the header's reading frame), or None."""
+    heads = [h]
     for h in heads:
         hx = (h["bbox"][0] + h["bbox"][2]) / 2
         cols = [ln for ln in lines if ln["bbox"][1] > h["bbox"][3]
@@ -610,7 +647,8 @@ def _wire_colours(lines, S):
             code = re.sub(r"\s+", "", re.search(r"\(([A-Z]{2}(?:\s*/\s*[A-Z]{2})?)\)", c["text"].upper()).group(1))
             cy = _center(c["bbox"])[1]
             home = [k for k, (_, ky) in cats if cell(ky) == cell(cy)] if bounds else []
-            key = home[0] if home else min(cats, key=lambda kc: abs(kc[1][1] - cy))[0]
+            # a colour group whose table cell names no circuit stays unnamed: it is never filed under a neighbour
+            key = home[0] if home else UNNAMED if bounds else min(cats, key=lambda kc: abs(kc[1][1] - cy))[0]
             if code not in out.setdefault(key, []):
                 out[key].append(code)
         if out:
@@ -803,7 +841,7 @@ def _power_links(page_no, geo, words, toks):
 def _empty_kb(sha, pdf_path):
     return {"schema": KB_SCHEMA, "kb_version": KB_VERSION, "pdf_sha256": sha, "pdf_name": Path(pdf_path).name,
             "cabinet": None, "pages": [], "views": {}, "vocabulary": [], "nameplates": [], "devices": {}, "groups": [],
-            "connections": [], "device_links": [], "buses": [], "wire_colours": dict(DEFAULT_WIRE_COLOURS),
+            "connections": [], "device_links": [], "buses": [], "wire_colours": None,
             "stats": {"warnings": []}}
 
 
@@ -914,15 +952,20 @@ def _build(pdf_path, sha, use_vlm_fallback=True):
                     nameplates.append(row)
         nameplates.sort(key=lambda r: tag_sort_key(r["tag"]))
         np_by_tag = {r["tag"]: r for r in nameplates}
-        wc = None
-        for p in pages:
-            if p["kind"] == "legend" and wc is None:
-                t = time.time()
-                g = geos.get(p["page"]) or _geometry(doc[p["page"] - 1])
-                timing["geometry"] += time.time() - t
-                wc = _wire_colours(texts[p["page"]][0], g["segs"])
-        kb["wire_colours"] = wc or dict(DEFAULT_WIRE_COLOURS)
-        kb["stats"]["wire_colours_source"] = "legend" if wc else "default"
+        wc, wc_page = None, None
+        # legend sheets first, then any sheet with a "Colour" column (some sets print the wiring table elsewhere)
+        for p in sorted(pages, key=lambda p: p["kind"] != "legend"):
+            if wc is not None:
+                break
+            if not any(re.fullmatch(r"COLOU?RS?", ln["text"].strip().upper()) for ln in texts[p["page"]][0]):
+                continue
+            t = time.time()
+            g = geos.get(p["page"]) or _geometry(doc[p["page"] - 1])
+            timing["geometry"] += time.time() - t
+            wc, wc_page = _wire_colours(texts[p["page"]][0], g["segs"]), p["page"]
+        kb["wire_colours"] = wc
+        kb["stats"]["wire_colours_source"] = "legend" if wc else "none"
+        kb["stats"]["wire_colours_page"] = wc_page if wc else None
 
         conns, buses, schem_tags = [], [], set()
         for p in pages:

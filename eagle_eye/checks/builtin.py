@@ -679,21 +679,135 @@ class FerruleCheck:
 
 
 # ------------------------------------------------------------------ COLOUR
+COLOUR_MIN_CONF = 0.6       # a wire colour measured less surely than this is not judged
+
+
+def wire_list_requirement():
+    """The uploaded wire list as an open document requirement: its terminal positions are not verified automatically."""
+    return finding("DOC-WIRELIST", "COLOUR", "Uploaded wire list", "Wire-list requirements verified",
+                   "Wire-list terminal positions need manual verification", "UNCERTAIN", conf=0.0,
+                   rule="COLOUR.unsupported_input",
+                   evidence=["Drawing-derived device links and wire colours by circuit class are checked separately; "
+                             "they do not verify every terminal, pin or colour in the uploaded wire list"],
+                   hint="Compare the uploaded wire list with terminal close-ups and record a manual inspection")
+
+
 @check("COLOUR")
 class ColourCheck:
-    """Wire colours against a wire list. Real drawing sets carry no per-wire colours, so without a wire list this check
-    has nothing to compare and produces no items (the demo-cabinet engine checks colours from its wire list)."""
+    """Wire colours by circuit class, next to every wire ferrule read. The colour rule comes from the cabinet's own drawing
+    legend or a profile chosen for the project, never from an assumed standard (wire_rules.py); the circuit class of a
+    wire from the drawing's power schematics via the two ends its ferrule names; the colour from the photo next to the
+    sleeve (vision/wire_colour.py). Green-and-yellow on anything but protective earth is checked under every rule.
+    A wire whose colour cannot be measured, or whose circuit the rule does not cover, gets no item: the report's wire
+    rule note counts them."""
     title = "Wire colour"
-    question = "Is the wire at this terminal the colour the wire list specifies?"
+    question = "Is the wire the colour its circuit class requires?"
 
     def run(self, ctx):
-        if not ctx.wires:
-            ctx.facts["colour_note"] = "no wire list with colours: COLOUR not applicable to this drawing set"
-            return []
-        ctx.facts["colour_note"] = "The uploaded wire list requires manual verification of terminal positions and wire colours"
-        return [finding("DOC-WIRELIST", "COLOUR", "Uploaded wire list", "Wire-list requirements verified",
-                        "Automatic wire-list colour checks are not available for real cabinets", "UNCERTAIN",
-                        conf=0.0, rule="COLOUR.unsupported_input",
-                        evidence=["Drawing-derived device links are checked separately; they do not verify every "
-                                  "terminal, pin or wire colour in the uploaded wire list"],
-                        hint="Compare the uploaded wire list with terminal close-ups and record a manual inspection")]
+        import wire_rules
+        from vision import wire_colour
+
+        rule = wire_rules.rules(ctx.kb, None, ctx.cfg.get("colour_profile"))
+        cc = wire_rules.circuit_classes(ctx.kb)
+        info = wire_rules.describe(rule, cc)
+        tally = {"ferrules": 0, "judged": 0, "not_measured": 0, "no_rule": 0}
+        out = [wire_list_requirement()] if ctx.wires else []
+        groups = {}
+        for f in ctx.ferrules:
+            if f["from"]["device"] and f["to"]["device"]:
+                groups.setdefault(f["norm"], []).append(f)
+        rgb = ctx.photo.get("rgb")
+        for norm, fs in sorted(groups.items()):
+            tally["ferrules"] += 1
+            best = max(fs, key=lambda r: (r["passes"], r["conf"]))
+            col = wire_colour.classify(rgb, best["box"], best.get("rot", 0), best.get("quad")) if rgb is not None else None
+            if not col or col["conf"] < COLOUR_MIN_CONF:
+                tally["not_measured"] += 1
+                continue
+            certain = best["from"]["known"] and best["to"]["known"] and (best["passes"] >= 2 or best["conf"] >= 0.9)
+            cls, why = wire_rules.wire_class([best["from"], best["to"]], cc) if certain else (None, "ferrule not read with certainty")
+            item = self._judge(norm, best, col, cls, why, rule, certain)
+            if item is None:
+                tally["no_rule"] += 1
+                continue
+            tally["judged"] += 1
+            fit = view_of_point(ctx.reg, best["center"])
+            box = union([best["box"]] + col["boxes"])
+            out.append(dict(item, box=[round(float(v), 1) for v in box], view=fit["view"] if fit else None,
+                            reads=[_rd(dict(r, tag=r["norm"])) for r in fs]))
+        info.update(tally)
+        ctx.facts["wire_rule"] = info
+        src = rule.get("source") or "no wire-colour rule (universal green-and-yellow rule only)"
+        ctx.facts["colour_note"] = (f"Wire colours: {tally['judged']} of {tally['ferrules']} ferrule wire(s) judged against "
+                                    f"{src}" + (f"; {tally['not_measured']} not measurable in this photo"
+                                                if tally["not_measured"] else ""))
+        return out
+
+    @staticmethod
+    def _judge(norm, best, col, cls, why, rule, certain):
+        """The finding for one measured wire colour, or None when the rule does not decide it."""
+        import wire_rules
+        from vision.wire_colour import name
+
+        c, conf = col["code"], col["conf"]
+        src = rule.get("source")
+        seen = f"{name(c)} ({c}): {col['reason']}"
+        ev = [f"wire colour {seen}; white reference: {col['white']}"]
+        common = dict(conf=conf, swatch=col["swatch"], colour=c, wire_class=cls, rule_source=src,
+                      sample_boxes=col["boxes"])
+        ends = f"{best['from']['device']} and {best['to']['device']}"
+
+        def item(expected, status, rule_id, evidence, allowed=(), strength=None, question=None, hint=None):
+            return finding(f"COL-{norm}", "COLOUR", norm, expected, f"{c} ({name(c)})", status, strength=strength,
+                           rule=rule_id, evidence=ev + evidence, question=question, hint=hint, allowed=list(allowed),
+                           **common)
+
+        if c == "GN/YE":
+            if cls == "PE":
+                return item("GN/YE (protective earth)", "OK", "COLOUR.earth_green_yellow", [why],
+                            wire_rules.allowed(rule, "PE"))
+            if cls or (certain and not any(wire_rules._kind(e["device"], e["pin"]) == "EARTH"
+                                          for e in (best["from"], best["to"]))):
+                where = why if cls else f"neither {ends} is an earth point"
+                return item("Not green-and-yellow" + (f" ({wire_rules.CLASS_NAME[cls]})" if cls else ""),
+                            "CANDIDATE_FAULT", "COLOUR.reserved_green_yellow",
+                            ["green-and-yellow identifies the protective conductor only, under every standard", where],
+                            wire_rules.allowed(rule, cls) if cls else (),
+                            strength="strong" if cls and conf >= 0.85 else "weak",
+                            question=f"Is the wire with ferrule '{norm}' green-and-yellow? It connects {ends}, which is "
+                                     f"not protective earth.",
+                            hint="Re-photo the ferrule with a few cm of wire on both sides, in neutral light")
+            return None
+        if cls == "PE":
+            ok = wire_rules.allowed(rule, "PE")
+            if c in ok:
+                return item("/".join(ok) + " (protective earth)", "OK", "COLOUR.earth_green", [why], ok)
+            return item("/".join(ok) + " (protective earth)", "CANDIDATE_FAULT", "COLOUR.earth_not_green",
+                        [why, f"protective earth is identified by {' or '.join(name(x) for x in ok)}"
+                              + (f" ({src})" if src else " (universal rule)")], ok, strength="weak",
+                        question=f"Is the earth wire with ferrule '{norm}' {name(c)} rather than green-and-yellow?",
+                        hint="Re-photo the ferrule with a few cm of wire on both sides, in neutral light")
+        if not src:
+            return None                                       # no rule chosen: only the universal rule applies
+        if cls:
+            ok = wire_rules.allowed(rule, cls)
+            if not ok:
+                return None                                   # the rule sets no colour for this circuit class
+            label = f"{'/'.join(ok)} ({wire_rules.CLASS_NAME[cls]})"
+            if c in ok:
+                return item(label, "OK", "COLOUR.allowed", [why, f"{c} is allowed for {wire_rules.CLASS_NAME[cls]} ({src})"],
+                            ok)
+            return item(label, "CANDIDATE_FAULT", "COLOUR.not_allowed",
+                        [why, f"{src} allows {', '.join(name(x) for x in ok)} for {wire_rules.CLASS_NAME[cls]}"], ok,
+                        strength="weak",
+                        question=f"Is the wire with ferrule '{norm}' {name(c)}? It is on the "
+                                 f"{wire_rules.CLASS_NAME[cls]} side, where {src} allows {', '.join(ok)}.",
+                        hint="Re-photo the ferrule with a few cm of wire on both sides, in neutral light")
+        used = sorted({x for k in wire_rules.CLASSES for x in wire_rules.allowed(rule, k)})
+        if certain and c not in used:
+            return item("A colour of the wire rule", "CANDIDATE_FAULT", "COLOUR.not_in_rule",
+                        [why, f"{name(c)} is not a colour {src} uses for any circuit ({', '.join(used)})"], used,
+                        strength="weak",
+                        question=f"Is the wire with ferrule '{norm}' {name(c)}? {src} uses no such colour.",
+                        hint="Re-photo the ferrule with a few cm of wire on both sides, in neutral light")
+        return None
