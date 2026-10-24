@@ -1,5 +1,6 @@
 /** Fault Forge, synthetic vs real (eval_gap.py): the same planted-fault scoring on generated cabinets and on photos of
- *  Emerson's real cabinet, side by side. A fault is caught only when it ends FAIL; REVIEW and missed are shown apart. */
+ *  Emerson's real cabinet, side by side, in the evaluation catalogue's terms: confirmed (FAIL), referred (REVIEW),
+ *  incorrect PASS, not assessed. */
 import { motion } from "framer-motion";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/hooks";
@@ -8,8 +9,9 @@ import type { ForgeGap as Gap, GapCategory, GapOutcome, GapRate, GapSide } from 
 const pct = (v: number, d = 0) => `${(v * 100).toFixed(d)}%`;
 
 const ROWS: { key: GapRate | "sec_per_photo"; label: string; note: string; higherIsBetter: boolean; fmt: (s: GapSide) => string }[] = [
-  { key: "fail_rate", label: "Caught as FAIL", note: "of planted faults", higherIsBetter: true, fmt: (s) => pct(s.fail_rate) },
+  { key: "fail_rate", label: "Confirmed", note: "planted faults ending FAIL", higherIsBetter: true, fmt: (s) => pct(s.fail_rate) },
   { key: "flag_rate", label: "Flagged", note: "FAIL or REVIEW", higherIsBetter: true, fmt: (s) => pct(s.flag_rate) },
+  { key: "incorrect_pass_rate", label: "Incorrect PASS", note: "planted faults cleared", higherIsBetter: false, fmt: (s) => pct(s.incorrect_pass_rate) },
   { key: "false_fail_rate", label: "False FAIL", note: "on correct items", higherIsBetter: false, fmt: (s) => `${s.false_fail} (${pct(s.false_fail_rate, 1)})` },
   { key: "review_rate", label: "Sent to REVIEW", note: "of correct items", higherIsBetter: false, fmt: (s) => pct(s.review_rate, 1) },
   { key: "not_in_view_rate", label: "Not in view", note: "of all items", higherIsBetter: false, fmt: (s) => pct(s.not_in_view_rate) },
@@ -17,9 +19,10 @@ const ROWS: { key: GapRate | "sec_per_photo"; label: string; note: string; highe
 ];
 
 const OUTCOME: Record<GapOutcome, [string, string]> = {
-  FAIL: ["Caught as FAIL", "var(--pass)"],
-  REVIEW: ["Sent to REVIEW", "var(--review)"],
-  missed: ["Missed", "var(--fail)"],
+  FAIL: ["Confirmed (FAIL)", "var(--pass)"],
+  REVIEW: ["Referred (REVIEW)", "var(--review)"],
+  PASS: ["Incorrect PASS", "var(--fail)"],
+  unassessed: ["Not assessed", "var(--niv)"],
 };
 
 /** Real minus synthetic, in percentage points, coloured by whether real photos do worse or better. */
@@ -35,10 +38,11 @@ function Split({ c }: { c: GapCategory | null }) {
   if (!c || !c.planted) return <span className="tiny faint">not planted</span>;
   const w = (n: number) => `${(n / c.planted) * 100}%`;
   return (
-    <div className="gap-split tip" data-tip={`${c.FAIL} caught as FAIL · ${c.REVIEW} REVIEW · ${c.missed} missed`}>
+    <div className="gap-split tip" data-tip={`${c.FAIL} confirmed · ${c.REVIEW} referred · ${c.PASS} incorrect PASS · ${c.unassessed} not assessed`}>
       <div className="gap-bar">
         <motion.i style={{ background: "var(--pass)" }} initial={{ width: 0 }} whileInView={{ width: w(c.FAIL) }} viewport={{ once: true }} transition={{ duration: 0.8 }} />
         <motion.i style={{ background: "var(--review)" }} initial={{ width: 0 }} whileInView={{ width: w(c.REVIEW) }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} />
+        <motion.i style={{ background: "var(--fail)" }} initial={{ width: 0 }} whileInView={{ width: w(c.PASS) }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }} />
       </div>
       <span className="mono small">{c.FAIL}/{c.planted}</span>
     </div>
@@ -61,7 +65,7 @@ function GapView({ g }: { g: Gap }) {
     <div className="stack" style={{ ["--gap" as string]: "16px" }}>
       <div className="card pad">
         <div className="gap-grid gap-head">
-          <span className="card-title">Same scoring, two kinds of photo</span>
+          <span className="card-title">Planted-fault comparison</span>
           <SideHead title="SYNTHETIC" s={s} empty="no self-test results" />
           <SideHead title="REAL" s={r} empty="not run on this engine" />
           <span className="mono tiny faint">REAL − SYNTHETIC</span>
@@ -80,16 +84,17 @@ function GapView({ g }: { g: Gap }) {
         <div className="card-head">
           <div className="card-title">By fault type</div>
           <div className="legend tiny faint">
-            <span><i className="gap-swatch" style={{ background: "var(--pass)" }} />caught as FAIL</span>
-            <span><i className="gap-swatch" style={{ background: "var(--review)" }} />REVIEW</span>
-            <span><i className="gap-swatch" style={{ background: "var(--line-3)" }} />missed</span>
+            <span><i className="gap-swatch" style={{ background: "var(--pass)" }} />confirmed (FAIL)</span>
+            <span><i className="gap-swatch" style={{ background: "var(--review)" }} />referred (REVIEW)</span>
+            <span><i className="gap-swatch" style={{ background: "var(--fail)" }} />incorrect PASS</span>
+            <span><i className="gap-swatch" style={{ background: "var(--line-3)" }} />not assessed</span>
           </div>
         </div>
         <div className="gap-grid gap-head">
           <span />
           <span className="mono tiny faint">SYNTHETIC</span>
           <span className="mono tiny faint">REAL</span>
-          <span className="mono tiny faint">CAUGHT, GAP</span>
+          <span className="mono tiny faint">CONFIRMED, GAP</span>
         </div>
         {g.categories.map((c) => (
           <div key={c.id} className="gap-grid gap-line">
@@ -122,7 +127,7 @@ function GapView({ g }: { g: Gap }) {
       <div className="tiny muted">
         {s && <>Synthetic: {s.source}, {s.engine}, {s.selection}. </>}
         {r && <>Real: {r.source}, {r.engine} {r.agent === "off" ? "without" : "with"} the AI verifier, {r.selection}. </>}
-        A fault counts as caught only when it ends FAIL; REVIEW and missed are counted apart on both sides.
+        Same terms as the evaluation comparison at the top of this page: only FAIL confirms a fault; REVIEW is a referral.
       </div>
       <div className="code"><span className="c"># synthetic vs real (Emerson's drawing set and photos in data/emerson/)</span>{"\n"}python forge_real.py{"\n"}python eval_gap.py</div>
     </div>

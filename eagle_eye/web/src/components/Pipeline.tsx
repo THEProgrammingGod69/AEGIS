@@ -16,7 +16,7 @@ export const STAGES = [
   { key: "kb", title: "Read the drawing set", sub: "Vector GA views, nameplate list, groups and wiring → the cabinet model. No AI." },
   { key: "ocr", title: "Read every label", sub: "PP-OCRv4 multi-pass: whole photo, upscaled tiles, rotated tiles for vertical labels." },
   { key: "place", title: "Place the photo on the drawing", sub: "Labels read with certainty become anchors (RANSAC); coverage = what this photo shows." },
-  { key: "agent", title: "Claude verifier", sub: "Independent second opinion on every candidate fault, from zoomed crops." },
+  { key: "agent", title: "Evidence validation", sub: "Local OCR and drawing checks; insufficient evidence stays unresolved." },
 ] as const;
 
 interface Derived {
@@ -60,8 +60,8 @@ function deriveReal(ev: JobEvent[], withRecheck: boolean): Derived[] {
   const ad = find("agent", "done");
   const as = find("agent", "start");
   const prog = ev.filter((e) => e.stage === "agent" && e.status === ("progress" as JobEvent["status"])).slice(-1)[0];
-  out.push({ key: "agent", status: ad ? "done" : as ? "running" : "pending", t: ad?.t,
-    detail: ad ? (ad.enabled ? `${ad.calls} API call${ad.calls === 1 ? "" : "s"} · ${ad.model ?? ""}${ad.cost_usd ? ` · $${Number(ad.cost_usd).toFixed(3)}` : ""} · ${ad.summary ?? ""}` : String(ad.summary ?? "off"))
+  if (ad || as) out.push({ key: "agent", status: ad ? "done" : as ? "running" : "pending", t: ad?.t,
+    detail: ad ? (ad.enabled ? `Recorded verifier · ${ad.model ?? ""} · ${ad.summary ?? ""}` : String(ad.summary ?? "Local inspection · no external AI API"))
       : prog ? `${prog.done}/${prog.total} candidates verified` : as ? `${as.candidates} candidate${as.candidates === 1 ? "" : "s"} to verify` : undefined });
   const cd = find("consensus", "done");
   const cc = cd?.counts as Record<string, number> | undefined;

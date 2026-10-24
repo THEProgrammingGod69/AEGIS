@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 import config
 import server
+import service
 
 client = TestClient(server.app)
 
@@ -44,8 +45,12 @@ def test_v2_inspect_then_stateless_recheck(runs_dir):
     files = r1["files"]
     assert base64.b64decode(files["pdf"])[:4] == b"%PDF"
     assert base64.b64decode(files["checklist"])[:2] == b"PK"
-    assert not {"photo", "marked"} & set(files)                    # metadata only: the browser has its own photo
-    assert "preview" in files                                      # ... except a server sample's, which it never had
+    assert not {"photo", "marked"} & set(files)                    # full photo and marked photo stay in the browser
+    if "preview" in files:                                        # a bounded thumbnail is an explicit stored artefact
+        import io
+        from PIL import Image
+        with Image.open(io.BytesIO(base64.b64decode(files["preview"]))) as preview:
+            assert max(preview.size) <= service.PREVIEW_SIDE
     assert r1["storage"] == "metadata" and len(meta["photo_meta"]["sha256"]) == 64
     assert "overlay" not in files                                 # demo drawing: the console ships its overlay
     assert not list(runs_dir.iterdir())                            # nothing kept server-side
@@ -71,8 +76,8 @@ def test_v2_errors(runs_dir):
     assert client.post("/api/v2/inspect", data={"sample": "99"}).status_code == 404
     assert client.post("/api/v2/inspect", files={"parent": ("p.json", b"{nope", "application/json")},
                        data={"sample": "01"}).status_code == 400
-    msgs = stream(client.post("/api/v2/inspect", files={"photo": ("x.jpg", b"not an image", "image/jpeg")}))
-    assert msgs[-1]["type"] == "error" and "photo" in msgs[-1]["detail"]
+    response = client.post("/api/v2/inspect", files={"photo": ("x.jpg", b"not an image", "image/jpeg")})
+    assert response.status_code == 400 and "photo" in response.json()["detail"]
     assert client.post("/api/v2/forge", json={"faults": 9}).status_code == 422
 
 

@@ -94,7 +94,7 @@ def extract_drawing_tags(page_image, page_no, vocabulary_hint=None, backend=None
     s = acfg.load()
     if backend is None:
         backend, _ = backends.get_backend(s)
-    if backend is None or backend.kind != "llm" or backend.name == "mock":
+    if backend is None or not backends.is_offline(backend) or backend.kind != "llm" or backend.name == "mock":
         return []
     if isinstance(page_image, (str, os.PathLike)):
         page_image, clip = _render(page_image, page_no, clip, dpi)

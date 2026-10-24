@@ -1,7 +1,7 @@
-# EAGLE EYE engine: real-cabinet engine (PP-OCRv4 + drawing knowledge base + Claude agent) and the demo-cabinet engine,
+# EAGLE EYE engine: local PP-OCRv4 + drawing knowledge base and the demo-cabinet engine,
 # served by FastAPI. Python 3.11 slim, CPU only. Build from eagle_eye/:
 #   docker build -f Dockerfile.engine -t eagle-eye-engine .
-#   docker run -p 8080:8080 -e PORT=8080 -e ANTHROPIC_API_KEY=... -v "$PWD/../data/emerson:/app/data/emerson:ro" eagle-eye-engine
+#   docker run -p 8080:8080 -e PORT=8080 -v "$PWD/../data/emerson:/app/data/emerson:ro" eagle-eye-engine
 # Deploy targets (Cloud Run, Render, Fly.io, Railway) and the on-prem compose file: docs/DEPLOY.md.
 FROM python:3.11-slim
 
@@ -23,7 +23,7 @@ COPY . /app
 # Containers write only under /tmp. EAGLE_EYE_CLOUD=1 serves the stateless /api/v2 for the hosted console; set it to 0 to
 # serve the full console from this container (on-prem). Real drawing sets/photos are mounted at /app/data/emerson, never baked.
 ENV EAGLE_EYE_DATA=/tmp/eagle_eye EAGLE_EYE_CLOUD=1 OMP_THREAD_LIMIT=1 EAGLE_EYE_REAL_DATA=/app/data/emerson \
-    EAGLE_OCR_WORKERS=2
+    EAGLE_OCR_WORKERS=2 EAGLE_AGENT_ENABLED=0
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:%s/api/v2/health' % os.environ.get('PORT','8080'), timeout=8)"
 CMD ["sh", "-c", "exec python server.py --host 0.0.0.0 --port ${PORT:-8080} --no-browser"]

@@ -407,8 +407,9 @@ def test_fallbacks_opt_in(monkeypatch):
         sent.append(extra_body)
         return msg
     old = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=old_create)), messages=None)
-    AnthropicBackend(client=old, fallbacks=True).create({"model": "claude-opus-5-5", "max_tokens": 10, "messages": []})
-    assert sent == [{"fallbacks": "default"}]
+    with pytest.raises(RuntimeError, match="External AI APIs are disabled"):
+        AnthropicBackend(client=old, fallbacks=True)
+    assert sent == []                                      # arbitrary clients cannot escape the offline-only gate
 
     rejected = Exception("fallbacks: not supported for this organization")
     rejected.status_code = 400
@@ -419,70 +420,36 @@ def test_fallbacks_opt_in(monkeypatch):
     assert [e for e, _ in fc3.requests] == ["beta", "messages", "messages"]
 
 
-def test_installed_sdk_supports_the_parameters_we_send():
-    anthropic = pytest.importorskip("anthropic")
-    from anthropic.resources.beta.messages import Messages as BetaMessages
-    from anthropic.resources.messages import Messages
-    for name in ("output_config", "cache_control", "tools", "system"):
-        assert backends._accepts(Messages.create, name) and backends._accepts(BetaMessages.create, name)
-    assert backends._accepts(BetaMessages.create, "fallbacks") and backends._accepts(BetaMessages.create, "betas")
-    assert hasattr(anthropic, "Anthropic")
+def test_hosted_client_construction_is_disabled_even_with_credentials(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    monkeypatch.setenv("EAGLE_AGENT_BACKEND", "anthropic")
+    monkeypatch.setenv("EAGLE_AGENT_ENABLED", "1")
+    assert backends.get_backend()[0] is None
+    with pytest.raises(RuntimeError, match="External AI APIs are disabled"):
+        AnthropicBackend()
 
 
-def test_real_sdk_round_trip_offline():
-    """The installed SDK client (mock HTTP transport, dummy key, no network) takes our requests and the echo of its
-    own response blocks (thinking signature kept), with the fallbacks opt-in on the beta endpoint."""
-    anthropic = pytest.importorskip("anthropic")
-    httpx2 = pytest.importorskip("httpx2")
-    seen = []
+def test_injected_network_backend_is_rejected_before_a_call():
+    class NetworkBackend:
+        name, kind = "hosted", "llm"
 
-    def respond(request):
-        if request.url.path == "/v1/models":
-            return httpx2.Response(200, json={"data": [{"id": "claude-opus-5-5", "type": "model", "display_name": "Opus",
-                                                        "created_at": "2026-01-01T00:00:00Z"}],
-                                              "has_more": False, "first_id": "claude-opus-5-5",
-                                              "last_id": "claude-opus-5-5"})
-        body = json.loads(request.content)
-        seen.append((request, body))
-        if len(seen) == 1:
-            content = [{"type": "thinking", "thinking": "", "signature": "sig-1"},
-                       {"type": "tool_use", "id": "toolu_1", "name": "zoom",
-                        "input": {"region_xyxy": [190, 140, 330, 270], "scale": 2}}]
-        else:
-            content = [{"type": "tool_use", "id": "toolu_2", "name": "record_decision", "input": {
-                "finding_id": "LBL-PS11", "verdict": "CONFIRMED_OK", "confidence": 0.9, "reason": "reads PS11",
-                "evidence_boxes": [[190, 140, 330, 270]], "rephoto_hint": None}}]
-        return httpx2.Response(200, json={
-            "id": f"msg_{len(seen)}", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
-            "content": content, "stop_reason": "tool_use", "stop_sequence": None, "stop_details": None,
-            "usage": {"input_tokens": 100, "output_tokens": 20, "cache_read_input_tokens": 50,
-                      "cache_creation_input_tokens": 0}})
+        def create(self, params):
+            pytest.fail("an external inference call was attempted")
 
-    client = anthropic.Anthropic(api_key="dummy-offline-test", base_url="http://mock.invalid", max_retries=0,
-                                 http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(respond)))
-    res = verifier.verify([FINDINGS[0]], make_ctx(), backend=AnthropicBackend(client=client, fallbacks=True))
-    assert res["errors"] == [] and res["decisions"]["LBL-PS11"]["verdict"] == "CONFIRMED_OK"
-    request, body = seen[0]
-    assert request.url.params.get("beta") == "true" and request.headers["anthropic-beta"] == acfg.FALLBACK_BETA
-    assert body["fallbacks"] == "default" and body["model"] == "claude-opus-5-5" and "thinking" not in body
-    assert body["tools"][-1]["strict"] is True and body["output_config"] == {"effort": "medium"}
-    assert body["cache_control"] == {"type": "ephemeral"} and body["system"][0]["cache_control"]
-    echoed = seen[1][1]["messages"][1]["content"]
-    assert echoed[0]["type"] == "thinking" and echoed[0]["signature"] == "sig-1"
-    assert seen[1][1]["messages"][2]["content"][0]["tool_use_id"] == "toolu_1"
-    assert res["usage"]["cache_read"] == 100 and res["calls"] == 2
+    res = verifier.verify(FINDINGS, make_ctx(), backend=NetworkBackend())
+    assert not res["enabled"] and res["calls"] == 0 and not res["decisions"]
+    assert drawing_extract.extract_drawing_tags(Image.new("RGB", (10, 10)), 1, backend=NetworkBackend()) == []
 
 
 def test_status_with_and_without_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.example.invalid")      # not a credential
     st = verifier.status()
-    assert st["enabled"] is False and st["backend"] is None and "ANTHROPIC_API_KEY" in st["reason"]
+    assert st["enabled"] is False and st["backend"] is None and "external AI APIs are disabled" in st["reason"]
     assert set(st) >= {"enabled", "backend", "model", "fast_model", "reason"}
     assert verifier.verify(FINDINGS, make_ctx())["enabled"] is False
     monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
     st = verifier.status()
-    assert st["enabled"] and st["backend"] == "anthropic" and (st["model"], st["fast_model"]) == (
-        "auto", "claude-opus-5-5")
+    assert not st["enabled"] and st["backend"] is None
     assert FAKE_KEY not in json.dumps(st)
     monkeypatch.setenv("EAGLE_AGENT_ENABLED", "0")
     assert verifier.status()["enabled"] is False

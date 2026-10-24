@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .venv/
 .venv-win/
+.venv312/
+.runtime/
 venv/
 .pytest_cache/
 

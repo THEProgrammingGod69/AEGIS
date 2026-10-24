@@ -1,6 +1,7 @@
 import { liveReady, useEngine } from "./cloud";
 import { staticApi, staticUrl } from "./static";
-import type { CheckInfo, ForgeGap, ForgeLive, Health, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import { safeRun, safeRunMeta } from "./inspection";
+import type { CheckInfo, Evaluation, ForgeGap, ForgeLive, Health, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 
 /** True in the hosted build (npm run build:static): cloud engine + recorded runs, history kept in the browser. */
 export const STATIC = import.meta.env.VITE_STATIC === "1";
@@ -31,6 +32,8 @@ export interface InspectInput {
   /** real drawing set + photo found by the engine (EAGLE_EYE_REAL_DATA), e.g. the Emerson 13GE03331 preset */
   preset?: string | null;
   presetPhoto?: string | null;
+  /** Explicit mode: real cabinet drawing, or a deliberately selected synthetic demo. */
+  engine?: "auto" | "legacy" | "real";
 }
 
 const liveApi = {
@@ -46,21 +49,23 @@ const liveApi = {
   job: (id: string, since = 0) => req<JobView>(`/api/jobs/${id}?since=${since}`),
   forgeLive: () => req<ForgeLive>("/api/forge/live"),
   selftest: () => req<SelfTest>("/api/forge/selftest"),
+  evaluation: () => req<Evaluation>("/api/evaluation"),
   forgeGap: () => req<ForgeGap>("/api/forge/gap"),
   forge: (body: { faults: number | null; strength: number; seed: number | null; count: number }) =>
     req<JobView>("/api/forge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
   inspect: (i: InspectInput) => {
     const fd = new FormData();
     if (i.photo) fd.append("photo", i.photo);
-    else if (i.preset) {
+    if (i.preset) {
       fd.append("preset", i.preset);
       if (i.presetPhoto) fd.append("preset_photo", i.presetPhoto);
-    } else if (i.sample) fd.append("sample", i.sample);
+    } else if (!i.photo && i.sample) fd.append("sample", i.sample);
     if (i.ga) fd.append("ga", i.ga);
     if (i.wires) fd.append("wires", i.wires);
     if (i.checklist) fd.append("checklist", i.checklist);
     if (i.checks) fd.append("checks", i.checks.join(","));
     if (i.parent) fd.append("parent", i.parent);
+    if (i.engine) fd.append("engine", i.engine);
     return req<JobView>("/api/inspect", { method: "POST", body: fd });
   },
   review: (rid: string, item: string, decision: Review["decision"] | "CLEAR", note = "", by = "Inspector") =>
@@ -81,7 +86,12 @@ const liveUrl = {
   gaPreview: () => "/api/inputs/ga/preview",
 };
 
-export const api: typeof liveApi = STATIC ? (staticApi as unknown as typeof liveApi) : liveApi;
+const sourceApi: typeof liveApi = STATIC ? (staticApi as unknown as typeof liveApi) : liveApi;
+export const api: typeof liveApi = { ...sourceApi,
+  run: async (id) => safeRun(await sourceApi.run(id)),
+  runs: async (limit) => (await sourceApi.runs(limit)).map((m) => safeRunMeta(m)),
+  chain: async (id) => (await sourceApi.chain(id)).map((m) => safeRunMeta(m)),
+};
 export const url: typeof liveUrl = STATIC ? (staticUrl as unknown as typeof liveUrl) : liveUrl;
 
 /** Can this console run a real inspection right now? Local engine: always. Hosted: when the cloud engine is up. */
@@ -95,7 +105,8 @@ const DL: Record<string, [string, string]> = {
   pdf: ["EAGLE_EYE_Report", "pdf"], checklist: ["QC_Checklist", "xlsx"], json: ["EAGLE_EYE", "json"], marked: ["Marked", "jpg"],
 };
 /** Props for a download link (hosted runs are blob URLs, so they need an explicit file name). */
-export function dl(run: string, name: string, cabinet = "EE") {
+export function dl(run: string, name: string, cabinet = "EE", blocked = false) {
+  if (blocked && name !== "json") return { href: undefined, "aria-disabled": true as const, title: "Rerun inspection to regenerate verified exports" };
   const href = url.download(run, name);
   if (!STATIC) return { href };
   const [stem, ext] = DL[name] ?? [name, "bin"];

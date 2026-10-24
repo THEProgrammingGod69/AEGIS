@@ -20,6 +20,7 @@ _err = None
 _local = threading.local()
 _lock = threading.Lock()
 _apis = []                      # every engine created, released at exit (libtesseract warns about leaks otherwise)
+_dll_dirs = []                  # keep Windows DLL-directory handles alive for dependent OCR libraries
 
 
 def _tess_dir():
@@ -48,6 +49,14 @@ def _load():
         if os.environ.get("EAGLE_EYE_OCR", "").lower() == "cli":
             _err = "disabled by EAGLE_EYE_OCR=cli"
             return None
+        # Python 3.8+ does not use PATH to resolve dependent DLLs. The normal Windows
+        # Tesseract distribution keeps Leptonica and its other DLLs beside the executable.
+        d = _tess_dir()
+        if os.name == "nt" and d and hasattr(os, "add_dll_directory"):
+            try:
+                _dll_dirs.append(os.add_dll_directory(d))
+            except OSError:
+                pass                         # the CLI fallback still reports an actionable setup error
         for name in _candidates():
             if not name:
                 continue

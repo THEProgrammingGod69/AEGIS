@@ -7,12 +7,13 @@ export interface Fix {
   detail: string;
   where: string;
   minutes: number;
-  kind: "fix" | "rephoto";
+  kind: "fix" | "rephoto" | "review";
 }
 
 const colour = (c: string) => `${COLOUR_NAME[c] ?? c} (${c})`;
 
 function where(it: Item, p: RunPayload): string {
+  if ((p.engine_kind ?? p.meta.engine_kind) === "real") return it.view ? `${it.view} drawing view · ${it.target}` : `Drawing target: ${it.target}`;
   const [x, y] = it.box;
   const at = `${Math.round(x)} mm across, ${Math.round(y)} mm down`;
   if (it.check === "ORDER") return `${it.target}, slots 1–${it.slots?.length ?? "?"}`;
@@ -25,9 +26,15 @@ function where(it: Item, p: RunPayload): string {
 }
 
 export function fixFor(it: Item, p: RunPayload): Fix {
+  if (it.check === "REGISTRATION" || it.id === "REG-DRAWING") return { action: "Match the cabinet photograph to its drawing", detail: "Verify the cabinet identity and drawing revision, then start a new inspection with a clear relevant cabinet view. A new photo alone cannot correct an unrelated drawing.", where: "Inspection inputs", minutes: 2, kind: "rephoto" };
   const w = where(it, p);
-  if (it.result === "REVIEW")
-    return { action: `Re-photograph ${it.target}`, detail: "The engine could not read this zone clearly enough to decide. Take a sharper, square-on photo of it.", where: w, minutes: 2, kind: "rephoto" };
+  if (it.result === "REVIEW") {
+    const documentation = it.id.startsWith("DOC-") || (it.rule ?? "").endsWith(".unsupported_input");
+    return { action: documentation ? `Review ${it.target} manually` : `Resolve evidence for ${it.target}`,
+      detail: it.hint || (documentation ? "Compare the uploaded requirements with the cabinet and record a manual inspection. This document is not automatically verified."
+        : "Review the drawing and photo evidence. Confirm matching inputs and capture additional detail when needed before deciding."),
+      where: documentation ? "Uploaded inspection requirements" : w, minutes: 2, kind: "review" };
+  }
   switch (it.check) {
     case "GA":
       return { action: `Install ${it.target}`, detail: `The drawing places ${it.target} here and the slot is empty. Mount it as drawn on the GA and wire it per the wire list.`, where: w, minutes: 15, kind: "fix" };

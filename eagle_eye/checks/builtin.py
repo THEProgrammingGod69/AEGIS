@@ -64,6 +64,17 @@ def _strong_read(r):
     return r.get("passes", 1) >= 2 and float(r.get("conf", 0)) >= 0.9
 
 
+def _verified_read(r):
+    """Literal complete text with usable OCR support; vocabulary repairs are suggestions, never verification."""
+    exact = r.get("method") == "exact" and normalize(r.get("raw", "")) == r.get("tag")
+    conf = float(r.get("conf", 0))
+    return exact and (conf >= 0.85 or (r.get("passes", 1) >= 2 and conf >= 0.75))
+
+
+def _best_read(reads):
+    return max(reads, key=lambda r: (_verified_read(r), r.get("passes", 1), r.get("conf", 0)))
+
+
 # ------------------------------------------------------------------ MISSING
 @check("MISSING")
 class MissingCheck:
@@ -89,16 +100,21 @@ class MissingCheck:
             near = [r for r in reads if r["dist_px"] <= NEAR * tol]
             common = dict(view=iv["view"], drawing=_drawing_ref(ctx, tag))
             if near:
-                best = max(near, key=lambda r: (r["passes"], r["conf"]))
-                presence[tag] = "read"
-                out.append(finding(fid, "MISSING", tag, "Installed", "Present", "OK", box, conf=best["conf"],
-                                   rule="MISSING.read_at_predicted", evidence=[_read_text(best) + " at its drawn spot"],
+                best = _best_read(near)
+                certain = _verified_read(best)
+                presence[tag] = "read" if certain else "partial"
+                out.append(finding(fid, "MISSING", tag, "Installed", "Present" if certain else "Label read is uncertain",
+                                   "OK" if certain else "UNCERTAIN", box, conf=best["conf"],
+                                   rule="MISSING.read_at_predicted" if certain else "MISSING.uncertain_read",
+                                   evidence=[_read_text(best) + " at its drawn spot"],
+                                   hint=None if certain else f"Capture the full {tag} label sharply without obstructions",
                                    reads=[_rd(r) for r in near], **common))
                 continue
             if reads and (iv.get("off_fit") or not iv.get("anchored", True)):
-                best = max(reads, key=lambda r: (r["passes"], r["conf"]))
+                best = _best_read(reads)
                 presence[tag] = "far"
-                out.append(finding(fid, "MISSING", tag, "Installed", "Present", "OK", box, conf=best["conf"],
+                out.append(finding(fid, "MISSING", tag, "Installed", "Present" if _verified_read(best) else "Label read is uncertain",
+                                   "OK" if _verified_read(best) else "UNCERTAIN", box, conf=best["conf"],
                                    rule="MISSING.read_off_fit", reads=[_rd(r) for r in reads],
                                    evidence=[_read_text(best) + "; the label check judges its position"], **common))
                 continue
@@ -155,8 +171,11 @@ class MissingCheck:
                 presence[tag] = status
                 zoom_reads.setdefault(tag, []).append(rec)
                 txt = "zoom re-read" if status == "zoom" else "partial zoom read only this tag explains"
-                out.append(finding(fid, "MISSING", tag, "Installed", "Present", "OK", box, conf=rec["conf"],
+                certain = status == "zoom" and _verified_read(rec)
+                out.append(finding(fid, "MISSING", tag, "Installed", "Present" if certain else "Partial label reading",
+                                   "OK" if certain else "UNCERTAIN", box, conf=rec["conf"],
                                    rule=f"MISSING.{status}", evidence=[f"{txt}: {_read_text(rec)}"], reads=[_rd(rec)],
+                                   hint=None if certain else f"Capture the complete {tag} label so every character is readable",
                                    **common))
             elif status == "wrong":
                 presence[tag], wrong[tag] = "wrong", rec
@@ -199,9 +218,21 @@ class MissingCheck:
             view = r.get("view")
             presence[t] = "read_unplaced"
             ctx.facts.setdefault("unplaced", {})[t] = rs
-            out.append(finding(f"MISS-{t}", "MISSING", t, "Installed", "Present", "OK", union([x["box"] for x in rs]),
+            out.append(finding(f"MISS-{t}", "MISSING", t, "Installed", "Label read; position unverified", "UNCERTAIN", union([x["box"] for x in rs]),
                                view=view, conf=r["conf"], rule="MISSING.read_view_not_placed", reads=[_rd(x) for x in rs],
-                               evidence=[_read_text(r), f"its {view} view is not placed on this photo: position not judged"]))
+                               evidence=[_read_text(r), f"its {view} view is not placed on this photo: position not judged"],
+                               hint=f"Include surrounding labels to locate the {view} view against the matching drawing"))
+        # Emit explicit coverage gaps. Omitting unseen expected tags made a partial photo look like a complete check.
+        for view, tags in ctx.views.items():
+            for t, rec in sorted(tags.items(), key=lambda kv: tag_sort_key(kv[0])):
+                if t in ctx.in_view or t in seen or not rec.get("label_expected", True):
+                    continue
+                seen.add(t)
+                presence[t] = "unjudged"
+                out.append(finding(f"MISS-{t}", "MISSING", t, "Installed", "Outside the verified photo coverage",
+                                   "NOT_IN_VIEW", view=view, rule="MISSING.not_in_view",
+                                   evidence=["this drawing region has no reliable photo coverage"],
+                                   hint=f"Capture the {t} area with surrounding readable labels"))
         return out
 
     @staticmethod
@@ -235,7 +266,8 @@ class MissingCheck:
         cls = classify_tokens(toks, vocab)
         hit = [r for r in cls["reads"] if r["tag"] == tag]
         if hit:
-            return "zoom", max(hit, key=lambda r: r["conf"]), info
+            best = _best_read(hit)
+            return "zoom" if _verified_read(best) else "partial", best, info
         wr = MissingCheck._wrong_in(ctx, tag, box, cls["unknown"] + [r for r in cls["reads"] if r["tag"] != tag])
         if wr:
             return "wrong", wr, info
@@ -265,11 +297,20 @@ class OrderCheck:
         explained = ctx.facts.setdefault("order_explained", {})
         zoom = ctx.facts.get("zoom_reads", {})
         for g in ctx.kb.get("groups") or []:
+            required = [t for t in g["order"] if ctx.label_expected(t)]
+            if len(required) < 2:
+                continue
+            fid = f"ORD-{g['id']}"
+            required_seq = " · ".join(required)
             fit = ctx.fit(g["view"])
             if not fit:
+                out.append(finding(fid, "ORDER", g["id"], required_seq, "Drawing view not located in this photo",
+                                   "NOT_IN_VIEW", view=g["view"], rule="ORDER.not_in_view"))
                 continue
-            members = [t for t in g["order"] if t in ctx.in_view and ctx.label_expected(t)]
+            members = [t for t in required if t in ctx.in_view]
             if len(members) < 2:
+                out.append(finding(fid, "ORDER", g["id"], required_seq, "Too little of the group is in view",
+                                   "NOT_IN_VIEW", view=g["view"], rule="ORDER.partial_view"))
                 continue
             placed = {}
             for t in members:
@@ -278,12 +319,14 @@ class OrderCheck:
                     pred = ctx.in_view[t]["predicted"]
                     placed[t] = min(rs, key=lambda r: dist(r["center"], pred))
             if len(placed) < 2:
+                out.append(finding(fid, "ORDER", g["id"], required_seq, "Too few complete labels could be read",
+                                   "UNCERTAIN", view=g["view"], rule="ORDER.unreadable",
+                                   hint=f"Capture the {g['family']} group so every label is readable"))
                 continue
             a = 0 if g["axis"] == "x" else 1
             coord = {t: unproject(fit, placed[t]["center"])[a] for t in placed}
             expected = [t for t in g["order"] if t in placed]
             observed = sorted(placed, key=lambda t: coord[t])
-            fid = f"ORD-{g['id']}"
             box = union([box_around(placed[t]["center"], 3 * max(ctx.text_px(t), 6), 2 * max(ctx.text_px(t), 6),
                                     ctx.photo["size"]) for t in placed])
             drawing = {"page": ctx.kb["views"][g["view"]]["page"], "view": g["view"],
@@ -291,10 +334,14 @@ class OrderCheck:
             reads = [_rd(placed[t]) for t in expected]
             seq = " · ".join(expected)
             if observed == expected:
-                out.append(finding(fid, "ORDER", g["id"], seq, seq, "OK", box, view=g["view"], drawing=drawing,
+                full = len(placed) == len(required)
+                literal = all(_verified_read(p) for p in placed.values())
+                status = "OK" if full and literal else "NOT_IN_VIEW" if len(members) < len(required) else "UNCERTAIN"
+                out.append(finding(fid, "ORDER", g["id"], required_seq, seq, status, box, view=g["view"], drawing=drawing,
                                    conf=min(p["conf"] for p in placed.values()), rule="ORDER.matches", reads=reads,
                                    evidence=[f"{len(placed)} of {len(members)} {g['family']} labels read, in the "
-                                             f"drawing's {'left-to-right' if a == 0 else 'top-to-bottom'} order"]))
+                                             f"drawing's {'left-to-right' if a == 0 else 'top-to-bottom'} order"],
+                                   hint=None if status == "OK" else f"Capture the full {g['family']} group with every label readable"))
                 continue
             pitch = float(g.get("pitch_pt") or 0) or 5.0
             ambiguous = all(abs(coord[x] - coord[y]) < 0.35 * pitch
@@ -302,13 +349,13 @@ class OrderCheck:
             pairs = self._swaps(expected, observed)
             names = ", ".join(f"{x} <-> {y} swapped" for x, y in pairs) if pairs else "wrong order"
             if ambiguous:
-                out.append(finding(fid, "ORDER", g["id"], seq, " · ".join(observed), "OK", box, view=g["view"],
+                out.append(finding(fid, "ORDER", g["id"], required_seq, " · ".join(observed), "UNCERTAIN", box, view=g["view"],
                                    drawing=drawing, conf=0.6, rule="ORDER.ambiguous", reads=reads,
-                                   evidence=["labels sit too close along the rail to tell the order apart; "
-                                             "treated as matching"]))
+                                   evidence=["labels sit too close along the rail to tell the order apart"],
+                                   hint=f"Capture the {g['family']} group straight on so positions can be distinguished"))
                 continue
             involved = sorted({t for p in pairs for t in p} or set(observed), key=tag_sort_key)
-            strong = all(placed[t].get("anchor") and _strong_read(placed[t]) for t in involved) and all(
+            strong = all(placed[t].get("anchor") and _verified_read(placed[t]) and _strong_read(placed[t]) for t in involved) and all(
                 min(dist(placed[t]["center"], p) for p in ctx.in_view[t]["instances"]) >= 0.5 * pitch * fit["scale_px_per_pt"]
                 for t in involved)
             for t in involved:
@@ -384,10 +431,21 @@ class LabelCheck:
         zoom = ctx.facts.get("zoom_reads", {})
         explained = ctx.facts.get("order_explained", {})
         for tag, rs in sorted(ctx.facts.get("unplaced", {}).items(), key=lambda kv: tag_sort_key(kv[0])):
-            best = max(rs, key=lambda r: (r["passes"], r["conf"]))
-            out.append(finding(f"LBL-{tag}", "LABEL", tag, tag, tag, "OK", union([r["box"] for r in rs]),
+            best = _best_read(rs)
+            out.append(finding(f"LBL-{tag}", "LABEL", tag, tag, tag, "UNCERTAIN", union([r["box"] for r in rs]),
                                view=best.get("view"), conf=best["conf"], rule="LABEL.read_view_not_placed",
-                               reads=[_rd(r) for r in rs], evidence=[_read_text(best) + " (position not judged)"]))
+                               reads=[_rd(r) for r in rs], evidence=[_read_text(best) + " (position not judged)"],
+                               hint="Capture surrounding labels to locate this device against the matching drawing"))
+        unplaced = ctx.facts.get("unplaced", {})
+        seen = set()
+        for view, tags in ctx.views.items():
+            for tag, rec in sorted(tags.items(), key=lambda kv: tag_sort_key(kv[0])):
+                if tag in ctx.in_view or tag in unplaced or tag in seen or not rec.get("label_expected", True):
+                    continue
+                seen.add(tag)
+                out.append(finding(f"LBL-{tag}", "LABEL", tag, tag, "Outside the verified photo coverage",
+                                   "NOT_IN_VIEW", view=view, rule="LABEL.not_in_view",
+                                   hint=f"Capture the {tag} area with surrounding readable labels"))
         for tag in sorted(ctx.in_view, key=tag_sort_key):
             if not ctx.label_expected(tag):
                 continue
@@ -408,11 +466,13 @@ class LabelCheck:
             if p in ("read", "zoom", "partial"):
                 rs = [r for r in ctx.reads_of(tag) if r.get("dist_px") is not None and r["dist_px"] <= NEAR * tol]
                 rs = rs or zoom.get(tag, [])
-                best = max(rs, key=lambda r: (r.get("passes", 1), r.get("conf", 0)))
-                partial = best.get("method") == "partial"
-                out.append(finding(fid, "LABEL", tag, tag, tag, "OK", box, conf=best["conf"] * (0.85 if partial else 1),
+                best = _best_read(rs)
+                partial = not _verified_read(best)
+                out.append(finding(fid, "LABEL", tag, tag, tag if not partial else best.get("raw", "Incomplete label"),
+                                   "UNCERTAIN" if partial else "OK", box, conf=best["conf"] * (0.85 if partial else 1),
                                    rule="LABEL.partial_support" if partial else "LABEL.read_at_predicted",
                                    evidence=[_read_text(best) + (" (partial; only this tag fits here)" if partial else "")],
+                                   hint=f"Capture the complete {tag} label so every character is readable" if partial else None,
                                    reads=[_rd(r) for r in rs], **common))
                 continue
             if p == "wrong":
@@ -434,10 +494,16 @@ class LabelCheck:
                 continue
             # p == "far": read, but not where the drawing puts it
             rs = [r for r in ctx.reads_of(tag) if r.get("dist_px") is not None]
-            best = min(rs, key=lambda r: r["dist_px"])
+            best = min(rs, key=lambda r: (not _verified_read(r), r["dist_px"]))
             d = best["dist_px"]
             fit = ctx.fit(iv["view"])
             scale = fit["scale_px_per_pt"]
+            if not _verified_read(best):
+                out.append(finding(fid, "LABEL", tag, tag, best.get("raw", "Incomplete label"), "UNCERTAIN", box,
+                                   conf=best["conf"], rule="LABEL.uncertain_read", reads=[_rd(r) for r in rs],
+                                   evidence=[_read_text(best), "a vocabulary repair does not verify the literal label"],
+                                   hint=f"Capture the full {tag} label sharply", **common))
+                continue
             if d <= FAR * tol:
                 out.append(finding(fid, "LABEL", tag, tag, tag, "OK", box, conf=best["conf"] * 0.9,
                                        rule="LABEL.read_offset", reads=[_rd(r) for r in rs],
@@ -450,10 +516,12 @@ class LabelCheck:
                                    evidence=[f"root cause: {explained[tag]}"], **common))
                 continue
             if not iv.get("anchored", True) and not iv.get("off_fit"):
-                out.append(finding(fid, "LABEL", tag, tag, tag, "OK", box, conf=best["conf"] * 0.85,
+                out.append(finding(fid, "LABEL", tag, tag, tag, "UNCERTAIN", box, conf=best["conf"] * 0.85,
                                    rule="LABEL.read_not_anchored", reads=[_rd(r) for r in rs],
                                    evidence=[_read_text(best), "its drawn spot lies beyond the labels this photo could "
-                                             "anchor, so its position is not judged"], **common))
+                                             "anchor, so its position is not judged"],
+                                   hint=f"Capture {tag} with nearby readable labels to verify its drawing position",
+                                   **common))
                 continue
             dpt = (ctx.tag_rec(tag) or {}).get("center")
             refs = _layout_refs(ctx, iv["view"], tag)
@@ -585,9 +653,10 @@ class FerruleCheck:
                               rule="FERRULE.no_wiring", reads=reads,
                               evidence=["no wiring could be extracted from this drawing set; ferrule not judged"])
             elif linked:
-                own = finding(fid, "FERRULE", norm, f"{a} - {b} in the drawing", norm, "OK", box, view=view,
+                own = finding(fid, "FERRULE", norm, f"{a} - {b} in the drawing", norm, "OK" if certain else "UNCERTAIN", box, view=view,
                               conf=best["conf"], rule="FERRULE.link_in_drawing", reads=reads,
-                              evidence=[_read_text(best), f"the drawing connects {a} and {b}"])
+                              evidence=[_read_text(best), f"the drawing connects {a} and {b}"],
+                              hint=None if certain else "Capture the complete wire marker sharply without obstructions")
             elif a in wired and b in wired:
                 own = finding(fid, "FERRULE", norm, "Connection in the drawing", f"{a} - {b}", "CANDIDATE_FAULT", box,
                               view=view, strength="weak", conf=0.55, rule="FERRULE.link_not_in_drawing", reads=reads,
@@ -621,5 +690,10 @@ class ColourCheck:
         if not ctx.wires:
             ctx.facts["colour_note"] = "no wire list with colours: COLOUR not applicable to this drawing set"
             return []
-        ctx.facts["colour_note"] = "wire-list colours are checked by the demo-cabinet engine only"
-        return []
+        ctx.facts["colour_note"] = "The uploaded wire list requires manual verification of terminal positions and wire colours"
+        return [finding("DOC-WIRELIST", "COLOUR", "Uploaded wire list", "Wire-list requirements verified",
+                        "Automatic wire-list colour checks are not available for real cabinets", "UNCERTAIN",
+                        conf=0.0, rule="COLOUR.unsupported_input",
+                        evidence=["Drawing-derived device links are checked separately; they do not verify every "
+                                  "terminal, pin or wire colour in the uploaded wire list"],
+                        hint="Compare the uploaded wire list with terminal close-ups and record a manual inspection")]

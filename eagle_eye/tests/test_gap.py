@@ -7,30 +7,31 @@ import eval_gap
 from server import app
 
 
-def test_outcome_counts_fail_before_review():
+def test_outcome_ranks_fail_review_pass_unassessed():
     assert eval_gap.outcome(["PASS", "REVIEW", "FAIL"]) == "FAIL"
     assert eval_gap.outcome(["PASS", "REVIEW"]) == "REVIEW"
-    assert eval_gap.outcome(["PASS", None]) == "missed"
-    assert eval_gap.outcome([]) == "missed"
+    assert eval_gap.outcome(["PASS", None]) == "PASS"                  # cleared: an incorrect PASS
+    assert eval_gap.outcome(["NOT_IN_VIEW", "SKIP"]) == "unassessed"
+    assert eval_gap.outcome([]) == "unassessed"
 
 
 def _row(outcomes, false_fail=0, reviews=0, judged=10, not_in_view=0, items=12, category="missing"):
-    return {"faults": [{"category": category, "outcome": o} for o in outcomes], "false_fail": false_fail,
+    return {"photo": f"{category}.jpg", "faults": [{"category": category, "outcome": o} for o in outcomes], "false_fail": false_fail,
             "reviews": reviews, "judged": judged, "not_in_view": not_in_view, "items": items, "seconds": 2.0}
 
 
 def test_summary_and_gap_score_both_sides_the_same_way():
     syn = [_row(["FAIL", "FAIL"]), _row(["FAIL"], category="swap")]
-    real = [_row(["FAIL", "REVIEW"], reviews=2, not_in_view=6), _row(["missed"], false_fail=1, category="swap")]
+    real = [_row(["FAIL", "REVIEW"], reviews=2, not_in_view=6), _row(["PASS", "unassessed"], false_fail=1, category="swap")]
     rep = eval_gap.build(real=real, synth_path="/nonexistent.json")
     assert rep["synthetic"] is None and rep["gap"] is None             # no saved self-test here
     s, r = eval_gap.summarize(syn), rep["real"]
     assert (s["planted"], s["FAIL"], s["fail_rate"]) == (3, 3, 1.0)
-    assert (r["planted"], r["FAIL"], r["REVIEW"], r["missed"]) == (3, 1, 1, 1)
-    assert r["fail_rate"] == round(1 / 3, 4) and r["flag_rate"] == round(2 / 3, 4)
+    assert (r["planted"], r["FAIL"], r["REVIEW"], r["PASS"], r["unassessed"]) == (4, 1, 1, 1, 1)
+    assert (r["fail_rate"], r["flag_rate"], r["incorrect_pass_rate"]) == (0.25, 0.5, 0.25)
     assert r["false_fail"] == 1 and r["false_fail_rate"] == 0.05 and r["review_rate"] == 0.1
     assert r["not_in_view_rate"] == 0.25
-    assert r["categories"]["swap"]["missed"] == 1 and r["categories"]["ferrule"]["planted"] == 0
+    assert r["categories"]["swap"]["PASS"] == 1 and r["categories"]["ferrule"]["planted"] == 0
 
 
 def test_synthetic_side_matches_the_shipped_self_test():

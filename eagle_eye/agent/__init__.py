@@ -10,7 +10,8 @@
                                                                          "source": "vlm", ...}]
 
 The agent only verifies what the deterministic stages found (CANDIDATE_FAULT / UNCERTAIN findings); it never adds items.
-Without credentials it is off and the engine stays deterministic-only. The anthropic SDK is imported lazily.
+External AI APIs are disabled, even when credentials exist. Only local replay/mock/scripted fixtures are retained;
+the production engine uses local OCR and geometry and never imports the hosted SDK.
 """
 from agent.drawing_extract import extract_drawing_tags
 from agent.schema import Decision

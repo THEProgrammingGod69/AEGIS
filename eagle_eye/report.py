@@ -229,7 +229,8 @@ def fill_checklist(template_xlsx, rep, out_xlsx, meta=None):
 
 
 CHECK_NAMES = {"GA": "Part present", "MISSING": "Part present", "ORDER": "Order", "LABEL": "Device label",
-               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Wire ferrule", "COLOUR": "Wire colour"}
+               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Wire ferrule", "COLOUR": "Wire colour",
+               "REGISTRATION": "Drawing alignment", "CHECKLIST": "Manual checklist requirements"}
 
 
 def checklist_template(rep, out_xlsx):

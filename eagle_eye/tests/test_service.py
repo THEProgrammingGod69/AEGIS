@@ -100,10 +100,10 @@ def test_fingerprint_only_request_needs_the_photo_once(runs_dir):
     import hashlib
     sha = hashlib.sha256(sample("02").read_bytes()).hexdigest()
     try:
-        service.run_inspection(None, photo_sha=sha)
+        service.run_inspection(None, photo_sha=sha, engine="legacy")
         raise AssertionError("an unknown fingerprint must ask for the photo")
     except service.NeedPhoto:
         pass
     service.run_inspection(sample("02"), photo_sha=sha)
-    m = service.run_inspection(None, photo_sha=sha, photo_name="02.jpg")
+    m = service.run_inspection(None, photo_sha=sha, photo_name="02.jpg", engine="legacy")
     assert m["cached"] and m["photo_meta"]["sha256"] == sha

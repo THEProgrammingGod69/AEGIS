@@ -20,11 +20,11 @@ const IDEAS = [
 ];
 
 const DOD = [
-  { k: "Finds the faults", v: "87 / 87 planted faults caught on 50 cabinets the engine never saw." },
-  { k: "No false alarms", v: "0 FAIL across 1,950 correct items. A correct item is never FAIL." },
+  { k: "Recorded synthetic baseline", v: "87 / 87 planted faults caught on 50 generated cabinet images in the recorded self-test." },
+  { k: "Measured false alarms", v: "0 FAIL across 1,950 correct synthetic items in that test; real-world performance requires separate evaluation." },
   { k: "Every FAIL has proof", v: "Boxed and numbered on the photo, with an expected-vs-found snippet." },
   { k: "Re-check works", v: "New photo after the fix: CLOSED / OPEN / REGRESSION, history kept." },
-  { k: "Works on a cabinet it has never seen", v: "No per-cabinet training. The cabinet's GA PDF defines what to expect." },
+  { k: "Drawing-driven inspection", v: "The matching GA PDF defines expectations. Supported drawings, readable labels and reliable alignment are required." },
 ];
 
 const VS: [string, string, string][] = [
@@ -34,7 +34,7 @@ const VS: [string, string, string][] = [
   ["Uncertainty", "Guesses confidently", "REVIEW: “re-photo this zone”"],
   ["Proof", "A paragraph of text", "Box on the photo + expected-vs-found crop"],
   ["Repeatability", "Changes run to run", "Deterministic: same photo, same report"],
-  ["A new cabinet", "Prompt engineering", "Load its GA drawing. Done."],
+  ["A new cabinet", "Prompt engineering", "Validate its drawing, label visibility and alignment"],
 ];
 
 const PIPE = [
@@ -47,7 +47,7 @@ const PIPE = [
 ];
 
 const NEW = [
-  { icon: Cloud, t: "Live cloud engine", s: "The real Python engine in a container. Upload any photo, drawing set or check selection from any browser; results stay on your device.", to: "inspect", tag: "~2 s / cabinet" },
+  { icon: Cloud, t: "Local vision inspection", s: "Your configured backend runs OCR and geometry without an external AI API. Real photographs require the matching drawing; unresolved checks block approval.", to: "inspect", tag: "drawing required" },
   { icon: Gauge, t: "5× faster engine", s: "OCR now runs in-process through libtesseract: identical text on 1,668 crops, identical self-test, 4 s → 0.9 s per cabinet.", to: "engine", tag: "same results" },
   { icon: ClipboardList, t: "Technician work orders", s: "Every FAIL becomes a numbered fix with location, proof crops, time estimate and sign-off. Print or save as PDF.", to: "history", tag: "printable" },
   { icon: UserCheck, t: "Review station", s: "Human in the loop: inspectors confirm or overturn findings with the proof on screen. Every decision is audit-logged.", to: "review", tag: "audit trail" },
@@ -61,17 +61,17 @@ const PLAN = [
   { icon: FileCode2, t: "Adapt the parser to Emerson's drawings", s: "Map their GA tag and title-block conventions; the checks stay unchanged." },
   { icon: Target, t: "Fine-tune a YOLO11 detector on their photos", s: "Swap the occupancy model for a detector trained on Emerson's samples." },
   { icon: SpellCheck2, t: "PaddleOCR for curved ferrules", s: "Keep the wire-list-constrained decoding; upgrade the reader." },
-  { icon: FlaskConical, t: "Re-run Fault Forge on real cabinets", s: "Plant faults on Emerson's samples and publish the same self-test numbers." },
+  { icon: FlaskConical, t: "Evaluate real cabinets separately", s: "Use verified real defects and independent cabinets; report confirmed detections, review referrals and incorrect approvals separately." },
 ];
 
 export function Overview({ onPresent }: { onPresent?: () => void }) {
   const st = useAsync(api.selftest);
   const s = st.data?.summary;
   const metrics = [
-    { v: s?.caught ?? 87, of: s?.planted ?? 87, label: "planted faults caught", sub: `${s?.cabinets ?? 50} unseen cabinets`, c: "var(--pass)" },
-    { v: s?.false_alarms ?? 0, label: "false alarms", sub: `across ${(s?.correct_items ?? 1950).toLocaleString()} correct items`, c: "var(--accent)" },
+    { v: s?.caught ?? 87, of: s?.planted ?? 87, label: "synthetic faults caught", sub: `${s?.cabinets ?? 50} generated cabinet images · recorded baseline`, c: "var(--pass)" },
+    { v: s?.false_alarms ?? 0, label: "synthetic false alarms", sub: `across ${(s?.correct_items ?? 1950).toLocaleString()} correct synthetic items`, c: "var(--accent)" },
     { v: (s?.review_rate ?? 0.003) * 100, label: "sent to REVIEW", sub: `${s?.reviews ?? 6} items, never a guessed FAIL`, c: "var(--review)", suffix: "%", d: 1 },
-    { v: s?.sec_per_cabinet ?? 4, label: "seconds per cabinet", sub: `CPU only · ${s?.cpu_cores ?? 4} cores · no GPU`, c: "var(--accent-3)", d: 1 },
+    { v: s?.sec_per_cabinet ?? 4, label: "seconds per synthetic image", sub: `Recorded baseline · ${s?.cpu_cores ?? 4} CPU cores`, c: "var(--accent-3)", d: 1 },
   ];
 
   return (
@@ -293,7 +293,7 @@ export function Overview({ onPresent }: { onPresent?: () => void }) {
       <Reveal className="cta card card-glow">
         <div>
           <h2>See it on Emerson's example, live.</h2>
-          <p className="muted">4 FAILs with proof in a few seconds, then a re-check that closes 3 of them.</p>
+          <p className="muted">A synthetic example with four known faults, followed by a re-check after three are fixed. Real-photo timing and accuracy are evaluated separately.</p>
         </div>
         <div className="row wrap">
           <button className="btn btn-primary btn-lg" onClick={() => go("inspect/demo")}><Play /> Run the live demo</button>

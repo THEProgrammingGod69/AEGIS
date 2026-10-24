@@ -5,10 +5,11 @@
     real        photos of Emerson's cabinet with faults planted by forge_real.py (data/emerson/forged/), inspected by
                 the real-cabinet engine (deterministic, no AI verifier unless ``--agent env``)
 
-Both sides are scored the same way. A planted fault is FAIL when one of its expected items ends FAIL, REVIEW when one
-ends REVIEW and none FAIL, otherwise missed. A false FAIL is a FAIL on any other item (on real photos, one that is not a
-listed drawing deviation). Faults are grouped into the categories both forges plant (missing, wrong label, swap);
-ferrule and wire-colour faults are planted in generated cabinets only so far.
+Both sides are scored the same way, in the terms of the evaluation catalogue (evaluation.py). A planted fault is
+confirmed (FAIL) when one of its expected items ends FAIL, referred (REVIEW) when one ends REVIEW and none FAIL, an
+incorrect PASS when its items were cleared, otherwise unassessed (not in view or skipped). A false FAIL is a FAIL on any
+other item (on real photos, one that is not a listed drawing deviation). Faults are grouped into the categories both
+forges plant (missing, wrong label, swap); ferrule and wire-colour faults are planted in generated cabinets only so far.
 
     python eval_gap.py [--no-real] [--agent off|env] [--data DIR] [--out DIR]
 
@@ -34,16 +35,17 @@ SYNTH_CATEGORY = {"missing_component": "missing", "missing_label": "missing", "w
                   "swap_breakers": "swap", "missing_ferrule": "ferrule", "wrong_ferrule": "ferrule",
                   "wrong_colour": "colour"}
 REAL_CATEGORY = {"missing": "missing", "wrong": "wrong_label", "swap": "swap"}
-OUTCOMES = ("FAIL", "REVIEW", "missed")
-RATES = ("fail_rate", "flag_rate", "false_fail_rate", "review_rate", "not_in_view_rate")
+OUTCOMES = ("FAIL", "REVIEW", "PASS", "unassessed")
+RATES = ("fail_rate", "flag_rate", "incorrect_pass_rate", "false_fail_rate", "review_rate", "not_in_view_rate")
 NO_REAL = ("No real-photo evaluation on this engine yet. Put Emerson's drawing set and photos in data/emerson/, then run "
            "python forge_real.py and python eval_gap.py.")
 
 
 def outcome(results):
-    """FAIL | REVIEW | missed for one planted fault, from the results of its expected items."""
+    """FAIL (confirmed) | REVIEW (referred) | PASS (incorrectly cleared) | unassessed, for one planted fault, from the
+    results of its expected items."""
     results = set(results)
-    return "FAIL" if "FAIL" in results else "REVIEW" if "REVIEW" in results else "missed"
+    return next((r for r in ("FAIL", "REVIEW", "PASS") if r in results), "unassessed")
 
 
 def _ratio(a, b):
@@ -53,15 +55,17 @@ def _ratio(a, b):
 def summarize(rows):
     """One side's summary from per-photo rows {"faults": [{"category", "outcome"}], "false_fail", "reviews",
     "judged" (correct items judged), "not_in_view", "items", "seconds"}."""
-    cats = {c: {"planted": 0, "FAIL": 0, "REVIEW": 0, "missed": 0} for c, _ in CATEGORIES}
+    blank = lambda: dict(planted=0, **{k: 0 for k in OUTCOMES})  # noqa: E731
+    cats = {c: blank() for c, _ in CATEGORIES}
     for r in rows:
         for f in r["faults"]:
-            c = cats.setdefault(f["category"], {"planted": 0, "FAIL": 0, "REVIEW": 0, "missed": 0})
+            c = cats.setdefault(f["category"], blank())
             c["planted"] += 1
             c[f["outcome"]] += 1
     for c in cats.values():
         c["fail_rate"] = _ratio(c["FAIL"], c["planted"])
         c["flag_rate"] = _ratio(c["FAIL"] + c["REVIEW"], c["planted"])
+        c["incorrect_pass_rate"] = _ratio(c["PASS"], c["planted"])
     planted = sum(c["planted"] for c in cats.values())
     tot = {k: sum(c[k] for c in cats.values()) for k in OUTCOMES}
     judged = sum(r["judged"] for r in rows)
@@ -69,6 +73,7 @@ def summarize(rows):
     secs = [r["seconds"] for r in rows if r.get("seconds")]
     return {"photos": len(rows), "planted": planted, **tot,
             "fail_rate": _ratio(tot["FAIL"], planted), "flag_rate": _ratio(tot["FAIL"] + tot["REVIEW"], planted),
+            "incorrect_pass_rate": _ratio(tot["PASS"], planted),
             "false_fail": false_fail, "false_fail_rate": _ratio(false_fail, judged),
             "review_rate": _ratio(sum(r["reviews"] for r in rows), judged),
             "not_in_view_rate": _ratio(sum(r["not_in_view"] for r in rows), sum(r["items"] for r in rows)),
@@ -169,17 +174,18 @@ def table(rep):
         return "-" if v is None else f"{v * 100:.1f}%" if pct else str(v)
 
     def split(c):
-        return f"{c['FAIL']}/{c['REVIEW']}/{c['missed']} of {c['planted']}" if c and c["planted"] else "not planted"
+        return f"{c['FAIL']}/{c['REVIEW']}/{c['PASS']}/{c['unassessed']} of {c['planted']}" if c and c["planted"] \
+            else "not planted"
 
     lines = ["Fault Forge: synthetic vs real", f"{'':26}{'synthetic':>20}{'real':>20}",
              f"{'photos':26}{cell(s, 'photos', False):>20}{cell(r, 'photos', False):>20}",
              f"{'planted faults':26}{cell(s, 'planted', False):>20}{cell(r, 'planted', False):>20}"]
-    for key, label in (("fail_rate", "caught as FAIL"), ("flag_rate", "flagged (FAIL or REVIEW)"),
-                       ("false_fail_rate", "false FAIL rate"), ("review_rate", "REVIEW rate"),
-                       ("not_in_view_rate", "not in view")):
+    for key, label in (("fail_rate", "confirmed (FAIL)"), ("flag_rate", "flagged (FAIL or REVIEW)"),
+                       ("incorrect_pass_rate", "incorrect PASS"), ("false_fail_rate", "false FAIL rate"),
+                       ("review_rate", "REVIEW rate"), ("not_in_view_rate", "not in view")):
         lines.append(f"{label:26}{cell(s, key):>20}{cell(r, key):>20}")
     lines.append(f"{'seconds per photo':26}{cell(s, 'sec_per_photo', False):>20}{cell(r, 'sec_per_photo', False):>20}")
-    lines.append("by fault type (FAIL/REVIEW/missed)")
+    lines.append("by fault type (FAIL/REVIEW/incorrect PASS/unassessed)")
     for c in rep["categories"]:
         lines.append(f"  {c['label']:24}{split(c['synthetic']):>20}{split(c['real']):>20}")
     if not r:

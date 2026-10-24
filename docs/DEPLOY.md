@@ -1,104 +1,111 @@
-# Deploying EAGLE EYE
+# Running and deploying EAGLE EYE
 
-Two pieces:
+The React console sends inspection requests to your own FastAPI engine. OCR models load once in that server process;
+the browser does not download a language model. Drawing parsing, OCR, alignment and evidence checks run on CPU.
+Hosted AI inference is disabled in code, even if old API credentials remain in the environment. No AI API key is required.
+The optional private preset store is storage, not an inference service; use a local folder for a fully on-prem setup.
 
-| Piece | Where | Why |
-|---|---|---|
-| **Console** (`eagle_eye/web`, React) | Vercel (`aegis-eagle-eye.vercel.app`), static build | Fast, free, keeps the recorded-replay fallback so the demo never dies |
-| **Engine** (`eagle_eye/Dockerfile.engine`, FastAPI + PP-OCRv4 + Claude agent) | Google Cloud Run / Render / Fly.io / Railway (2 vCPU, 2-4 GB, request timeout ≥ 300 s, min instances 1 for the demo) | A real photo takes 20-60 s of CPU: too long and too large for Vercel serverless functions |
+## Local deployment
 
-The console talks to the engine at `VITE_ENGINE_URL` (`eagle_eye/web/.env.static`). Secrets live only in the engine's
-environment; nothing secret is ever shipped to the browser.
-
-## Photos are kept as metadata, not as photos
-
-* **Fingerprint first.** The console computes the SHA-256 of the photo (and of the drawing set) in the browser and sends
-  only the fingerprints. If the engine already holds the result / the drawing, nothing is uploaded; otherwise it answers
-  `409 {"need": ["photo"]}` and the console sends exactly the files it asked for.
-* **Read once, then discarded.** The engine reads the full-resolution photo once (OCR, registration, proof crops of the
-  issues) and deletes it. What is stored is metadata: fingerprint, size, EXIF orientation, quality score, OCR reads,
-  results with photo-pixel boxes, a small preview (<= 1600 px) and the proof crops. Drawing sets are stored once,
-  content-addressed (`cache/inputs/<sha256>.pdf`).
-* **Nothing photo-like is sent back.** `/api/v2` returns the run as JSON plus the PDF, the filled checklist and drawing
-  crops. The browser draws the boxes on its own copy of the photo and keeps only a preview in IndexedDB.
-* **Same photo again = instant.** Results are cached by fingerprint (photo + inputs + checks + engine version + verifier),
-  so re-opening or re-checking a known photo needs neither the upload nor the OCR.
-
-## Engine environment
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `PORT` | `8080` | Listen port (Cloud Run / Render set it) |
-| `EAGLE_EYE_CLOUD` | `1` in the image | `1` = stateless `/api/v2` only (hosted console); `0` = also serve the console (on-prem) |
-| `EAGLE_EYE_DATA` | `/tmp/eagle_eye` | Writable run store and caches (KB, OCR, agent) |
-| `EAGLE_EYE_REAL_DATA` | `/app/data/emerson` | Folder with a real drawing set + photos for the "Emerson 13GE03331" preset (mounted, never baked) |
-| `EAGLE_PRESET_BLOB` | unset | Prefix of a real-cabinet preset in the project's **private** Vercel Blob store (e.g. `presets/emerson/`); mirrored into `/tmp` on first use. Needs the store connected to the engine project (`BLOB_READ_WRITE_TOKEN`) |
-| `EAGLE_ADMIN_TOKEN` | unset | Enables `POST /api/v2/admin/preset` (header `x-admin-token`) to upload preset files into that private store; delete it after uploading |
-| `EAGLE_CORS_ORIGINS` | console URL + localhost | Comma-separated allowed origins |
-| `EAGLE_OCR_MODE` / `EAGLE_OCR_WORKERS` | `FULL` / `2` | OCR passes and parallel lanes (match the vCPUs) |
-| `EAGLE_OCR_GATE` | `0` | `1` skips tiles where a low-resolution pass sees no text: ~3x faster, but loses small labels (whole-cabinet and rear photos) |
-| `ANTHROPIC_API_KEY` | unset | Optional Claude second opinion. Unset = deterministic engine (no API key, no training needed) |
-| `EAGLE_AGENT_ENABLED` | `1` | `0` switches the agent off even with a key |
-| `EAGLE_AGENT_MODEL` | `auto` | Main model: `claude-fable-5-1` when the key can use it, else `claude-opus-5-5` |
-| `EAGLE_AGENT_FAST_MODEL` | `claude-opus-5-5` | Per-finding verification model |
-| `EAGLE_AGENT_MAX_CALLS` | `25` | API requests per photo (hard cap) |
-| `EAGLE_AGENT_TIMEOUT` | `60` | Seconds per API request |
-| `EAGLE_FAIL_WITHOUT_AGENT` | `1` | Without the agent, wrong / unknown / swapped labels read with certainty FAIL on their own (missing parts stay REVIEW); `0` = everything unconfirmed is REVIEW |
-| `EAGLE_MAX_PHOTO_MB` / `EAGLE_MAX_PDF_MB` | `25` / `30` | Upload limits |
-| `EAGLE_RATE_PER_MIN` | `6` | Inspections per client IP per minute |
-
-## Google Cloud Run
+From the repository root:
 
 ```bash
-IMG="$REGION-docker.pkg.dev/$PROJECT/eagle/engine:finale"
-gcloud builds submit eagle_eye --config eagle_eye/cloudbuild.yaml --substitutions _IMAGE="$IMG"
-printf '%s' "$ANTHROPIC_API_KEY" | gcloud secrets create anthropic-api-key --data-file=-
-gcloud run deploy eagle-eye-engine --image "$IMG" --region "$REGION" \
-  --cpu 2 --memory 4Gi --timeout 300 --min-instances 1 --max-instances 3 --concurrency 2 --allow-unauthenticated \
-  --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
-  --set-env-vars EAGLE_CORS_ORIGINS=https://aegis-eagle-eye.vercel.app,EAGLE_OCR_WORKERS=2
-# optional: the real drawing set from a private bucket, mounted read-only
-gcloud run services update eagle-eye-engine --region "$REGION" \
-  --add-volume name=emerson,type=cloud-storage,bucket="$PRIVATE_BUCKET",readonly=true \
-  --add-volume-mount volume=emerson,mount-path=/app/data/emerson
+docker compose up --build
 ```
 
-## Render / Fly.io / Railway
+Open `http://localhost:8000`. The compose service mounts private cabinet files from `data/emerson/` read-only and
+persists run metadata in a Docker volume. Keep the supplied photos and drawing PDFs out of Git.
+Install/build dependencies before an offline demo; dependency installation uses package repositories.
 
-* **Render**: `render.yaml` at the repository root is a ready Blueprint (Docker runtime, 2 vCPU plan, health check, optional
-  disk for the real data). Set `ANTHROPIC_API_KEY` in the dashboard.
-* **Fly.io**: `fly launch --dockerfile eagle_eye/Dockerfile.engine` from `eagle_eye/`, then `fly scale vm shared-cpu-2x
-  --memory 4096`, `fly secrets set ANTHROPIC_API_KEY=...`, optional `fly volumes create emerson` mounted at `/app/data/emerson`.
-* **Railway**: new service from the repo, root directory `eagle_eye`, Dockerfile path `Dockerfile.engine`, variables as above.
-
-## Console on Vercel
-
-Project root `eagle_eye/web` (already configured by `vercel.json`). Set `VITE_ENGINE_URL` to the engine URL in
-`eagle_eye/web/.env.static` (or as a Vercel environment variable) and redeploy. When the engine cannot be reached the console
-falls back to the recorded demo runs automatically.
-
-The console shrinks photos to 2900 px / 3.6 MB before upload, which fits a serverless engine. With the engine on Cloud Run /
-Render, let full-resolution phone photos through (small labels need them): `VITE_MAX_PHOTO_SIDE=4096` and
-`VITE_MAX_PHOTO_MB=20` in `.env.static`.
-
-## On-prem / local ("drawings never leave the plant")
+Without Docker, install **Python 3.11–3.12 (3.12 recommended)** and Tesseract OCR, then use `eagle_eye/run.bat`
+on Windows or `./eagle_eye/run.sh` on macOS/Linux. The pinned RapidOCR dependency does not support Python 3.13.
+The launcher creates a virtual environment and installs dependencies. A manual engine setup is:
 
 ```bash
-docker compose up --build          # console + engine on http://localhost:8000, data/emerson mounted read-only
+cd eagle_eye
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements-engine.txt
+python -m pip install --no-deps rapidocr-onnxruntime==1.4.4
+python server.py --host 127.0.0.1 --port 8000
 ```
 
-Leave `ANTHROPIC_API_KEY` empty to keep every byte on site (deterministic engine; anything uncertain becomes REVIEW with a
-re-photo hint), or set `ANTHROPIC_BASE_URL` to an approved gateway. Only cropped regions and a downscaled photo are ever sent to
-the agent; the drawing PDF never leaves the machine unless a GA page is a raster scan and the VLM fallback is enabled.
+On Windows, the normal Tesseract install location is detected. For a portable installation, set `TESSERACT_CMD`
+to the absolute path of `tesseract.exe`. Tesseract must include its English language data and runtime libraries.
+An NVIDIA GPU is not required. Real, full-resolution phone photos cost more CPU time than the synthetic demo;
+measure latency on the hardware and photo sizes you will actually demonstrate.
 
-Without Docker: `eagle_eye/run.bat` (Windows) or `./eagle_eye/run.sh` installs everything, including
-`rapidocr-onnxruntime==1.4.4` with `--no-deps`, and starts `python server.py`. Put the drawing set and photos in
-`data/emerson/` and the console shows the "Emerson 13GE03331" preset on the Inspect page.
+## Real inputs and inspection decisions
 
-## Smoke test
+In **Inspect → Real cabinet**, upload a photo and the **matching vector GA PDF**, or choose the real preset.
+An uploaded photo takes precedence over a preset's sample photo. A real upload without its drawing is rejected;
+the synthetic demo drawing is only used in explicit demo mode. A scanned or unfamiliar drawing format may require
+parser work; an LLM is not used to invent its structure.
+
+Place the matching private PDF and photos in `data/emerson/` to enable the local real preset. Having photos alone
+does not provide enough information to verify drawing compliance. Do not substitute the synthetic demo PDF.
+
+If the engine cannot align the photo with the drawing, it reports one registration REVIEW and suppresses spatial
+PASS/FAIL judgments. Unreadable labels need human review or a closer photo. Components outside the captured area
+are NOT IN VIEW. Required views and checks must be covered before the report can allow approval. A REVIEW is a
+referral, not a confirmed defect and not evidence that a cabinet is safe to ship.
+
+## Hosted console and your engine
+
+The static console builds from `eagle_eye/web` with `npm ci && npm run build:static`. Set `VITE_ENGINE_URL` to your
+engine URL before building. Its clearly labelled synthetic replays are for demonstration, not real inspection results.
+For an on-prem installation, use the local build (`npm run build`) or the bundled `web/dist` served by FastAPI.
+
+`Dockerfile.engine` builds from `eagle_eye/` for a container host. `render.yaml` defines a Render service;
+`Dockerfile.vercel` is the existing hosted engine image. Deploy only after verifying the configured origin, storage
+and resource limits. An engine release must accompany the console release: rebuilding only the UI cannot repair
+old backend judgments. Existing downloaded reports remain historical records; rerun affected real inspections.
+
+| Variable | Default / purpose |
+|---|---|
+| `PORT` | `8080` in the engine image; compose uses `8000` |
+| `EAGLE_EYE_CLOUD` | `1` serves stateless `/api/v2`; `0` also serves the local console |
+| `EAGLE_EYE_DATA` | Writable metadata/cache directory; `/tmp/eagle_eye` in the engine image |
+| `EAGLE_EYE_REAL_DATA` | Local private preset folder; `/app/data/emerson` in compose |
+| `EAGLE_CORS_ORIGINS` | Allowed console origins, comma-separated |
+| `EAGLE_OCR_WORKERS` | `2` in the image; tune to available CPU and memory |
+| `EAGLE_OCR_GATE` | Keep `0` for full coverage; `1` can skip small-label tiles |
+| `EAGLE_AGENT_ENABLED` | Set to `0`; external inference is also blocked independently in code |
+| `EAGLE_FAIL_WITHOUT_AGENT` | `1`: strong, agreeing local evidence can confirm label/order defects; absence stays REVIEW |
+| `EAGLE_MAX_PHOTO_MB` / `EAGLE_MAX_PDF_MB` | `25` / `30`; uploads are validated before inspection |
+| `EAGLE_RATE_PER_MIN` | `6` inspections per client IP per minute |
+| `EAGLE_PRESET_BLOB` | Optional private Vercel Blob preset prefix; requires storage credentials |
+| `EAGLE_ADMIN_TOKEN` | Optional preset upload authorization; unset when not in use |
+
+The stateless API reads a photo once, retaining fingerprints, OCR, quality metadata, a bounded preview and proof
+crops rather than the original full-resolution upload. JSON responses may contain that preview and proof images.
+The console keeps a local preview in IndexedDB. Drawings are cached by content hash. Review the storage policy before
+using confidential data on any hosted service. Selecting the local compose deployment keeps inspection processing local.
+
+## Validation and real versus synthetic evaluation
+
+From `eagle_eye/` with the environment activated:
 
 ```bash
-curl -s "$ENGINE/api/v2/health" | python -m json.tool      # ocr.ok, agent.enabled, presets, storage: "metadata"
+python -m pip install pytest httpx
+python -m pytest tests -q
+python eval_forge.py 50 200
+python eval_real.py
+# Optional: plant controlled defects into private real photos, then evaluate them separately.
+python forge_real.py
+python eval_real.py --forged
 ```
-Then open the console, pick the "Emerson 13GE03331" preset (or upload the PDF + photos), and check the live stages, the
-coverage bar, proof crops with agent reasons, the PDF report, the filled checklist and the work order.
+
+Real evaluation requires the private matching drawing, photos and annotated ground truth. It cannot be reproduced
+from six unlabelled images alone. Hold out original photos by cabinet/session before making synthetic variations;
+crops or augmentations of one original must not appear in both training and evaluation splits.
+
+**Fault Forge → Real vs synthetic** displays the evaluation catalogue. Missing measurements stay “Not measured”.
+Older summaries are labelled historical and are not presented as measurements of the current engine.
+Confirmed recall counts actual FAILs on known defects. Referral rate counts REVIEW separately; an incorrect PASS
+on a known defect is reported separately too. Synthetic performance does not establish real-cabinet accuracy.
+
+For a smoke test, request `/api/v2/health` and verify OCR readiness, disabled external inference and the intended preset.
+Then inspect a synthetic sample in demo mode and a real photo with its matching drawing. Check coverage, proof crops,
+PDF/checklist export and recheck behavior. The automated suite does not certify zero errors or factory shipping safety.

@@ -395,7 +395,13 @@ def _tess(job):
     img, psm = job
     if _CAPI:
         return ocr_capi.image_to_string(img, psm, WL).strip()
-    return pytesseract.image_to_string(img, config=f"--psm {psm} -c tessedit_char_whitelist={WL}").strip()
+    try:
+        return pytesseract.image_to_string(img, config=f"--psm {psm} -c tessedit_char_whitelist={WL}", timeout=20).strip()
+    except pytesseract.TesseractNotFoundError as exc:
+        raise InspectionError("Local Tesseract OCR is not installed. Install Tesseract and restart the engine, "
+                              "or set TESSERACT_CMD to its executable path.") from exc
+    except RuntimeError as exc:
+        raise InspectionError("Local OCR could not finish reading this image. Try a smaller, sharper cabinet view.") from exc
 
 
 def ocr_variants(img, psm=7, fast=False):
@@ -590,9 +596,10 @@ class OrderCheck:
                 idx = sorted({k for s in swaps for k in s} | set(wrong))
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, desc, "FAIL", box_of(idx), 0.9,
                                [f"read along rail: {seq_f}"], slots=slots, swaps=[[exp[i], exp[j]] for i, j in swaps]))
-            elif "?" in found:
+            elif any(f in ("?", "(no label)", "(other)") for f in found):
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, seq_f, "REVIEW",
-                               box_of([i for i, f in enumerate(found) if f == "?"]), 0.5, ["unreadable slot label"],
+                               box_of([i for i, f in enumerate(found) if f in ("?", "(no label)", "(other)")]),
+                               0.5, ["rail order requires a readable identity in every occupied slot"],
                                slots=slots))
             else:
                 out.append(res(f"ORD-{rail['name']}", "ORDER", rail["name"], seq_e, seq_f, "PASS",
@@ -789,6 +796,44 @@ def min_anchors(reg):
     return max(6, int(0.4 * reg["targets"]))
 
 
+def registration_valid(reg):
+    """A matching label count alone does not establish a usable geometric fit."""
+    return bool(reg.get("anchors", 0) >= min_anchors(reg) and reg.get("refined") and
+                reg.get("inliers", 0) >= max(4, min_anchors(reg)))
+
+
+def unregistered_results(ga, wires, enabled, note):
+    """Keep the checklist, but do not run spatial checks on an unplaced photograph."""
+    rows = []
+
+    def skip(iid, check, target, expected, box):
+        rows.append(res(iid, check, target, expected, "Unverified: photo not aligned with drawing", "SKIP",
+                        box, 0.0, [note], guarded=True, root_cause="REG-DRAWING"))
+
+    for d in ga["devices"]:
+        if "GA" in enabled:
+            skip(f"GA-{d['tag']}", "GA", d["tag"], "Installed", d["box"])
+        if "LABEL" in enabled:
+            skip(f"LBL-{d['tag']}", "LABEL", d["tag"], d["tag"], d["label_box"])
+    if "ORDER" in enabled:
+        devs = {d["tag"]: d for d in ga["devices"]}
+        for rail in ga["rails"]:
+            skip(f"ORD-{rail['name']}", "ORDER", rail["name"], "-".join(rail["tags"]),
+                 _union([devs[t]["box"] for t in rail["tags"]]))
+    for terminal, wire in zip(ga["terminals"], wires):
+        x, y, tw, th = terminal["box"]
+        if "FERRULE" in enabled:
+            skip(f"FER-{terminal['tag']}", "FERRULE", terminal["tag"], wire["ferrule"],
+                 (x + tw + 4, y + th / 2 - 8, 66, 16))
+        if "COLOUR" in enabled:
+            skip(f"COL-{terminal['tag']}", "COLOUR", terminal["tag"], wire["colour"],
+                 (x + tw + 78, y + th / 2 - 7, 50, 14))
+    rows.insert(0, res("REG-DRAWING", "REGISTRATION", "Photo / drawing alignment", "Matching cabinet and usable alignment",
+                       "Confirm matching drawing and capture a clear cabinet view", "REVIEW", (0, 0, *ga["size"]),
+                       0.0, [note], root_cause=True))
+    return rows
+
+
 def load_photo(path):
     """Decode a photo from any path (np.fromfile keeps non-ASCII Windows paths working)."""
     try:
@@ -822,25 +867,30 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
     ctx.rect, ctx.H, ctx.reg = register(photo, ga, ctx.wires)
     need = min_anchors(ctx.reg)
     rotation = 0
-    if ctx.reg["anchors"] < need:
+    if not registration_valid(ctx.reg):
         # Too few labels/ferrules matched the drawing. A phone photo taken upside down or sideways is the usual
         # cause, so try the other orientations before giving up. Never triggers on a well-registered photo.
         stage("register", "retry", anchors=ctx.reg["anchors"], reason="weak registration, trying other orientations")
-        best = (ctx.reg["anchors"], 0, ctx.rect, ctx.H, ctx.reg, photo)
+        rank = lambda g: (registration_valid(g), g.get("inliers", 0), g.get("anchors", 0))
+        best = (rank(ctx.reg), 0, ctx.rect, ctx.H, ctx.reg, photo)
         for k in (2, 1, 3):
             ph = np.ascontiguousarray(np.rot90(photo, k))
             try:
                 rr, hh, gg = register(ph, ga, ctx.wires)
             except InspectionError:
                 continue
-            if gg["anchors"] > best[0]:
-                best = (gg["anchors"], k, rr, hh, gg, ph)
-            if gg["anchors"] >= need:
+            if rank(gg) > best[0]:
+                best = (rank(gg), k, rr, hh, gg, ph)
+            if registration_valid(gg):
                 break
         _, rotation, ctx.rect, ctx.H, ctx.reg, photo = best
     ctx.photo = photo
-    ctx.bpm = Backplate(ctx.rect, ga)
-    ctx.wb_gains = white_balance(ctx.rect, ga, ctx.bpm)
+    trusted = registration_valid(ctx.reg)
+    ctx.reg["valid"] = trusted
+    ctx.reg["invalid_reason"] = None if trusted else "Insufficient matching labels or geometric inliers"
+    if trusted:
+        ctx.bpm = Backplate(ctx.rect, ga)
+        ctx.wb_gains = white_balance(ctx.rect, ga, ctx.bpm)
     timing["register"] = round(time.perf_counter() - t, 3)
     stage("register", "done", anchors=ctx.reg["anchors"], inliers=ctx.reg["inliers"],
           outliers=ctx.reg["outliers"], refined=ctx.reg["refined"], rotated=rotation * 90)
@@ -853,6 +903,8 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
     for name in enabled:
         if name not in CHECKS:
             continue
+        if not trusted:
+            continue
         t = time.perf_counter(); stage("check", "start", check=name)
         out = CHECKS[name]().run(ctx)
         results += out
@@ -861,15 +913,15 @@ def inspect(photo_path, ga_pdf, wire_xlsx, checklist_xlsx=None, enabled=ORDER, o
     warnings = []
     if rotation:
         warnings.append(dict(code="rotated", message=f"The photo was rotated {rotation * 90}° to match the drawing."))
-    if ctx.reg["anchors"] < need:
-        # Precision first: without a trustworthy fit to the drawing nothing is called FAIL.
-        note = (f"weak registration: only {ctx.reg['anchors']} of {ctx.reg['targets']} labels/ferrules matched the drawing; "
+    if not trusted:
+        # Neither PASS nor FAIL is justified when drawing locations cannot be mapped to the photo.
+        note = (f"weak registration: {ctx.reg['anchors']} of {ctx.reg['targets']} labels/ferrules matched the drawing "
+                f"with {ctx.reg['inliers']} geometric inliers; "
                 f"the photo may not show cabinet {ga['cabinet']}")
-        for r in results:
-            if r["result"] == "FAIL":
-                r.update(result="REVIEW", found=f"Unverified: {r['found']}", evidence=r["evidence"] + [note], guarded=True)
-        warnings.append(dict(code="weak_registration", message=note[0].upper() + note[1:] + ". Every would-be FAIL was "
-                             "sent to REVIEW. Check the photo shows the whole backplate of this cabinet, then re-photo."))
+        results = unregistered_results(ga, ctx.wires, enabled, note)
+        warnings.append(dict(code="weak_registration", message=note[0].upper() + note[1:] +
+                             ". Component checks were not evaluated. Confirm the correct drawing, then capture the "
+                             "whole backplate straight on with readable labels."))
     timing["total"] = round(time.perf_counter() - t0, 3)
     c = counts(results)
     stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"], warnings=[w["code"] for w in warnings])

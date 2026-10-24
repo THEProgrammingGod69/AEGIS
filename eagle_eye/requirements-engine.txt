@@ -20,5 +20,4 @@ shapely==2.2.0
 six==1.17.0
 PyYAML==6.0.3
 tqdm==4.70.1
-# Claude vision agent (optional at run time: the engine runs deterministic-only without an API key)
-anthropic==2.2.0
+# Inspection uses local OCR and geometry. Hosted model SDKs are deliberately excluded.
