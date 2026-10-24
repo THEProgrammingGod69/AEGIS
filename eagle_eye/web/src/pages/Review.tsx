@@ -64,6 +64,7 @@ export function Review() {
 
   const decide = useCallback(async (d: ReviewT["decision"] | "CLEAR") => {
     if (!cur) return;
+    if (cur.item === "REG-DRAWING" && d !== "CLEAR") { toast("error", "Drawing alignment must be resolved by a new inspection with matching inputs."); return; }
     try {
       const idx = list.indexOf(cur);
       await api.review(cur.run.id, cur.item, d, note, name);
@@ -104,7 +105,7 @@ export function Review() {
       <div className="page-head">
         <div>
           <span className="eyebrow">Review station</span>
-          <h1>The engine never guesses. A person closes the loop.</h1>
+          <h1>Resolve uncertain evidence with an inspection.</h1>
           <p>Items EAGLE EYE could not decide land here as REVIEW instead of a guessed FAIL. An inspector looks at the drawing-vs-photo proof, decides, and leaves a note. FAILs can be confirmed or overturned too; every decision is kept with who and when.</p>
         </div>
         <label className="ctl" style={{ minWidth: 240 }}>
@@ -140,7 +141,7 @@ export function Review() {
               <div className="empty">
                 <Inbox />
                 <div className="small muted">
-                  {t === "review" ? "Nothing waiting. The engine was sure about every item it checked." : t === "confirm" ? "No unconfirmed FAILs." : "No decisions yet."}
+                  {t === "review" ? "No REVIEW items in this queue. Check each run for unobserved or skipped requirements." : t === "confirm" ? "No unconfirmed FAILs." : "No decisions yet."}
                 </div>
                 {t === "review" && lists.confirm.length > 0 && <button className="btn btn-sm" onClick={() => setTab("confirm")}>Confirm {lists.confirm.length} FAILs instead</button>}
                 {!all.length && <button className="btn btn-sm btn-primary" onClick={() => go("inspect")}>Run an inspection</button>}
@@ -174,7 +175,7 @@ export function Review() {
                   <a className="btn btn-sm btn-ghost" href={`#/run/${cur.run.id}`}>Open inspection</a>
                 </div>
                 {p && it ? <ProofCard run={cur.run.id} it={it} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm }} /> : <div className="skeleton" style={{ height: 380 }} />}
-                <div className="decide">
+                {cur.item === "REG-DRAWING" ? <div className="decide"><p className="small muted">This is an input or alignment blocker. Start a new inspection with the matching drawing; a component PASS or FAIL decision cannot resolve it.</p><button className="btn btn-primary" onClick={() => go("inspect")}>Select matching inputs</button></div> : <div className="decide">
                   <textarea className="input" rows={2} placeholder={cur.result === "REVIEW" ? "What did you see on the cabinet? (kept in the audit trail)" : "Why do you confirm / overturn? (optional)"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
                   <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
                     <button className="btn btn-lg decide-pass" onClick={() => void decide("PASS")}><CheckCircle2 /> {cur.result === "FAIL" ? "Overturn: it is correct" : "PASS: it is correct"} <kbd>P</kbd></button>
@@ -182,7 +183,7 @@ export function Review() {
                     {cur.review && <button className="btn btn-lg btn-ghost" onClick={() => void decide("CLEAR")}>Undo decision</button>}
                     <span className="tiny faint grow" style={{ textAlign: "right" }}><kbd>↑</kbd> <kbd>↓</kbd> move through the queue</span>
                   </div>
-                </div>
+                </div>}
               </motion.div>
             ) : (
               <motion.div key="none" className="card pad empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

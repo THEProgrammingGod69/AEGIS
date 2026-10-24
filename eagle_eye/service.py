@@ -35,7 +35,7 @@ from PIL import Image, ImageOps
 import config
 import pdf_report
 import report as rp
-from inspector import CHECKS, ORDER, R, InspectionError, counts, inspect
+from inspector import CHECKS, ORDER, R, InspectionError, counts, inspect, unregistered_results
 from render import describe_fault, expected_item, random_faults, render
 
 FILES = dict(marked="marked.jpg", rectified="rectified.jpg", overlay="ga_overlay.png", json="report.json",
@@ -48,7 +48,8 @@ WORK = CACHE / "work"                      # a photo lives here only while it is
 PREVIEW_SIDE = 1600
 RECT_PX_PER_MM = 2                         # stored rectified image resolution (the engine works at inspector.R)
 CROP_SIDE = 520                            # stored proof crops are at most this many px per side
-RESULT_SCHEMA = "eagle-eye-result/1"
+RESULT_SCHEMA = "eagle-eye-result/2"  # invalidates results made before registration/approval guards
+SAFETY_SCHEMA = "eagle-eye-evidence/1"
 _ID = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 
@@ -181,12 +182,64 @@ class WrongDrawing(InspectionError):
     Asking for the right drawing set beats a report in which every item is REVIEW."""
 
 
-DEMO_MISMATCH = ("None of the {n} labels of the demo drawing {cab} were found in this photo, so it is not that cabinet. "
+DEMO_MISMATCH = ("None of the {n} labels of the demo drawing {cab} could be matched in this photo, so its cabinet identity "
+                 "and alignment could not be verified. "
                  "Add this cabinet's own drawing set (vector PDF) under Engineering inputs - or pick the real-cabinet "
                  "preset if one is offered - and inspect again.")
 REAL_MISMATCH = ("None of the labels of drawing set {name} ({cab}) could be read in this photo. Check that the photo "
                  "shows this cabinet, then re-photo one side at a time from about 1 m, straight on, so the device labels "
                  "are sharp.")
+DRAWING_REQUIRED = ("Add this cabinet's matching GA drawing PDF under Engineering inputs, or select its real-cabinet "
+                    "preset. Uploaded photographs are never inspected against the synthetic demo drawing automatically. "
+                    "For a generated test image, explicitly select Synthetic demo mode.")
+
+
+def validate_input(path, kind):
+    """Reject unreadable engineering inputs before OCR or background work starts."""
+    try:
+        if kind == "ga":
+            import pymupdf
+            with pymupdf.open(path) as doc:
+                if not doc.is_pdf or doc.needs_pass or not doc.page_count:
+                    raise ValueError("empty, encrypted or non-PDF document")
+                if not any(page.get_text().strip() for page in doc):
+                    raise InspectionError("The drawing PDF has no selectable text. Upload the original vector GA PDF; "
+                                          "a scanned drawing or photograph cannot provide reliable cabinet requirements.")
+        else:
+            from openpyxl import load_workbook
+            wb = load_workbook(path, read_only=True)
+            wb.close()
+    except InspectionError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - translate parser errors to an actionable upload error
+        title = "GA drawing PDF" if kind == "ga" else "wire list workbook" if kind == "wires" else "checklist workbook"
+        raise InspectionError(f"Could not read the {title}. Upload a valid, unencrypted {'PDF' if kind == 'ga' else 'XLSX'} file.") from exc
+
+
+def validate_checks(enabled, kind=None):
+    """None selects defaults; an explicitly empty or misspelled selection is an input error."""
+    if enabled is None:
+        return
+    from checks import ORDER as REAL_ORDER
+    allowed = set(ORDER)
+    if kind != "legacy":
+        allowed.update(REAL_ORDER)
+    if not isinstance(enabled, (list, tuple)) or not enabled:
+        raise InspectionError("Select at least one inspection check, or omit checks to use all required defaults.")
+    unknown = sorted({str(c) for c in enabled if not isinstance(c, str) or c not in allowed})
+    if unknown:
+        raise InspectionError(f"Unknown inspection check(s): {', '.join(unknown)}. Supported checks: {', '.join(sorted(allowed))}.")
+
+
+def validate_request(ga=None, engine="auto", source="upload", prev=None, photo=None, enabled=None):
+    """An arbitrary photograph must never silently opt into the demonstration drawing."""
+    if engine not in ("auto", "legacy", "real"):
+        raise InspectionError("engine must be auto, legacy (synthetic demo), or real.")
+    validate_checks(enabled)
+    sample_photo = bool(photo and Path(photo).resolve().parent == config.SAMPLES.resolve())
+    demo_session = bool(prev and prev.get("source") in ("sample", "forge") and prev.get("engine_kind", "legacy") == "legacy")
+    if not ga and source not in ("sample", "forge") and engine != "legacy" and not sample_photo and not demo_session:
+        raise InspectionError(DRAWING_REQUIRED)
 
 
 def verdict(c, n_items, warnings=None, rep=None):
@@ -196,24 +249,34 @@ def verdict(c, n_items, warnings=None, rep=None):
         if real:
             return dict(label="REVIEW", headline="REVIEW · photo not placed on the drawing",
                         detail=weak["message"] + " Re-photo one side of the cabinet at a time, straight on.")
-        return dict(label="REVIEW", headline="REVIEW · photo does not match the drawing",
-                    detail="Too few labels and ferrules could be matched to the GA drawing, so EAGLE EYE refuses to call "
-                           "anything FAIL. Check the photo shows this cabinet's whole backplate, then re-photo.")
+        return dict(label="REVIEW", headline="REVIEW · photo not aligned to the drawing",
+                    detail="The photo could not be aligned with the drawing. Component checks were not verified. "
+                           "Confirm the matching cabinet drawing, then photograph the required area straight on.")
     if c["FAIL"]:
         return dict(label="HOLD", headline=f"HOLD · {c['FAIL']} fault{'s' if c['FAIL'] != 1 else ''} to fix before shipping",
                     detail="Every FAIL is boxed on the photo with expected-vs-found proof."
-                           + (f" {c['REVIEW']} zone(s) also need a re-photo." if c["REVIEW"] else ""))
+                           + (f" {c['REVIEW']} check(s) also require review." if c["REVIEW"] else ""))
     if c["REVIEW"]:
-        return dict(label="REVIEW", headline=f"REVIEW · re-photo {c['REVIEW']} zone{'s' if c['REVIEW'] != 1 else ''}",
-                    detail="No confirmed faults. Some items could not be read clearly, so EAGLE EYE asks for a better photo "
-                           "instead of guessing.")
+        return dict(label="REVIEW", headline=f"REVIEW · {c['REVIEW']} unresolved check{'s' if c['REVIEW'] != 1 else ''}",
+                    detail="No confirmed faults. Review the evidence and each check's guidance: a matching drawing, "
+                           "additional photographs, or a manual check may be required before approval.")
+    if not c.get("PASS") or c.get("SKIP") or c.get("NOT_IN_VIEW"):
+        return dict(label="REVIEW", headline="REVIEW · inspection coverage incomplete",
+                    detail="Cabinet approval is blocked: required checks were skipped, outside the photograph, or no checks were verified.")
+    if rep and set(rep.get("enabled") or []) != set(_enabled_for("real" if real else "legacy", None)):
+        return dict(label="REVIEW", headline="REVIEW · required checks disabled",
+                    detail="The selected checks passed, but all required inspection checks must be enabled before approval.")
     if real:
         cov = rep.get("coverage") or {}
-        return dict(label="PASS", headline="PASS · everything in view verified",
-                    detail=f"All {n_items - c['SKIP']} items this photo shows were verified "
-                           f"({cov.get('verified', 0)} of {cov.get('total', 0)} labelled drawing items covered by this "
-                           f"photo; photograph the other areas to cover the rest).")
-    return dict(label="PASS", headline="PASS · ready to ship",
+        total = cov.get("total")
+        if not (cov.get("approval_allowed") is True and cov.get("complete") is True and
+                isinstance(total, (int, float)) and total > 0 and (cov.get("verified") or 0) >= total):
+            return dict(label="REVIEW", headline="REVIEW · inspection coverage incomplete",
+                        detail=f"This photograph verified {cov.get('verified', 0)} of {cov.get('total', 0)} drawing items. "
+                               "Capture the remaining required checks before cabinet approval.")
+        return dict(label="PASS", headline="PASS · required visual checks verified",
+                    detail=f"All {n_items} required visual checks passed against the supplied drawing.")
+    return dict(label="PASS", headline="PASS · selected visual checks verified",
                 detail=f"All {n_items - c['SKIP']} items the drawing expects were verified on the photo.")
 
 
@@ -254,7 +317,12 @@ def input_path(rid, meta, key):
         p = INPUTS / f"{ref['sha256']}{ref.get('ext') or Path(ref['name']).suffix.lower()}"
         if p.exists():
             return p
-    return run_dir(rid) / "inputs" / Path(ref["path"]).name            # runs stored before content addressing
+    if ref.get("path"):
+        try:
+            return run_dir(rid) / "inputs" / Path(ref["path"]).name    # runs stored before content addressing
+        except KeyError:
+            return None
+    return None
 
 
 def resolve_inputs(d, ga=None, wires=None, checklist=None, names=None, defaults=True):
@@ -272,21 +340,38 @@ def resolve_inputs(d, ga=None, wires=None, checklist=None, names=None, defaults=
     return out
 
 
+def inherited_inputs(prev, ga=None, wires=None, checklist=None, names=None):
+    """Reuse unchanged engineering inputs; a replacement GA starts a new reference set."""
+    names = dict(names or {})
+    if not prev or ga:
+        return ga, wires, checklist, names
+    supplied = {"ga": ga, "wires": wires, "checklist": checklist}
+    for key, ref in (prev.get("inputs") or {}).items():
+        if key not in supplied or supplied[key] or ref.get("demo") or ref.get("missing"):
+            continue
+        supplied[key] = input_path(prev.get("id"), prev, key)
+        if not supplied[key] or not Path(supplied[key]).is_file():
+            raise InspectionError(f"The original {key} input is no longer available. Upload it again for this re-check.")
+        names.setdefault(key, ref.get("name") or Path(supplied[key]).name)
+    return supplied["ga"], supplied["wires"], supplied["checklist"], names
+
+
 def engine_for(ga, engine="auto", prev=None):
-    """'legacy' (demo-cabinet engine) or 'real' (real drawing sets); a re-check keeps its parent's engine."""
+    """A newly supplied drawing takes priority over the previous run's engine."""
     if engine in ("legacy", "real"):
         return engine
-    if prev:
-        return prev
     if ga:
         import pipeline
         return "real" if pipeline.is_real_drawing(ga) else "legacy"
+    if prev:
+        return prev
     return "legacy"
 
 
 def _enabled_for(kind, enabled):
+    validate_checks(enabled, kind)
     if kind == "legacy":
-        return [c for c in (enabled or ORDER) if c in CHECKS] or list(ORDER)
+        return list(ORDER) if enabled is None else list(dict.fromkeys(enabled))
     import pipeline
     return pipeline.real_enabled(enabled)
 
@@ -402,7 +487,8 @@ def _engine(kind, photo, inputs, enabled, emit, work, d, rec):
             art / FILES["rectified"], quality=85, optimize=True)
     else:
         import pipeline
-        [(rep, ctx)] = pipeline.inspect_real([photo], inputs["ga"]["path"], enabled=enabled, on_event=emit, run_dir=d,
+        [(rep, ctx)] = pipeline.inspect_real([photo], inputs["ga"]["path"], wires=inputs["wires"].get("path"),
+                                             checklist=inputs["checklist"].get("path"), enabled=enabled, on_event=emit, run_dir=d,
                                              names=[rec["name"]])
         if rep["registration"]["anchors"] == 0 and all(r["result"] == "NOT_IN_VIEW" for r in rep["results"]):
             raise WrongDrawing(REAL_MISMATCH.format(name=inputs["ga"]["name"], cab=rep["ga"]["cabinet"]))
@@ -433,11 +519,12 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
         parent = prev_meta.get("id") or parent
     elif parent:
         prev_meta = get_meta(parent)
-        prev_rep = read_json(run_dir(parent) / FILES["json"])
-        if not (ga or wires or checklist):     # a re-check reuses the drawing set of the run it re-checks
-            ga, wires, checklist = (None if prev_meta["inputs"][k]["demo"] else input_path(parent, prev_meta, k)
-                                    for k in ("ga", "wires", "checklist"))
-            input_names = {k: prev_meta["inputs"][k]["name"] for k in ("ga", "wires", "checklist")}
+        prev_rep = get_report(parent)
+    ga, wires, checklist, input_names = inherited_inputs(prev_meta, ga, wires, checklist, input_names)
+    validate_request(ga, engine, source, prev_meta, photo, enabled)
+    for key, path in (("ga", ga), ("wires", wires), ("checklist", checklist)):
+        if path:
+            validate_input(path, key)
     kind = engine_for(ga, engine, (prev_meta or {}).get("engine_kind"))
     enabled = _enabled_for(kind, enabled)
     inputs = resolve_inputs(d, ga, wires, checklist, input_names, defaults=(kind == "legacy"))
@@ -479,17 +566,32 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
-    rep = json.loads(json.dumps(rep))                 # never mutate a cached result in place
+    rep = _guard_registration_report(json.loads(json.dumps(rep)))  # never mutate a cached result in place
+    rep["safety_schema"] = SAFETY_SCHEMA
     rep["photo"] = FILES["preview"]
     rep["preview_scale"] = scale
     rep["photo_meta"] = dict(rep.get("photo_meta") or {}, **rec)
     t = datetime.datetime.now(); emit(dict(stage="report", status="start", t=rep["timing"]["total"]))
-    if prev_rep:
+    previous_ga = ((prev_meta or {}).get("inputs") or {}).get("ga") or {}
+    current_ga = inputs["ga"]
+    same_reference = bool(prev_rep and kind == prev_meta.get("engine_kind", "legacy") and
+                          not _registration_is_invalid(prev_rep) and
+                          prev_rep.get("ga", {}).get("cabinet") == rep.get("ga", {}).get("cabinet") and
+                          ((previous_ga.get("sha256") and previous_ga.get("sha256") == current_ga.get("sha256")) or
+                           (previous_ga.get("demo") and current_ga.get("demo"))))
+    if same_reference:
         rp.recheck(prev_rep, rep)
         status_key = "recheck"
     else:
         rp.numbered(rep["results"])
         status_key = "result"
+        if prev_rep:
+            if _registration_is_invalid(prev_rep):
+                code, message = "previous_unverified", "The previous inspection could not be aligned to its drawing. "
+            else:
+                code, message = "drawing_changed", "The reference drawing or cabinet changed. "
+            rep.setdefault("warnings", []).append(dict(code=code, message=message +
+                "This is a fresh inspection; previous issues were not automatically closed."))
     rp.markup(str(d / FILES["preview"]), rep, str(d / FILES["marked"]), status_key=status_key, scale=scale)
     if kind == "legacy":
         rp.ga_overlay(inputs["ga"]["path"], rep["ga"]["size"], str(d / FILES["overlay"]))
@@ -503,7 +605,8 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
                 counts=c, items=len(rep["results"]),
                 verdict=verdict(c, judged, rep.get("warnings"), rep), timing=rep["timing"],
                 warnings=rep.get("warnings", []),
-                registration={k: rep["registration"][k] for k in ("anchors", "inliers", "outliers", "refined", "targets")},
+                registration={k: rep["registration"].get(k) for k in
+                              ("anchors", "inliers", "outliers", "refined", "targets", "valid", "invalid_reason")},
                 issues=[dict(id=r["id"], result=r["result"], found=r["found"], marker=r.get("marker"),
                              recheck=r.get("recheck")) for r in rep["results"] if r.get("marker")],
                 parent=parent, root=(prev_meta.get("root") or parent) if prev_meta else rid, version=version,
@@ -522,7 +625,7 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
     write_json(d / "meta.json", meta)
     emit(dict(stage="report", status="done", t=rep["timing"]["total"] + meta["timing"]["report"],
               files=[f for f in FILES.values() if (d / f).exists()], storage="metadata"))
-    if prev_meta:
+    if rep.get("recheck"):
         emit(dict(stage="recheck", status="done", t=rep["timing"]["total"] + meta["timing"]["report"], **rep["recheck"]))
     return meta
 
@@ -558,6 +661,9 @@ def _reports(rid, rep, meta):
 def build_reports(rid):
     """PDF report + filled Excel checklist for a run stored with ``reports=False``."""
     meta, rep = get_meta(rid), get_report(rid)
+    if meta.get("historical_guard"):
+        raise InspectionError("This archived inspection contains unverified conclusions. Start a new inspection with "
+                              "the matching drawing to generate current PDF and checklist exports.")
     _reports(rid, rep, meta)
     return artefact(rid, "pdf"), artefact(rid, "checklist")
 
@@ -581,20 +687,142 @@ def save_review(rid, item_id, decision, note="", by="Inspector"):
 
 
 # ------------------------------------------------------------------ reading runs
+def _registration_is_invalid(rep):
+    registration = rep.get("registration") or {}
+    return bool(registration.get("valid") is False or registration.get("localised") is False or any(
+        w.get("code") == "weak_registration" for w in rep.get("warnings") or []))
+
+
+def _guard_registration_report(rep, meta=None):
+    """Apply current evidence boundaries to stored reports without altering the original audit files."""
+    kind = rep.get("engine_kind") or (meta or {}).get("engine_kind", "legacy")
+    if not (_registration_is_invalid(rep) or (meta and _registration_is_invalid(meta))):
+        return _guard_real_item_report(rep, meta) if kind == "real" else rep
+    rep["engine_kind"] = kind
+    warnings = rep.setdefault("warnings", [])
+    weak = next((w for w in warnings if w.get("code") == "weak_registration"), None)
+    if weak is None:
+        weak = {"code": "weak_registration", "message": "The photo was not reliably placed on its reference drawing. "
+                "Confirm the matching drawing and capture a sharp, straight-on cabinet view."}
+        warnings.append(weak)
+    if kind == "legacy":
+        rep["results"] = unregistered_results(rep["ga"], rep.get("wires") or [], rep.get("enabled") or ORDER,
+                                               weak["message"])
+    else:
+        rows = []
+        for item in rep.get("results") or []:
+            if item.get("id") == "REG-DRAWING":
+                continue
+            row = dict(item)
+            for key in ("marker", "recheck", "prev_result", "prev_found"):
+                row.pop(key, None)
+            if row.get("result") != "NOT_IN_VIEW":
+                row.update(result="SKIP", found="Unverified: photo not aligned with drawing", conf=0.0,
+                           verified_by=[], guarded=True, root_cause="REG-DRAWING")
+                evidence = list(row.get("evidence") or [])
+                row["evidence"] = evidence if weak["message"] in evidence else evidence + [weak["message"]]
+            rows.append(row)
+        size = rep.get("photo_size") or rep.get("ga", {}).get("size") or [1, 1]
+        rows.insert(0, dict(id="REG-DRAWING", check="REGISTRATION", target="Photo / drawing alignment",
+                            expected="Matching cabinet and usable alignment", found="Confirm matching drawing and capture a clear cabinet view",
+                            result="REVIEW", box=[0, 0, *size], conf=0.0, evidence=[weak["message"]],
+                            root_cause=True, verified_by=[], view=None, drawing=None))
+        rep["results"] = rows
+        cov = rep.get("coverage") or {}
+        cov.update(verified=0, ratio=0.0, complete=False, approval_allowed=False,
+                   unresolved=len(rows), in_view=0, not_in_view=cov.get("total", 0))
+        for view in (cov.get("by_view") or {}).values():
+            view["verified"] = 0
+        rep["coverage"] = cov
+    rep["counts"] = counts(rep["results"])
+    if kind == "real":
+        rep["counts"]["NOT_IN_VIEW"] = sum(r["result"] == "NOT_IN_VIEW" for r in rep["results"])
+    rep.setdefault("registration", {}).update(valid=False, invalid_reason=weak["message"])
+    if kind == "real":
+        rep["registration"]["localised"] = False
+    rep.pop("recheck", None)
+    rep["registration_guard"] = True
+    rp.numbered(rep["results"])
+    return rep
+
+
+def _guard_real_item_report(rep, meta=None):
+    """Old global fits and model answers do not verify a component in an unfitted drawing view."""
+    import consensus
+    registration = rep.get("registration") or (meta or {}).get("registration") or {}
+    changed = []
+    for row in rep.get("results") or []:
+        reason = consensus.conclusive_evidence_issue(row, registration)
+        if reason is None:
+            continue
+        row.update(result="REVIEW", found=f"Unverified: {row.get('found', '')}", verified_by=[], conf=0.0,
+                   guarded=True, hint="Review the local evidence and capture this drawing view with readable surrounding labels")
+        evidence = list(row.get("evidence") or [])
+        row["evidence"] = evidence if reason in evidence else evidence + [reason]
+        changed.append(row["id"])
+    coverage = rep.get("coverage")
+    missing_coverage = not isinstance(coverage, dict) or not all(k in coverage for k in (
+        "total", "verified", "complete", "approval_allowed"))
+    if not changed and not missing_coverage:
+        return rep
+    rep["engine_kind"] = "real"
+    rows = rep.get("results") or []
+    for row in rows:
+        for key in ("marker", "recheck", "prev_result", "prev_found"):
+            row.pop(key, None)
+    verified = {row["target"] for row in rows if row.get("check") == "LABEL" and row["result"] in ("PASS", "FAIL")}
+    cov = dict(coverage or {})
+    total = cov.get("total") or (rep.get("kb") or {}).get("tags") or 0
+    total = total if isinstance(total, (int, float)) and total >= 0 else 0
+    cov.update(verified=len(verified), total=total, ratio=round(len(verified) / total, 3) if total else 0.0,
+               complete=False, approval_allowed=False, unresolved=sum(r["result"] not in ("PASS", "FAIL") for r in rows))
+    for view, detail in (cov.get("by_view") or {}).items():
+        detail["verified"] = len({r["target"] for r in rows if r.get("check") == "LABEL" and r.get("view") == view
+                                  and r["result"] in ("PASS", "FAIL")})
+    rep["coverage"] = cov
+    rep["counts"] = consensus.counts(rows)
+    rep.pop("recheck", None)
+    warning = {"code": "historical_evidence", "message": "Stored conclusions were reassessed using local OCR and "
+               "per-view registration. Missing coverage or unverified model judgments cannot approve the cabinet."}
+    if not any(w.get("code") == warning["code"] for w in rep.get("warnings") or []):
+        rep.setdefault("warnings", []).append(warning)
+    rep["evidence_guard"] = True
+    rp.numbered(rows)
+    return rep
+
+
 def get_meta(rid):
-    return read_json(run_dir(rid) / "meta.json")
+    meta = read_json(run_dir(rid) / "meta.json")
+    rep = get_report(rid, meta=meta)
+    if rep.get("registration_guard") or rep.get("evidence_guard"):
+        meta.update(counts=rep["counts"], items=len(rep["results"]),
+                    verdict=verdict(rep["counts"], len(rep["results"]), rep.get("warnings"), rep),
+                    issues=[{k: r.get(k) for k in ("id", "result", "found", "marker")} for r in rep["results"]
+                            if r.get("marker")], warnings=rep["warnings"],
+                    historical_guard=rep.get("safety_schema") != SAFETY_SCHEMA, recheck=None)
+        if rep.get("registration_guard"):
+            meta.setdefault("registration", {}).update(valid=False, invalid_reason=rep["registration"]["invalid_reason"])
+        if rep.get("engine_kind") == "real":
+            if rep.get("registration_guard"):
+                meta["registration"]["localised"] = False
+            meta["coverage"] = rep["coverage"]
+    return meta
 
 
-def get_report(rid):
-    return read_json(run_dir(rid) / FILES["json"])
+def get_report(rid, meta=None):
+    rep = read_json(run_dir(rid) / FILES["json"])
+    if meta is None:
+        metadata_path = run_dir(rid) / "meta.json"
+        meta = read_json(metadata_path) if metadata_path.exists() else None
+    return _guard_registration_report(rep, meta)
 
 
 def list_runs(limit=200):
     metas = []
     for p in config.RUNS.glob("*/meta.json"):
         try:
-            metas.append(read_json(p))
-        except (OSError, ValueError):
+            metas.append(get_meta(p.parent.name))
+        except (OSError, ValueError, KeyError, TypeError):
             continue
     metas.sort(key=lambda m: m["id"], reverse=True)
     return metas[:limit]
@@ -637,6 +865,15 @@ def artefact(rid, name):
     fname = FILES.get(name, name)
     if fname not in FILES.values():
         raise KeyError(name)
+    if fname == FILES["json"]:
+        # Derived download: keep report.json as the immutable original audit record.
+        safe = d / "report.safe.json"
+        write_json(safe, get_report(rid))
+        return safe
+    if fname in {FILES[k] for k in ("pdf", "checklist", "marked", "rectified", "overlay")} and get_meta(rid).get("historical_guard"):
+        raise InspectionError("This archived export contains unverified inspection conclusions and is unavailable. "
+                              "Start a new inspection with the matching drawing to generate safe exports. "
+                              "The guarded JSON report and original photo preview remain available.")
     p = d / fname
     if not p.exists():
         raise KeyError(name)

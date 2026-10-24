@@ -60,6 +60,9 @@ export interface Coverage {
   total: number;
   ratio: number;
   by_view: Record<string, { verified: number; total: number }>;
+  complete?: boolean;
+  approval_allowed?: boolean;
+  unresolved?: number;
 }
 
 /** What is kept of a photo instead of the photo (metadata-first storage). */
@@ -137,7 +140,7 @@ export interface RunMeta {
   items: number;
   verdict: Verdict;
   timing: Timing;
-  registration: { anchors: number; inliers: number; outliers: string[]; refined: boolean; targets: number };
+  registration: { anchors: number; inliers: number; outliers: string[]; refined: boolean; targets: number; valid?: boolean; localised?: boolean; invalid_reason?: string | null; fits?: { view: string }[]; views?: string[] };
   issues: { id: string; result: Result; found: string; marker: number; recheck?: Recheck }[];
   parent: string | null;
   root: string;
@@ -154,6 +157,8 @@ export interface RunMeta {
   storage?: "metadata";
   photo_meta?: PhotoMeta;
   cached?: boolean;
+  /** Historical evidence was invalid; regenerate exports with a new inspection. */
+  historical_guard?: boolean;
   coverage?: Coverage;
   views?: string[];
   agent?: { enabled: boolean; backend: string | null; model: string | null; calls: number; cost_usd: number; reason?: string };
@@ -197,6 +202,11 @@ export interface RunPayload {
     refined: boolean;
     targets: number;
     anchor_points: AnchorPoint[];
+    valid?: boolean;
+    localised?: boolean;
+    invalid_reason?: string | null;
+    fits?: { view: string }[];
+    views?: string[];
   };
   photo_size: [number, number];
   size_mm: [number, number];
@@ -325,4 +335,28 @@ export interface ForgeLive {
   reviews: number;
   correct_items: number;
   runs: { id: string; seed: number; created: string; planted: number; caught: number; false_alarms: number; reviews: number }[];
+}
+
+export interface EvaluationDataset {
+  id: "synthetic" | "real";
+  label: string;
+  source: "synthetic" | "real";
+  status: "available" | "legacy" | "not_evaluated";
+  images: number | null;
+  cabinets: number | null;
+  engine_version: string | null;
+  confirmed: number | null;
+  referred: number | null;
+  incorrect_pass: number | null;
+  unassessed: number | null;
+  total_faults: number | null;
+  review_rate: number | null;
+  false_fail: number | null;
+  note: string;
+}
+
+export interface Evaluation {
+  schema: string;
+  metrics: Record<string, string>;
+  datasets: EvaluationDataset[];
 }

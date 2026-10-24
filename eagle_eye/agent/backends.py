@@ -7,7 +7,6 @@
 * ``RecordingWrapper`` - appends every real decision to a replay file (``EAGLE_AGENT_RECORD``) to build CI fixtures.
 """
 import hashlib
-import importlib.util
 import inspect
 import itertools
 import json
@@ -57,14 +56,17 @@ def _status(exc):
 
 
 class AnthropicBackend(Backend):
-    """Messages API through the SDK; server-side refusal fallbacks for the models that support them."""
+    """Compatibility adapter for the in-memory test client only.
+
+    Hosted inference is deliberately unavailable in this build, including when credentials are present. Retaining
+    the fake-client tool loop lets regression fixtures exercise old transcripts without making network requests.
+    """
     name = "anthropic"
 
     def __init__(self, client=None, fallbacks=None, timeout=None):
         s = acfg.load()
-        if client is None:
-            import anthropic                                   # optional dependency: only needed with a key
-            client = anthropic.Anthropic(timeout=timeout or s.timeout, max_retries=2)
+        if not isinstance(client, FakeClient):
+            raise RuntimeError("External AI APIs are disabled. Only the in-memory test client is supported.")
         self.client = client
         self.fallbacks = s.fallbacks if fallbacks is None else fallbacks
         self._fallbacks_rejected = False
@@ -186,7 +188,7 @@ def _mock_answer(params):
     return fake_message([tool_use_block("record_decision", {
         "finding_id": ids[-1], "verdict": "UNCLEAR", "confidence": 0.0,
         "reason": "mock agent backend: no model was consulted",
-        "evidence_boxes": [], "rephoto_hint": "set ANTHROPIC_API_KEY to let Claude verify this item"})],
+        "evidence_boxes": [], "rephoto_hint": "Capture a sharp close-up and verify against the matching drawing"})],
         usage={"input_tokens": 0, "output_tokens": 0}, model="mock")
 
 
@@ -274,24 +276,28 @@ def detect(s=None):
         return None, "disabled by EAGLE_AGENT_ENABLED=0"
     b = s.backend
     if b == "auto":
-        if acfg.has_credentials():
-            b = "anthropic"
-        elif s.replay:
+        if s.replay:
             b = "replay"
         else:
-            return None, "no Anthropic credentials (set ANTHROPIC_API_KEY) and no EAGLE_AGENT_REPLAY file"
+            return None, "local OCR and geometry; external AI APIs are disabled"
+    if b in ("off", "none", "local"):
+        return None, "local OCR and geometry; external AI APIs are disabled"
     if b == "anthropic":
-        if importlib.util.find_spec("anthropic") is None:
-            return None, "the anthropic SDK is not installed"
-        src = "credentials from the environment" if acfg.has_credentials() else "SDK credential profile"
-        return "anthropic", f"Claude via the Anthropic API ({src})"
+        return None, "external AI APIs are disabled, including EAGLE_AGENT_BACKEND=anthropic"
     if b == "replay":
         if not s.replay or not Path(s.replay).is_file():
             return None, f"EAGLE_AGENT_REPLAY file not found: {s.replay or '(unset)'}"
         return "replay", f"recorded decisions from {Path(s.replay).name}"
     if b == "mock":
         return "mock", "mock backend: no model is consulted, every candidate stays UNCLEAR"
-    return None, f"unknown EAGLE_AGENT_BACKEND={b!r} (anthropic | replay | mock)"
+    return None, f"unknown EAGLE_AGENT_BACKEND={b!r} (local | replay | mock)"
+
+
+def is_offline(backend):
+    """Allow only known local fixtures, never an arbitrary network-capable injected backend."""
+    if isinstance(backend, RecordingWrapper):
+        return is_offline(backend.inner)
+    return isinstance(backend, ReplayBackend) or isinstance(getattr(backend, "client", None), FakeClient)
 
 
 _CACHE = {}
@@ -309,9 +315,7 @@ def get_backend(s=None):
     with _CACHE_LOCK:
         if key not in _CACHE:
             try:
-                if name == "anthropic":
-                    backend = AnthropicBackend(timeout=s.timeout)
-                elif name == "replay":
+                if name == "replay":
                     backend = ReplayBackend(s.replay)
                 else:
                     backend = MockBackend()

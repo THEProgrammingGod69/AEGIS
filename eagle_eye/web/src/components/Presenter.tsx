@@ -27,7 +27,7 @@ export const STEPS: Step[] = [
   },
   {
     title: "A live inspection",
-    say: ["The real Python engine runs in the cloud: drawing parse, registration, five plug-in checks, consensus.", "About 2 seconds per cabinet on one CPU core, no GPU."],
+    say: ["The Python engine runs local OCR, drawing registration, checks and evidence validation without an external AI API.", "This demo uses a generated cabinet and its matching drawing. Real-photo processing time depends on detail and hardware."],
     action: "Run sample 01 live", run: () => go("inspect/demo"),
   },
   {
@@ -52,12 +52,12 @@ export const STEPS: Step[] = [
   },
   {
     title: "Cabinets it has never seen",
-    say: ["Fault Forge builds a new cabinet, plants hidden faults, shoots it with a random camera.", "Ask the jury to guess, then reveal the answer key. Self-test: 87 / 87 caught, 0 false alarms on 1,950 correct items."],
+    say: ["Fault Forge builds a generated cabinet, plants hidden faults, and varies the camera and lighting.", "The recorded synthetic baseline caught 87 / 87 planted faults with 0 false alarms on 1,950 correct synthetic items. The comparison panel keeps real evaluation separate."],
     action: "Forge a cabinet", run: () => go("forge/run"),
   },
   {
     title: "Bad photos",
-    say: ["Tilt, blur, glare, dim light, JPEG noise: the stress sweep makes the photo progressively worse.", "Findings move to REVIEW as quality drops; false FAILs stay at zero."],
+    say: ["Tilt, blur, glare, dim light, JPEG noise: the stress sweep makes a generated photo progressively worse.", "Measure confirmed detections, false alarms and review referrals; do not infer real-photo accuracy from this test."],
     action: "Open the Robustness Lab", run: () => go("lab"),
   },
   {

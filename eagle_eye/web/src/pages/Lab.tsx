@@ -73,7 +73,7 @@ export function Lab() {
   const runOne = async (pp: Perturb, label: string) => {
     if (!img) throw new Error("Photo not loaded yet");
     const file = await toFile(render(img, pp), pp, `robustness_${sample}_${label.toLowerCase().replace(/\W+/g, "-")}.jpg`);
-    const j = await api.inspect({ photo: file, sample: null });
+    const j = await api.inspect({ photo: file, sample: null, engine: "legacy" });
     setJob(j);
     const done = await followJob(j.id, setJob);
     if (done.status === "error") throw new Error(done.error ?? "Inspection failed");

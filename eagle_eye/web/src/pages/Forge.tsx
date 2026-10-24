@@ -7,7 +7,7 @@ import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
 import { STATUS_COLOR, isIssue, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
-import type { JobView, RunPayload } from "../lib/types";
+import type { EvaluationDataset, JobView, RunPayload } from "../lib/types";
 
 const TYPE_LABEL: Record<string, string> = {
   missing_component: "Missing part",
@@ -21,6 +21,34 @@ const TYPE_LABEL: Record<string, string> = {
 
 function strengthLabel(s: number) {
   return s < 0.9 ? "Gentle" : s < 1.1 ? "Typical" : s < 1.3 ? "Rough" : "Brutal";
+}
+
+function EvaluationComparison() {
+  const canLive = useCanLive();
+  const ev = useAsync(api.evaluation, [canLive]);
+  const measured = (n: number | null | undefined) => n == null ? "Not measured" : n.toLocaleString();
+  const rows: { label: string; value: (d: EvaluationDataset) => string }[] = [
+    { label: "Images / independent cabinets", value: (d) => `${measured(d.images)} / ${measured(d.cabinets)}` },
+    { label: "Confirmed defect detections", value: (d) => measured(d.confirmed) },
+    { label: "Defects referred to REVIEW", value: (d) => measured(d.referred) },
+    { label: "Defective items incorrectly passed", value: (d) => measured(d.incorrect_pass) },
+    { label: "Defects not assessed", value: (d) => measured(d.unassessed) },
+    { label: "Good items incorrectly failed", value: (d) => measured(d.false_fail) },
+    { label: "Confirmed defect recall", value: (d) => d.confirmed == null || !d.total_faults ? "Not measured" : `${(100 * d.confirmed / d.total_faults).toFixed(1)}% (${d.confirmed}/${d.total_faults})` },
+    { label: "Review rate", value: (d) => d.review_rate == null ? "Not measured" : `${(100 * d.review_rate).toFixed(1)}%` },
+    { label: "Engine version evaluated", value: (d) => d.engine_version ?? "Not recorded" },
+  ];
+  return <div className="card pad" style={{ marginBottom: 22 }}>
+    <div className="card-head"><div><div className="card-title"><Target /> Real versus synthetic evaluation</div><div className="card-sub">Source-separated measurements. REVIEW is a referral, never a confirmed defect detection. An absent measurement is not zero errors.</div></div><button className="btn btn-sm" onClick={ev.reload}>Refresh</button></div>
+    {ev.loading && !ev.data && <div className="small muted">Loading evaluation provenance…</div>}
+    {ev.error && <div className="callout info" style={{ marginBottom: 0 }}><Eye /><span>{ev.error} No real-world accuracy is inferred from the synthetic examples.</span></div>}
+    {ev.data && !ev.error && <>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Metric</th>{ev.data.datasets.map((d) => <th key={d.id}>{d.label}<div className="tiny faint" style={{ marginTop: 6 }}>{d.status === "available" ? "Measured report" : d.status === "legacy" ? "Historical report · limited metrics" : "Not evaluated"}</div></th>)}</tr></thead>
+        <tbody>{rows.map((row) => <tr key={row.label}><td className="small muted">{row.label}</td>{ev.data!.datasets.map((d) => <td key={d.id} className="mono small">{row.value(d)}</td>)}</tr>)}</tbody>
+      </table></div>
+      {ev.data.datasets.map((d) => <p key={d.id} className="small muted" style={{ marginTop: 12 }}><b>{d.label}:</b> {d.note}</p>)}
+    </>}
+  </div>;
 }
 
 function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) {
@@ -141,7 +169,7 @@ function SelfTest() {
         </div>
         <div className="card pad">
           <div className="card-head">
-            <div className="card-title">50 unseen cabinets</div>
+            <div className="card-title">{s.cabinets} generated cabinet images</div>
             <div className="legend tiny faint">
               <span><i className="cell ok" /> all caught</span>
               <span><i className="cell clean" /> clean, 0 FAIL</span>
@@ -219,9 +247,11 @@ export function Forge({ auto = false }: { auto?: boolean }) {
         <div>
           <span className="eyebrow">Fault Forge</span>
           <h1>Plant hidden faults. Watch it find them.</h1>
-          <p>Fault Forge builds a cabinet the engine has never seen, plants random faults, shoots it with a random camera angle, light, colour cast and blur, then scores the inspection against the hidden answer key. It is how we measure ourselves before Emerson's hidden test.</p>
+          <p>Fault Forge generates synthetic cabinets with known faults, camera angles, lighting and blur, then compares the inspection with the answer key. Real photographs are evaluated separately below; synthetic scores do not establish real-cabinet accuracy.</p>
         </div>
       </div>
+
+      <EvaluationComparison />
 
       <div className="forge-top">
         <div className="card pad forge-ctl">
@@ -297,9 +327,9 @@ export function Forge({ auto = false }: { auto?: boolean }) {
 
       <section className="section">
         <Reveal className="section-head">
-          <span className="eyebrow">Offline self-test</span>
-          <h2>50 cabinets it had never seen.</h2>
-          <p>The same harness, run in bulk. These are generated cabinets that copy Emerson's example layout; at the finale we re-run it on Emerson's real samples.</p>
+          <span className="eyebrow">Recorded synthetic self-test</span>
+          <h2>Generated images with a known answer key.</h2>
+          <p>These historical results use generated cabinets based on the demo layout. They do not measure the current engine on real Emerson photographs. The evaluation comparison above reports available provenance and leaves unmeasured metrics explicit.</p>
         </Reveal>
         <SelfTest />
       </section>

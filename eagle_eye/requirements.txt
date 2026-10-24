@@ -18,8 +18,7 @@ shapely>=2.0
 PyYAML>=6.0
 six>=1.16
 tqdm>=4.60
-# Claude verifier (optional at run time: without ANTHROPIC_API_KEY the engine is deterministic-only)
-anthropic>=0.40
+# Inspection uses local OCR and geometry. No hosted model SDK or API key is required.
 # Streamlit fallback UI (streamlit run app.py)
 streamlit>=1.36
 pandas>=2.0
