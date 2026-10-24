@@ -278,12 +278,12 @@ function Registration({ p }: { p: RunPayload }) {
 function TimingCard({ p }: { p: RunPayload }) {
   const t = p.timing;
   const parts = [
-    { k: "Parse drawing", v: t.parse, c: "#818cf8" },
-    ...(t.ocr != null ? [{ k: "Read labels (OCR)", v: t.ocr, c: "#f472b6" }] : []),
-    { k: "Register photo", v: t.register, c: "#38bdf8" },
-    ...Object.entries(t.checks).map(([k, v]) => ({ k: `${k} check`, v, c: "#22d3ee" })),
-    ...(t.agent ? [{ k: "Recorded verifier", v: t.agent, c: "#fbbf24" }] : []),
-    { k: "Report + PDF", v: p.meta.timing.report ?? 0, c: "#a78bfa" },
+    { k: "Parse drawing", v: t.parse, c: "#004b8d" },
+    ...(t.ocr != null ? [{ k: "Read labels (OCR)", v: t.ocr, c: "#6c47d9" }] : []),
+    { k: "Register photo", v: t.register, c: "#0a66e8" },
+    ...Object.entries(t.checks).map(([k, v]) => ({ k: `${k} check`, v, c: "#00b8e0" })),
+    ...(t.agent ? [{ k: "Recorded verifier", v: t.agent, c: "#ffb547" }] : []),
+    { k: "Report + PDF", v: p.meta.timing.report ?? 0, c: "#285f9a" },
   ];
   const total = parts.reduce((a, b) => a + b.v, 0) || 1;
   return (

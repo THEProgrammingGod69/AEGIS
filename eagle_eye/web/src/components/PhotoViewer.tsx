@@ -184,7 +184,7 @@ export function PhotoViewer({
           {overlaySrc && <img className="viewer-overlay" src={overlaySrc} width={W} height={H} draggable={false} alt="" style={{ opacity: overlayOpacity }} />}
           <svg className="viewer-svg" viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
             {backplate && polygonBounds(backplate) && (layers.drawing || layers.anchors) && (
-              <polygon points={backplate.map((p) => p.join(",")).join(" ")} fill="none" stroke="#38bdf8" strokeWidth={1.4} strokeDasharray="8 6" vectorEffect="non-scaling-stroke" opacity={0.75} />
+              <polygon points={backplate.map((p) => p.join(",")).join(" ")} fill="none" stroke="#5be3ff" strokeWidth={1.4} strokeDasharray="8 6" vectorEffect="non-scaling-stroke" opacity={0.75} />
             )}
             {layers.drawing && (
               <g className="layer-drawing">
@@ -193,7 +193,7 @@ export function PhotoViewer({
                   if (!b) return null;
                   return (
                     <g key={l.tag} style={{ animationDelay: `${i * 35}ms` }}>
-                      <polygon points={l.quad.map((p) => p.join(",")).join(" ")} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+                      <polygon points={l.quad.map((p) => p.join(",")).join(" ")} fill="rgba(91,227,255,0.05)" stroke="#5be3ff" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
                       {l.kind !== "terminal" && (
                         <text x={b.x0 + 4 * u} y={b.y1 - 6 * u} fontSize={10.5 * u} strokeWidth={2 * u} className="svg-tag">
                           {l.tag}
@@ -206,20 +206,20 @@ export function PhotoViewer({
             )}
             {layers.anchors &&
               anchors.map((a, i) => {
-                const c = a.inlier === false ? "#fb7185" : "#34d399";
+                const c = a.inlier === false ? "#ff5468" : "#2bd49a";
                 return (
                   <g key={a.tag + a.found.join()}>
                     {a.inlier === false && (
                       <line x1={a.found[0]} y1={a.found[1]} x2={a.expected[0]} y2={a.expected[1]} stroke={c} strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
                     )}
-                    <circle cx={a.expected[0]} cy={a.expected[1]} r={7 * u} fill="none" stroke="#38bdf8" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.8} />
-                    <circle cx={a.found[0]} cy={a.found[1]} r={3.6 * u} fill={c} stroke="#05070b" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <circle cx={a.expected[0]} cy={a.expected[1]} r={7 * u} fill="none" stroke="#5be3ff" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.8} />
+                    <circle cx={a.found[0]} cy={a.found[1]} r={3.6 * u} fill={c} stroke="#040b15" strokeWidth={1} vectorEffect="non-scaling-stroke" />
                     {a.inlier === false && <Chip x={a.found[0] - 18 * u} y={a.found[1] - (i % 2 ? 44 : 26) * u} u={u} color={c} text={a.tag} small />}
                   </g>
                 );
               })}
             {selectedQuad && polygonBounds(selectedQuad) && !items.some((i) => i.id === selected) && (
-              <polygon points={selectedQuad.map((p) => p.join(",")).join(" ")} fill="rgba(56,189,248,0.14)" stroke="#7dd3fc" strokeWidth={3} vectorEffect="non-scaling-stroke" className="sel-glow" />
+              <polygon points={selectedQuad.map((p) => p.join(",")).join(" ")} fill="rgba(91,227,255,0.14)" stroke="#7fe7ff" strokeWidth={3} vectorEffect="non-scaling-stroke" className="sel-glow" />
             )}
             {layers.issues &&
               items.map((it) => {
@@ -255,12 +255,12 @@ export function PhotoViewer({
       )}
       {(layers.anchors || layers.drawing) && (
         <div className="viewer-legend">
-          {layers.drawing && <span><i className="sq" style={{ ["--c" as string]: "#38bdf8" }} /> Drawing, laid onto the photo</span>}
+          {layers.drawing && <span><i className="sq" style={{ ["--c" as string]: "#5be3ff" }} /> Drawing, laid onto the photo</span>}
           {layers.anchors && (
             <>
-              <span><i style={{ ["--c" as string]: "#34d399" }} /> Anchor fits the drawing</span>
-              <span><i style={{ ["--c" as string]: "#fb7185" }} /> Off-pattern: points to a misplaced part</span>
-              <span><i className="ring" style={{ ["--c" as string]: "#38bdf8" }} /> Where the drawing expects it</span>
+              <span><i style={{ ["--c" as string]: "#2bd49a" }} /> Anchor fits the drawing</span>
+              <span><i style={{ ["--c" as string]: "#ff5468" }} /> Off-pattern: points to a misplaced part</span>
+              <span><i className="ring" style={{ ["--c" as string]: "#5be3ff" }} /> Where the drawing expects it</span>
             </>
           )}
         </div>

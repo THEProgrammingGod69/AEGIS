@@ -1,36 +1,72 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { ClipboardList, FlaskConical, Mic, PlayCircle, ScanEye, Trash2, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ClipboardList, FlaskConical, Gauge, Mic, PlayCircle, ScanEye, ScanLine, Trash2, Zap } from "lucide-react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ScrollProgress } from "./components/motion";
+import { Preloader } from "./components/Preloader";
 import { Presenter } from "./components/Presenter";
 import { NAV, TopBar } from "./components/TopBar";
 import { ToastProvider } from "./components/ui";
 import { STATIC, api } from "./lib/api";
 import { setPreferLive, useEngine } from "./lib/cloud";
+import { ScrollTrigger, calm, gsap, introDone, setMotion, useGSAP } from "./lib/gsap";
+import { installClickSpark, installInteractions, installXray, toggleXray } from "./lib/interactions";
 import { go, useRoute } from "./lib/router";
+import { blinkTo } from "./lib/transition";
 import type { Health } from "./lib/types";
-import { Analytics } from "./pages/Analytics";
-import { Engine } from "./pages/Engine";
-import { Forge } from "./pages/Forge";
-import { History } from "./pages/History";
-import { Inspect } from "./pages/Inspect";
-import { Lab } from "./pages/Lab";
 import { Overview } from "./pages/Overview";
-import { Review } from "./pages/Review";
-import { Run } from "./pages/Run";
-import { WorkOrder } from "./pages/WorkOrder";
+
+// Every page but the Overview loads on demand (and is prefetched once the console is idle), so the first paint
+// carries only the landing page and the motion core.
+const pages = {
+  inspect: () => import("./pages/Inspect"),
+  run: () => import("./pages/Run"),
+  work: () => import("./pages/WorkOrder"),
+  review: () => import("./pages/Review"),
+  analytics: () => import("./pages/Analytics"),
+  forge: () => import("./pages/Forge"),
+  lab: () => import("./pages/Lab"),
+  history: () => import("./pages/History"),
+  engine: () => import("./pages/Engine"),
+};
+const Inspect = lazy(() => pages.inspect().then((m) => ({ default: m.Inspect })));
+const Run = lazy(() => pages.run().then((m) => ({ default: m.Run })));
+const WorkOrder = lazy(() => pages.work().then((m) => ({ default: m.WorkOrder })));
+const Review = lazy(() => pages.review().then((m) => ({ default: m.Review })));
+const Analytics = lazy(() => pages.analytics().then((m) => ({ default: m.Analytics })));
+const Forge = lazy(() => pages.forge().then((m) => ({ default: m.Forge })));
+const Lab = lazy(() => pages.lab().then((m) => ({ default: m.Lab })));
+const History = lazy(() => pages.history().then((m) => ({ default: m.History })));
+const Engine = lazy(() => pages.engine().then((m) => ({ default: m.Engine })));
 
 const TITLES: Record<string, string> = {
   "": "Overview", inspect: "Inspect", run: "Inspection", work: "Work order", review: "Review station", analytics: "Analytics",
   forge: "Fault Forge", lab: "Robustness Lab", history: "History", engine: "Engine",
 };
 
+const seen = () => {
+  try {
+    return sessionStorage.getItem("ee_seen") === "1";
+  } catch {
+    return true;
+  }
+};
+
+function PageFallback() {
+  return (
+    <div className="main">
+      <div className="skeleton" style={{ height: 120, marginBottom: 18, maxWidth: 640 }} />
+      <div className="skeleton" style={{ height: 520 }} />
+    </div>
+  );
+}
+
 export function App() {
   const route = useRoute();
   const eng = useEngine();
   const [health, setHealth] = useState<Health | null>(null);
   const [palette, setPalette] = useState(false);
+  const [preload, setPreload] = useState(() => !calm() && !seen());
   const [presenter, setPresenter] = useState(() => {
     try {
       return sessionStorage.getItem("ee_presenter") === "1" || new URLSearchParams(location.search).has("present");
@@ -39,6 +75,22 @@ export function App() {
     }
   });
   const page = route[0] ?? "";
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!preload) introDone();
+    installInteractions();
+    installXray();
+    installClickSpark();
+    // pinned sections measure after images and fonts settle
+    const refresh = () => ScrollTrigger.refresh();
+    window.addEventListener("load", refresh);
+    void document.fonts?.ready.then(refresh);
+    // warm the other pages once the console is idle
+    const idle = (window as Window & { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 1500));
+    idle(() => Object.values(pages).forEach((p) => void p().catch(() => {})));
+    return () => window.removeEventListener("load", refresh);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let alive = true;
@@ -71,6 +123,12 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // the new page's content rises in (behind the opening lids when the blink transition is running)
+  useGSAP(() => {
+    if (calm() || !mainRef.current) return;
+    gsap.fromTo(mainRef.current, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: "expo.out", clearProps: "transform,opacity,visibility" });
+  }, { dependencies: [route.join("/")] });
+
   const commands = useMemo<Command[]>(() => {
     const latest = async (work = false) => {
       const r = (await api.runs(50)).find((m) => m.source !== "forge") ?? (await api.runs(1))[0];
@@ -83,7 +141,9 @@ export function App() {
       { id: "latest", group: "Demo", label: "Open the latest inspection", icon: <ScanEye />, run: () => void latest() },
       { id: "wo", group: "Demo", label: "Work order for the latest inspection", icon: <ClipboardList />, keywords: "technician fix print", run: () => void latest(true) },
       { id: "present", group: "Demo", label: presenter ? "Hide presenter mode" : "Start presenter mode", hint: "demo script", icon: <Mic />, keywords: "tour script pitch", run: () => setPresenter((x) => !x) },
-      ...NAV.map((n) => ({ id: `nav-${n.key}`, group: "Go to", label: n.label, icon: <n.icon />, run: () => go(n.key) })),
+      ...NAV.map((n) => ({ id: `nav-${n.key}`, group: "Go to", label: n.label, icon: <n.icon />, run: () => blinkTo(`#/${n.key}`, n.label) })),
+      { id: "motion", group: "Display", label: calm() ? "Motion: Full" : "Motion: Calm", hint: calm() ? "now Calm" : "now Full", icon: <Gauge />, keywords: "animation reduce reduced projector stutter calm full", run: () => setMotion(calm() ? "full" : "calm") },
+      { id: "xray", group: "Display", label: "X-ray: show the GA drawing on every photo", hint: "or press X", icon: <ScanLine />, keywords: "overlay drawing easter egg", run: () => void toggleXray() },
     ];
     if (STATIC)
       c.push({ id: "mode", group: "Engine", label: eng.preferLive ? "Switch to instant replay (recorded runs)" : "Switch to the live cloud engine", icon: <Zap />, run: () => setPreferLive(!eng.preferLive) });
@@ -101,10 +161,11 @@ export function App() {
   else if (page === "lab") view = <Lab />;
   else if (page === "history") view = <History />;
   else if (page === "engine") view = <Engine />;
-  else view = <div className="main"><Overview onPresent={() => setPresenter(true)} /></div>;
+  else view = <Overview onPresent={() => setPresenter(true)} />;
 
   return (
     <ToastProvider>
+      <ScrollProgress />
       <TopBar page={page} health={health} onPalette={() => setPalette(true)} />
       {!STATIC && health && !health.tesseract.ok && (
         <div className="setup-warn">
@@ -114,17 +175,32 @@ export function App() {
           Install it (Windows: UB-Mannheim installer · macOS: <code>brew install tesseract</code> · Linux: <code>apt install tesseract-ocr</code>) or set <code>TESSERACT_CMD</code>, then restart <code>python server.py</code>.
         </div>
       )}
-      <AnimatePresence mode="wait">
-        <motion.main key={page + (route[1] ?? "")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
-          <ErrorBoundary resetKey={route.join("/")}>{view}</ErrorBoundary>
-        </motion.main>
-      </AnimatePresence>
+      <main key={page + (route[1] ?? "")} ref={mainRef}>
+        <ErrorBoundary resetKey={route.join("/")}>
+          <Suspense fallback={<PageFallback />}>{view}</Suspense>
+        </ErrorBoundary>
+      </main>
       <footer className="footer">
         <div className="footer-inner">
-          <span>EAGLE EYE · Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1</span>
-          <span>Drawing-first verification · FAIL only when evidence agrees · CPU only · <button className="linkish" onClick={() => setPalette(true)}>Ctrl K</button></span>
+          <span>EAGLE EYE · Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Built for Emerson&apos;s Track 1 challenge</span>
+          <span>Drawing-first verification · FAIL only when evidence agrees · CPU only · <button className="linkish" onClick={() => setPalette(true)}>Ctrl K</button> · press <kbd>X</kbd> for X-ray</span>
         </div>
       </footer>
+      <div className="lids" aria-hidden="true">
+        <div className="lid lid-top" />
+        <div className="lid lid-bottom" />
+        <div className="lid-label mono" />
+      </div>
+      {preload && <Preloader onDone={() => {
+        try {
+          sessionStorage.setItem("ee_seen", "1");
+        } catch {
+          /* ignore */
+        }
+        setPreload(false);
+        introDone();
+        ScrollTrigger.refresh();
+      }} />}
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <Presenter open={presenter} onClose={() => setPresenter(false)} />
     </ToastProvider>

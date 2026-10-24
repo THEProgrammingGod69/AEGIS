@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { STATUS_COLOR, statusText } from "../lib/format";
-import { useCountUp } from "../lib/hooks";
+import { ScrollTrigger, SplitText, calm, gsap, useGSAP } from "../lib/gsap";
 import type { Status } from "../lib/types";
 
 export function StatusBadge({ s, lg, label }: { s: Status | "HOLD"; lg?: boolean; label?: string }) {
@@ -21,16 +21,39 @@ export function Marker({ n, s, lg }: { n: number | string; s: Status; lg?: boole
   );
 }
 
+/** #17 count-up: tweens the number straight into the DOM (no React render per frame), from 0 the first time it
+ *  scrolls into view, then from the previous value whenever `value` changes. Calm shows the final value. */
 export function Count({ value, decimals = 0 }: { value: number; decimals?: number }) {
-  const v = useCountUp(value);
-  return <>{v.toFixed(decimals)}</>;
+  const ref = useRef<HTMLSpanElement>(null);
+  const from = useRef(0);
+  const seen = useRef(false);
+  const fmt = (v: number) => v.toFixed(decimals);
+  useGSAP(() => {
+    const el = ref.current!;
+    if (calm()) {
+      el.textContent = fmt(value);
+      from.current = value;
+      return;
+    }
+    const o = { v: from.current };
+    el.textContent = fmt(o.v);
+    const run = () =>
+      gsap.to(o, {
+        v: value, duration: seen.current && from.current !== 0 ? 0.8 : 1.4, ease: "power3.out", overwrite: true,
+        onUpdate: () => void (el.textContent = fmt(o.v)),
+        onComplete: () => void (from.current = value),
+      });
+    if (seen.current) run();
+    else ScrollTrigger.create({ trigger: el, start: "top 95%", once: true, onEnter: () => { seen.current = true; run(); } });
+  }, { dependencies: [value, decimals] });
+  return <span ref={ref} className="tnum" />;
 }
 
 export function Kpi({ value, label, note, color, suffix, decimals }: {
   value: number; label: string; note?: ReactNode; color?: string; suffix?: string; decimals?: number;
 }) {
   return (
-    <div className="kpi" style={{ ["--c" as string]: color ?? "var(--text)" }}>
+    <div className="kpi" data-spotlight="" style={{ ["--c" as string]: color ?? "var(--text)" }}>
       <div className="kpi-value">
         <Count value={value} decimals={decimals} />
         {suffix && <span style={{ fontSize: "0.55em", marginLeft: 3, opacity: 0.8 }}>{suffix}</span>}
@@ -64,30 +87,54 @@ export function Seg<T extends string | number>({ value, options, onChange }: {
   );
 }
 
+/** Bar that grows from its left edge (#38 family): scaleX only, compositor-friendly. */
 export function Meter({ value, color }: { value: number; color?: string }) {
+  const ref = useRef<HTMLElement>(null);
+  const w = Math.max(0.02, Math.min(1, value));
+  useGSAP(() => {
+    if (calm()) return;
+    gsap.fromTo(ref.current, { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "expo.out" });
+  }, { dependencies: [w] });
   return (
     <div className="meter" style={{ ["--c" as string]: color ?? "var(--accent)" }}>
-      <motion.i initial={{ width: 0 }} animate={{ width: `${Math.max(2, Math.min(100, value * 100))}%` }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }} />
+      <i ref={ref} style={{ width: `${w * 100}%`, transformOrigin: "0 50%" }} />
     </div>
   );
 }
 
-export function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: ReactNode; sub?: ReactNode }) {
+/** #11 line-mask reveal: the title's lines slide up out of a mask as the section scrolls in. */
+export function SectionHead({ eyebrow, title, sub, center }: { eyebrow: ReactNode; title: ReactNode; sub?: ReactNode; center?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (calm()) return;
+    const root = ref.current!;
+    const h = root.querySelector("h2")!;
+    const rest = root.querySelectorAll(".eyebrow, p");
+    gsap.from(rest, { autoAlpha: 0, y: 14, duration: 0.7, stagger: 0.12, ease: "expo.out", scrollTrigger: { trigger: root, start: "top 88%", once: true } });
+    SplitText.create(h, {
+      type: "lines", mask: "lines", autoSplit: true,
+      onSplit: (self) => gsap.from(self.lines, { yPercent: 105, stagger: 0.08, duration: 0.9, ease: "expo.out", scrollTrigger: { trigger: h, start: "top 88%", once: true } }),
+    });
+  }, { scope: ref });
   return (
-    <motion.div className="section-head" initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
+    <div ref={ref} className={`section-head${center ? " center" : ""}`}>
       <span className="eyebrow">{eyebrow}</span>
       <h2>{title}</h2>
       {sub && <p>{sub}</p>}
-    </motion.div>
+    </div>
   );
 }
 
-export function Reveal({ children, delay = 0, y = 16, className, style }: { children: ReactNode; delay?: number; y?: number; className?: string; style?: React.CSSProperties }) {
-  return (
-    <motion.div className={className} style={style} initial={{ opacity: 0, y }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}>
-      {children}
-    </motion.div>
-  );
+/** Scroll-in reveal (the [data-reveal] batch, per element): rises 16 px and fades in once. */
+export function Reveal({ children, delay = 0, y = 18, className, style, ...rest }: {
+  children: ReactNode; delay?: number; y?: number; className?: string; style?: CSSProperties;
+} & Record<`data-${string}`, string | undefined>) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (calm()) return;
+    gsap.from(ref.current, { y, autoAlpha: 0, duration: 0.85, delay, ease: "expo.out", scrollTrigger: { trigger: ref.current, start: "top 92%", once: true } });
+  }, { scope: ref });
+  return <div ref={ref} className={className} style={style} {...rest}>{children}</div>;
 }
 
 /* ---------------- toasts ---------------- */
@@ -113,7 +160,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toast-wrap">
         <AnimatePresence>
           {items.map((t) => (
-            <motion.div key={t.id} className={`toast ${t.kind}`} initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.97 }}>
+            <motion.div key={t.id} className={`toast ${t.kind}`} initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.97 }} transition={{ type: "spring", stiffness: 420, damping: 30 }}>
               {t.kind === "error" ? <AlertTriangle /> : <CheckCircle2 />}
               <div className="grow">{t.text}</div>
               <button className="faint" onClick={() => setItems((x) => x.filter((y) => y.id !== t.id))} aria-label="Dismiss">

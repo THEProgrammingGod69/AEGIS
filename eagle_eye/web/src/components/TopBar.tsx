@@ -2,11 +2,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   BarChart3, Cloud, Command, Cpu, FlaskConical, History, LayoutGrid, Microscope, PlayCircle, Puzzle, RefreshCw, ScanEye, UserCheck, Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Brand } from "./Logo";
 import { Seg } from "./ui";
 import { STATIC } from "../lib/api";
 import { pingEngine, setPreferLive, useEngine } from "../lib/cloud";
+import { calm, fine, gsap } from "../lib/gsap";
+import { blinkTo } from "../lib/transition";
 import type { Health } from "../lib/types";
 
 export const NAV = [
@@ -69,6 +71,54 @@ function EnginePill() {
   );
 }
 
+/** #25 nav: the active pill slides between links (GSAP) and a label scrambles on hover; links blink-transition (#2). */
+function Nav({ active }: { active: string }) {
+  const nav = useRef<HTMLElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const first = useRef(true);
+
+  useLayoutEffect(() => {
+    const el = nav.current!;
+    const place = (animate: boolean) => {
+      const link = el.querySelector<HTMLElement>('.nav-item[aria-current="page"]');
+      if (!link) return gsap.set(pill.current, { autoAlpha: 0 });
+      const to = { x: link.offsetLeft, width: link.offsetWidth, autoAlpha: 1 };
+      if (!animate || calm()) gsap.set(pill.current, to);
+      else gsap.to(pill.current, { ...to, duration: 0.35, ease: "ee", overwrite: true });
+    };
+    place(!first.current);
+    first.current = false;
+    const ro = new ResizeObserver(() => place(false));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active]);
+
+  const scramble = (e: React.PointerEvent<HTMLAnchorElement>) => {
+    if (calm() || !fine()) return;
+    const label = e.currentTarget.querySelector<HTMLElement>("span");
+    if (!label || label.offsetParent === null) return;
+    gsap.to(label, { duration: 0.4, scrambleText: { text: label.dataset.label!, chars: "upperCase", speed: 0.6 }, overwrite: true });
+  };
+
+  return (
+    <nav className="nav" aria-label="Main" ref={nav}>
+      <span className="nav-pill" ref={pill} aria-hidden="true" />
+      {NAV.map((n) => (
+        <a key={n.key} href={`#/${n.key}`} className="nav-item" aria-current={active === n.key ? "page" : undefined} title={n.label}
+          onPointerEnter={scramble}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            blinkTo(`#/${n.key}`, n.label);
+          }}>
+          <n.icon />
+          <span data-label={n.label}>{n.label}</span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 export function TopBar({ page, health, onPalette }: { page: string; health: Health | null; onPalette: () => void }) {
   const active = page === "run" || page === "work" ? "inspect" : page;
   const ok = health?.ok ?? health?.tesseract.ok;
@@ -77,18 +127,10 @@ export function TopBar({ page, health, onPalette }: { page: string; health: Heal
     <header className="topbar">
       <div className="topbar-inner">
         <Brand />
-        <nav className="nav" aria-label="Main">
-          {NAV.map((n) => (
-            <a key={n.key} href={`#/${n.key}`} className="nav-item" aria-current={active === n.key ? "page" : undefined} title={n.label}>
-              {active === n.key && <motion.span layoutId="nav-pill" className="nav-pill" transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
-              <n.icon />
-              <span>{n.label}</span>
-            </a>
-          ))}
-        </nav>
+        <Nav active={active} />
         <div className="topbar-right">
           <button className="btn btn-sm btn-ghost palette-btn" onClick={onPalette} title="Command palette (Ctrl/⌘ K)">
-            <Command /> <kbd>K</kbd>
+            <Command /> <kbd>Ctrl K</kbd>
           </button>
           {STATIC ? <EnginePill /> : (
             <div className="status-pill" title={health ? (ok ? health.tesseract.version ?? "" : health.tesseract.error) : "Connecting…"}>

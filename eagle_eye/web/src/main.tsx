@@ -11,6 +11,8 @@ import "./styles/base.css";
 import "./styles/ui.css";
 import "./styles/pages.css";
 import "./styles/round3.css";
+import "./styles/motion.css";
+import "./styles/overview.css";
 
 const mount = () =>
   ReactDOM.createRoot(document.getElementById("root")!).render(

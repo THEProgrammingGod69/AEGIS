@@ -13,15 +13,16 @@ export const STATUS_COLOR: Record<Status | "HOLD", string> = {
   HOLD: "var(--fail)",
 };
 
+/** Overlay colours for boxes drawn on photos: always inside a dark device panel, so the signal palette. */
 export const STATUS_HEX: Record<Status, string> = {
-  PASS: "#34d399",
-  FAIL: "#fb7185",
-  REVIEW: "#fbbf24",
+  PASS: "#2bd49a",
+  FAIL: "#ff5468",
+  REVIEW: "#ffb547",
   SKIP: "#94a3b8",
-  NOT_IN_VIEW: "#64748b",
-  CLOSED: "#34d399",
-  OPEN: "#fb7185",
-  REGRESSION: "#c084fc",
+  NOT_IN_VIEW: "#7d8794",
+  CLOSED: "#2bd49a",
+  OPEN: "#ff5468",
+  REGRESSION: "#a78bfa",
   NEW: "#fb923c",
 };
 

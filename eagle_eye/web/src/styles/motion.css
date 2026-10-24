@@ -1,0 +1,335 @@
+/* ==========================================================================
+   Motion system (v2): progress bar, blink lids, preloader, spotlight, odometer, marquee, cursor, sparks, X-ray.
+   Everything here animates transform / opacity / clip-path / SVG strokes only.
+   ========================================================================== */
+
+/* #20 aurora scroll-progress bar */
+.scroll-progress {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 3px;
+  z-index: 90;
+  background: var(--aurora);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+/* #2 eye-blink lids: aurora panels with curved, lash-lit edges */
+.lid {
+  position: fixed;
+  left: -12vw;
+  right: -12vw;
+  height: 66vh;
+  z-index: 400;
+  visibility: hidden;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.lid-top {
+  top: 0;
+  border-radius: 0 0 50% 50% / 0 0 24% 24%;
+  background:
+    radial-gradient(60% 80% at 70% 100%, rgba(108, 71, 217, 0.55), transparent 70%),
+    radial-gradient(50% 70% at 20% 80%, rgba(0, 184, 224, 0.4), transparent 70%),
+    linear-gradient(175deg, #003a6e 0%, #004b8d 40%, #0a66e8 100%);
+  box-shadow: 0 5px 0 -1px rgba(127, 231, 255, 0.75), 0 18px 40px rgba(0, 75, 141, 0.35);
+  transform: translateY(-101%);
+}
+
+.lid-bottom {
+  bottom: 0;
+  border-radius: 50% 50% 0 0 / 24% 24% 0 0;
+  background:
+    radial-gradient(60% 80% at 30% 0%, rgba(0, 184, 224, 0.5), transparent 70%),
+    radial-gradient(50% 70% at 85% 20%, rgba(108, 71, 217, 0.45), transparent 70%),
+    linear-gradient(5deg, #003a6e 0%, #004b8d 40%, #0a66e8 100%);
+  box-shadow: 0 -5px 0 -1px rgba(127, 231, 255, 0.75), 0 -18px 40px rgba(0, 75, 141, 0.35);
+  transform: translateY(101%);
+}
+
+.lid-label {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 401;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  white-space: nowrap;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 18px rgba(127, 231, 255, 0.6);
+}
+
+/* #1 preloader: white canvas; the iris becomes a growing window (--r) onto the page underneath */
+.preloader {
+  --r: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background:
+    radial-gradient(700px 520px at 88% -8%, rgba(10, 102, 232, 0.16), transparent 62%),
+    radial-gradient(520px 320px at -6% -8%, rgba(127, 231, 255, 0.24), transparent 60%),
+    linear-gradient(rgba(0, 75, 141, 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, rgba(0, 75, 141, 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
+    #f6f8fb;
+  -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--r), #000 calc(var(--r) + 1px));
+  mask: radial-gradient(circle at 50% 46%, transparent var(--r), #000 calc(var(--r) + 1px));
+}
+
+.pl-eye {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: min(440px, 78vw);
+  transform: translate(-50%, -50%);
+  overflow: visible;
+}
+
+.pl-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(46% + min(190px, 34vw));
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* #23 spotlight: radial Azure glow following the cursor inside cards */
+[data-spotlight] {
+  position: relative;
+}
+
+[data-spotlight]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(360px circle at var(--x, 50%) var(--y, 0%), rgba(10, 102, 232, 0.11), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+  pointer-events: none;
+}
+
+[data-spotlight]:hover::after {
+  opacity: 1;
+}
+
+.device[data-spotlight]::after,
+.device [data-spotlight]::after {
+  background: radial-gradient(360px circle at var(--x, 50%) var(--y, 0%), rgba(91, 227, 255, 0.12), transparent 60%);
+}
+
+/* #24 tilt: give tilting cards a 3D context */
+[data-tilt] {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.new-grid,
+.values,
+.engine-checks {
+  perspective: 1100px;
+}
+
+/* aurora numbers (display sizes only) */
+.aurora-num {
+  background: var(--aurora-v);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand-ink {
+  color: var(--brand);
+}
+
+/* #17 odometer */
+.odo {
+  display: inline-flex;
+  line-height: 1;
+  height: 1em;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.odo-d {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+
+.odo-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+}
+
+.odo-strip > span {
+  display: block;
+  height: 1em;
+  line-height: 1;
+}
+
+.odo.aurora-num .odo-strip > span {
+  background: var(--aurora-v);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html.calm .odo-strip[data-d="0"] { transform: translateY(0); }
+html.calm .odo-strip[data-d="1"] { transform: translateY(-10%); }
+html.calm .odo-strip[data-d="2"] { transform: translateY(-20%); }
+html.calm .odo-strip[data-d="3"] { transform: translateY(-30%); }
+html.calm .odo-strip[data-d="4"] { transform: translateY(-40%); }
+html.calm .odo-strip[data-d="5"] { transform: translateY(-50%); }
+html.calm .odo-strip[data-d="6"] { transform: translateY(-60%); }
+html.calm .odo-strip[data-d="7"] { transform: translateY(-70%); }
+html.calm .odo-strip[data-d="8"] { transform: translateY(-80%); }
+html.calm .odo-strip[data-d="9"] { transform: translateY(-90%); }
+
+/* #16 marquee band */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee-inner {
+  display: inline-flex;
+  will-change: transform;
+}
+
+.marquee-set {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* #21 crosshair reticle */
+.cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 350;
+  pointer-events: none;
+  width: 34px;
+  height: 34px;
+  visibility: hidden;
+}
+
+.cursor-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(10, 102, 232, 0.6);
+  transition: border-color 0.25s, background 0.25s;
+}
+
+.cursor-ring i {
+  position: absolute;
+  background: var(--azure);
+  border-radius: 2px;
+}
+
+.cursor-ring i:nth-child(1) { left: 50%; top: -6px; width: 1.5px; height: 9px; margin-left: -0.75px; }
+.cursor-ring i:nth-child(2) { left: 50%; bottom: -6px; width: 1.5px; height: 9px; margin-left: -0.75px; }
+.cursor-ring i:nth-child(3) { top: 50%; left: -6px; height: 1.5px; width: 9px; margin-top: -0.75px; }
+.cursor-ring i:nth-child(4) { top: 50%; right: -6px; height: 1.5px; width: 9px; margin-top: -0.75px; }
+
+.cursor.snap .cursor-ring {
+  border-color: #2bd49a;
+  background: rgba(43, 212, 154, 0.12);
+}
+
+.cursor.snap .cursor-ring i {
+  background: #2bd49a;
+}
+
+.cursor.on .cursor-ring {
+  background: rgba(10, 102, 232, 0.08);
+}
+
+.cursor-label {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--brand);
+  white-space: nowrap;
+}
+
+/* click sparks */
+.spark-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 600;
+  pointer-events: none;
+}
+
+/* lightning canvas */
+.lightning {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* aurora blobs (#39): blurred once, then only transformed */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.45;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Bonus X-ray mode: the logo eye scans */
+html.xray .eye-mark .iris {
+  animation: xray-scan 1.6s var(--ease) infinite;
+  transform-origin: 24px 24px;
+}
+
+@keyframes xray-scan {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-2.2px); }
+  70% { transform: translateX(2.2px); }
+}
+
+html.xray .topbar {
+  box-shadow: 0 0 0 1.5px rgba(10, 102, 232, 0.4), 0 12px 32px -16px rgba(0, 75, 141, 0.3);
+}
+
+/* Lenis */
+html.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor,
+  .spark-canvas {
+    display: none;
+  }
+}

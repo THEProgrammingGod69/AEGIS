@@ -1,62 +1,148 @@
 /* ==========================================================================
    EAGLE EYE console · design tokens + base
-   Dark "precision optics" theme: graphite canvas, blueprint grid, cyan drawing light.
+   v2 "Daylight Signal": a bright, Emerson-aligned canvas (Emerson Blue type, Electric Azure actions, an aurora
+   gradient for energy) with dark "device" panels for the viewport, logs and presenter.
    ========================================================================== */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  --bg: #05070b;
-  --bg-2: #070a10;
-  --panel: rgba(14, 19, 29, 0.72);
-  --panel-solid: #0b1019;
-  --panel-2: #101724;
-  --panel-3: #151d2c;
-  --hover: rgba(148, 163, 184, 0.07);
-  --line: rgba(148, 163, 184, 0.11);
-  --line-2: rgba(148, 163, 184, 0.19);
-  --line-3: rgba(148, 163, 184, 0.3);
+  /* surfaces */
+  --bg: #f6f8fb;
+  --bg-2: #eef2f7;
+  --panel: rgba(255, 255, 255, 0.78);   /* glass: pair with backdrop-filter */
+  --panel-solid: #ffffff;
+  --panel-2: #f1f4f8;
+  --panel-3: #e9eef4;
+  --surface: #ffffff;
+  --sunken: #edf1f6;
+  --hover: rgba(0, 75, 141, 0.05);
+  --line: #e1e6ed;
+  --line-2: #cbd3de;
+  --line-3: #aab6c4;
 
-  --text: #e9eef6;
-  --text-2: #a6b1c4;
-  --text-3: #6c788d;
-  --text-4: #4b5567;
+  /* ink */
+  --text: #0b1726;
+  --text-2: #3b4758;
+  --text-3: #5f6b7a;
+  --text-4: #8a94a3;
 
-  --accent: #38bdf8;
-  --accent-2: #22d3ee;
-  --accent-3: #818cf8;
-  --accent-ink: #04121c;
-  --accent-soft: rgba(56, 189, 248, 0.12);
-  --accent-glow: rgba(56, 189, 248, 0.38);
-  --iris: #f5b544;
+  /* Emerson brand + action */
+  --brand: #004b8d;
+  --brand-700: #003a6e;
+  --lapis: #285f9a;
+  --grey: #9fa1a4;
+  --platinum: #e5e6e7;
+  --azure: #0a66e8;
+  --azure-2: #1c74c9;
+  --cyan: #00b8e0;
+  --cyan-text: #00779a;
+  --ice: #7fe7ff;
+  --violet: #6c47d9;
 
-  --pass: #34d399;
-  --fail: #fb7185;
-  --review: #fbbf24;
-  --skip: #94a3b8;
-  --niv: #64748b;
-  --closed: #34d399;
-  --open: #fb7185;
-  --regression: #c084fc;
-  --new: #fb923c;
+  /* old names, re-skinned */
+  --accent: var(--azure);
+  --accent-2: var(--brand);
+  --accent-3: var(--violet);
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(10, 102, 232, 0.1);
+  --accent-glow: rgba(10, 102, 232, 0.35);
+  --iris: var(--brand);
+
+  /* status: text colour + tinted fill */
+  --pass: #08875a;
+  --pass-fill: #e3f6ee;
+  --fail: #d7263d;
+  --fail-fill: #fde8eb;
+  --review: #9a5b00;
+  --review-fill: #fff3dc;
+  --review-bar: #ffb547;
+  --skip: #5f6b7a;
+  --skip-fill: #edf1f6;
+  --niv: #5b6a80;
+  --closed: #08875a;
+  --open: #d7263d;
+  --regression: #6c47d9;
+  --regression-fill: #efeafd;
+  --new: #c2410c;
+  --new-fill: #ffede3;
+
+  /* gradients */
+  --aurora: linear-gradient(110deg, #004b8d 0%, #0a66e8 38%, #00b8e0 72%, #7fe7ff 100%);
+  --aurora-v: linear-gradient(110deg, #004b8d 0%, #0a66e8 35%, #6c47d9 62%, #00b8e0 100%);
 
   --radius-xs: 7px;
   --radius-sm: 10px;
   --radius: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
 
-  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 6px 20px -12px rgba(0, 0, 0, 0.7);
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.85);
-  --shadow-pop: 0 30px 80px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line-2);
+  /* elevation: blue-tinted, soft */
+  --shadow-sm: 0 1px 2px rgba(11, 23, 38, 0.06), 0 4px 14px -6px rgba(11, 23, 38, 0.12);
+  --shadow: 0 2px 4px rgba(11, 23, 38, 0.05), 0 24px 60px -24px rgba(0, 75, 141, 0.35);
+  --shadow-pop: 0 30px 80px -20px rgba(0, 75, 141, 0.4), 0 0 0 1px var(--line);
 
   --font-ui: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Space Grotesk Variable", "Space Grotesk", var(--font-ui);
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
 
+  /* motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --nav-h: 64px;
+  --ease-snap: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --nav-h: 76px;
   --gutter: clamp(16px, 3vw, 32px);
   --maxw: 1480px;
+}
+
+/* Dark "device" scope: viewport, PhotoViewer, logs, presenter, CTA band. Same token names, so components flip. */
+.device,
+.presenter,
+.log-panel,
+.viewer,
+.heat,
+.compare {
+  color-scheme: dark;
+  --bg: #040b15;
+  --bg-2: #061120;
+  --panel: rgba(10, 28, 50, 0.62);
+  --panel-solid: #0a1a2e;
+  --panel-2: #0d2138;
+  --panel-3: #112a45;
+  --surface: #0a1a2e;
+  --sunken: #071425;
+  --hover: rgba(127, 231, 255, 0.06);
+  --line: rgba(159, 161, 164, 0.14);
+  --line-2: rgba(159, 161, 164, 0.24);
+  --line-3: rgba(159, 161, 164, 0.36);
+  --text: #e5e6e7;
+  --text-2: #b9bcc0;
+  --text-3: #80858b;
+  --text-4: #5d646c;
+  --accent: #5be3ff;
+  --accent-2: #7fe7ff;
+  --accent-3: #a78bfa;
+  --accent-ink: #04121c;
+  --accent-soft: rgba(91, 227, 255, 0.12);
+  --accent-glow: rgba(91, 227, 255, 0.4);
+  --pass: #2bd49a;
+  --pass-fill: rgba(43, 212, 154, 0.12);
+  --fail: #ff5468;
+  --fail-fill: rgba(255, 84, 104, 0.12);
+  --review: #ffb547;
+  --review-fill: rgba(255, 181, 71, 0.12);
+  --skip: #94a3b8;
+  --skip-fill: rgba(148, 163, 184, 0.12);
+  --niv: #7d8794;
+  --closed: #2bd49a;
+  --open: #ff5468;
+  --regression: #a78bfa;
+  --regression-fill: rgba(167, 139, 250, 0.14);
+  --new: #fb923c;
+  --new-fill: rgba(251, 146, 60, 0.14);
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 6px 20px -12px rgba(0, 0, 0, 0.7);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+  --shadow-pop: 0 30px 80px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px var(--line-2);
+  background: var(--bg);
+  color: var(--text);
 }
 
 *,
@@ -68,6 +154,12 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+  scroll-behavior: auto;
 }
 
 body {
@@ -84,19 +176,22 @@ body {
   overflow-x: hidden;
 }
 
-/* Ambient light + blueprint grid (a nod to the GA drawing every check is anchored to) */
+/* Aurora mesh: four soft blobs behind everything (the hero adds its own drifting ones, #39) */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -2;
+  pointer-events: none;
   background:
-    radial-gradient(1200px 600px at 12% -8%, rgba(56, 189, 248, 0.13), transparent 60%),
-    radial-gradient(900px 520px at 92% 0%, rgba(129, 140, 248, 0.11), transparent 60%),
-    radial-gradient(900px 700px at 50% 115%, rgba(34, 211, 238, 0.06), transparent 60%),
+    radial-gradient(700px 520px at 88% -8%, rgba(10, 102, 232, 0.2), transparent 62%),
+    radial-gradient(560px 420px at 55% -12%, rgba(0, 184, 224, 0.14), transparent 60%),
+    radial-gradient(520px 420px at 98% 45%, rgba(108, 71, 217, 0.09), transparent 60%),
+    radial-gradient(520px 320px at -6% -8%, rgba(127, 231, 255, 0.28), transparent 60%),
     var(--bg);
 }
 
+/* Blueprint grid in Emerson Blue at 6%: a nod to the GA drawing every check is anchored to */
 body::after {
   content: "";
   position: fixed;
@@ -104,26 +199,29 @@ body::after {
   z-index: -1;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.045) 1px, transparent 1px),
-    linear-gradient(rgba(148, 163, 184, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.025) 1px, transparent 1px);
-  background-size: 96px 96px, 96px 96px, 24px 24px, 24px 24px;
-  mask-image: radial-gradient(ellipse 85% 70% at 50% 20%, #000 30%, transparent 85%);
+    linear-gradient(rgba(0, 75, 141, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 75, 141, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 10%, #000 25%, transparent 80%);
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 10%, #000 25%, transparent 80%);
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.35);
-  color: #fff;
+  background: rgba(10, 102, 232, 0.22);
+  color: var(--text);
 }
 
 a {
-  color: var(--accent);
+  color: var(--brand);
   text-decoration: none;
 }
 
 a:hover {
-  color: #7dd3fc;
+  color: var(--azure);
+}
+
+.device a {
+  color: var(--accent);
 }
 
 img {
@@ -158,7 +256,7 @@ h3,
 h4 {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.12;
 }
@@ -174,26 +272,31 @@ kbd,
   font-feature-settings: "zero", "ss02";
 }
 
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.18);
+  background: rgba(0, 75, 141, 0.18);
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(148, 163, 184, 0.3);
+  background-color: rgba(0, 75, 141, 0.32);
 }
 
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* Calm (Ctrl K → Motion: Calm, ?calm) and reduced motion: every loop stops on its final frame */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -203,4 +306,12 @@ kbd,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+html.calm *,
+html.calm *::before,
+html.calm *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
 }

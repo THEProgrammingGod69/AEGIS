@@ -70,7 +70,7 @@ function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expe
   if (kind === "expected") {
     const g = gaFor(run);
     const T = (v: number, a: "x" | "y") => (a === "x" ? g.ox : g.oy) + v * g.k;
-    return <CropView src={g.src} size={[g.w, g.h]} rect={[T(x - m, "x"), T(y - m, "y"), T(x + w + m, "x"), T(y + h + m, "y")]} outline={quad(T)} color="#0ea5e9" bg="#fff" />;
+    return <CropView src={g.src} size={[g.w, g.h]} rect={[T(x - m, "x"), T(y - m, "y"), T(x + w + m, "x"), T(y + h + m, "y")]} outline={quad(T)} color="#0a66e8" bg="#fff" />;
   }
   if (kind === "aligned") {
     const T = (v: number) => v * 4;
