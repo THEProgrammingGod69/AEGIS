@@ -111,6 +111,17 @@ def test_missing_part_is_one_root_cause_and_the_agent_can_clear_it():
     assert unsure["MISS-PS13"]["result"] == expect
 
 
+def test_without_agent_positive_reads_fail_but_absence_never_does():
+    wrong = [_tok("TS2" if t == "TS1" else t, _at(t)) for t in TAGS]
+    _, fs, items = _run(wrong, strong_alone=True)
+    assert fs["LBL-TS1"]["strength"] == "strong" and items["LBL-TS1"]["result"] == "FAIL"
+    assert "2nd OCR pass" in items["LBL-TS1"]["verified_by"]
+    missing = [_tok(t, _at(t)) for t in TAGS if t != "PS13"]
+    _, fs, items = _run(missing, strong_alone=True)
+    assert fs["MISS-PS13"]["status"] == "CANDIDATE_FAULT" and items["MISS-PS13"]["result"] == "REVIEW"
+    assert consensus.fail_without_agent()                                    # the default: no API key needed
+
+
 def test_zoom_reread_finds_an_unread_label():
     toks = [_tok(t, _at(t)) for t in TAGS if t != "PS13"]
     _, fs, items = _run(toks, zoom={"tokens": [_tok("PS13", _at("PS13"), passes=1, conf=0.9)]})

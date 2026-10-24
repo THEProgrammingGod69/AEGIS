@@ -137,6 +137,18 @@ export async function stream(path: string, init: RequestInit, h: StreamHandlers)
     set({ state: "down", checkedAt: Date.now() });
     throw new EngineUnreachable(`The cloud engine could not be reached (${(e as Error).message}).`);
   }
+  // 409 is part of the fingerprint-first protocol, not an error: the engine names the files it does not hold yet and
+  // the caller sends exactly those. It must be handled before the generic error branch below.
+  if (res.status === 409) {
+    let need: string[] = ["photo"];
+    try {
+      const b = await res.json();
+      if (Array.isArray(b?.need) && b.need.length) need = b.need;
+    } catch {
+      /* default: the photo */
+    }
+    throw new NeedFiles(need);
+  }
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {
@@ -147,16 +159,6 @@ export async function stream(path: string, init: RequestInit, h: StreamHandlers)
     }
     if (res.status >= 500) throw new EngineUnreachable(`The cloud engine failed (${msg}).`);
     throw new Error(msg);
-  }
-  if (res.status === 409) {
-    let need: string[] = ["photo"];
-    try {
-      const b = await res.json();
-      if (Array.isArray(b?.need) && b.need.length) need = b.need;
-    } catch {
-      /* default: the photo */
-    }
-    throw new NeedFiles(need);
   }
   const results: StreamResult[] = [];
   const handle = (line: string) => {

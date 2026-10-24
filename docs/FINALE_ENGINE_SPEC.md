@@ -10,9 +10,10 @@ so the stages can be built and tested independently. The legacy synthetic-cabine
 1. **The drawing is ground truth.** Every check asks "is expected item X here, correct and in the right place?". Nothing is
    hard-coded for 13GE03331: vocabulary, views, positions, groups and connections come from the PDF.
 2. **Only judge what is visible.** Items outside the photo's covered area are `NOT_IN_VIEW` (neutral), never REVIEW.
-3. **FAIL needs two agreeing independent signals**: deterministic (OCR/geometry) AND the Claude agent. Disagreement or no
-   agent → REVIEW with a precise re-photo hint. (Opt-in `EAGLE_FAIL_WITHOUT_AGENT=1` lets a *strong* deterministic candidate
-   FAIL when the agent is disabled — for the on-prem "drawings never leave the plant" mode; off by default.)
+3. **FAIL needs two agreeing independent signals.** With the Claude agent: deterministic (OCR/geometry) AND the agent.
+   Without it (the default deployment, no API key): a *strong positive* candidate (wrong/unknown label read identically by
+   two independent OCR passes, or a swap read at both spots) FAILs on its own; absence (MISSING) never does and stays
+   REVIEW with a precise re-photo hint. `EAGLE_FAIL_WITHOUT_AGENT=0` disables the deterministic FAIL.
 4. **Precision over recall**; REVIEW must stay rare (< 5 % of in-view items).
 5. **Deterministic first, LLM second.** The agent verifies candidates and resolves unclear crops; it never invents items.
 6. Every finding carries evidence (crop box, OCR reads, rule fired, agent answer) and is reproducible (caches keyed by hashes).

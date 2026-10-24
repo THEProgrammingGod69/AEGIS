@@ -34,18 +34,20 @@ flowchart LR
   AG --> CON["Consensus<br/>FAIL only when both agree"]
 ```
 
-| Measured on the 5 real photos (Claude verifier off) | |
+| Measured on the 5 real photos (no API key, no training) | |
 |---|---|
 | Visible labels verified (hand-made ground truth) | **53 / 58** |
 | False FAIL | **0** |
 | Real drawing-vs-cabinet differences flagged | 16 / 23 (extra baseplates 334CBP06-08, TERM1F moved, 335CBP02 missing, ferrules naming CB45/46/49/55) |
 | Planted faults in real photos (label removed / reprinted / swapped) | **5 / 7** caught, 0 false FAIL |
-| Unclear items | REVIEW with a re-photo hint (14 % of judged items, mostly labels hidden by cables) |
+| Unclear items | REVIEW with a re-photo hint (12 % of judged items, mostly labels hidden by cables) |
 
 * **Only what is visible is judged.** Items outside the photo, too small to read, or beyond the labels the photo could
   anchor are NOT IN VIEW: neither passed nor failed.
-* **FAIL needs two signals.** OCR + geometry raise a candidate; the Claude verifier (set `ANTHROPIC_API_KEY`) must
-  confirm it. Without the verifier, candidates stay REVIEW (`EAGLE_FAIL_WITHOUT_AGENT=1` for on-prem use).
+* **FAIL needs agreeing evidence, no API key and no model training.** A wrong or unknown label read identically by two
+  independent OCR passes, or two labels read at each other's drawn spots, FAILs on its own. Absence never does: a label
+  hidden by a cable looks like a missing part, so it is REVIEW with a re-photo hint. The Claude verifier
+  (`ANTHROPIC_API_KEY`) is optional and only adds a second opinion.
 * **Photos are kept as metadata, not photos.** The browser sends the photo's SHA-256 fingerprint first; the engine reads
   a photo once and keeps only its fingerprint, size, quality, OCR reads, results, a small preview and proof crops.
   Responses are JSON; the browser draws the boxes on its own copy. The same photo again is answered without an upload.
@@ -172,7 +174,8 @@ Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_ey
 ## Honest limits
 
 - Real-cabinet numbers come from 5 photos of one cabinet and its hand-made answer key: a small sample.
-- Without the Claude verifier no real-cabinet item can FAIL (two signals are required); candidates go to REVIEW.
+- Without the optional Claude verifier a missing part is never FAIL on its own (REVIEW instead): absence cannot be told
+  apart from a label hidden by cables in a photo.
 - Reading a full-resolution real photo takes 1-2 minutes on one CPU (the hosted engine has one vCPU); results are cached
   by photo fingerprint, so the same photo again is instant.
 - Labels hidden by cables, or labels whose neighbours could not be read, are REVIEW or NOT IN VIEW, never FAIL.

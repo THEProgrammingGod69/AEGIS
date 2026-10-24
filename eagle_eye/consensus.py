@@ -1,8 +1,11 @@
 """Phase 6 - consensus: candidate findings + agent decisions -> PASS / FAIL / REVIEW / NOT_IN_VIEW / SKIP (spec section 8).
 
-A FAIL needs two independent signals that agree: the deterministic candidate (OCR + geometry) and the Claude agent's
-CONFIRMED_FAULT. Anything the two do not agree on, or that the agent could not settle, is REVIEW with a precise re-photo
-hint. With the agent off, ``EAGLE_FAIL_WITHOUT_AGENT=1`` (on-prem, no-cloud mode) lets a *strong* candidate FAIL.
+A FAIL needs independent signals that agree. With the Claude agent on: the deterministic candidate (OCR + geometry)
+and the agent's CONFIRMED_FAULT. Without it (no API key, the default deployment): a *strong positive* candidate - a wrong
+or unknown label read identically by two independent OCR passes, or two labels read at each other's drawn spots - FAILs
+on its own, while absence (MISSING: nothing readable where a part should be) never does, because a label hidden by a
+cable looks exactly like a missing one; it stays REVIEW with a re-photo hint. ``EAGLE_FAIL_WITHOUT_AGENT=0`` turns the
+deterministic FAIL off (everything uncertain or unconfirmed is REVIEW).
 
     decide(findings, decisions, agent_on) -> report items (legacy-compatible, spec section 9)
     merge_photos(reports, kb) -> cabinet summary across photos
@@ -13,10 +16,14 @@ from kb.tags import tag_sort_key
 
 RESULTS = ("PASS", "FAIL", "REVIEW", "SKIP", "NOT_IN_VIEW")
 WEAK_FAIL_CONF = 0.85
+# checks whose strong candidates are positive reads (two agreeing OCR passes + geometry): they may FAIL without the
+# agent. MISSING is evidence of absence and is deliberately not here (on Emerson's photos every deterministic MISSING
+# "fault" was a label hidden by cables).
+STRONG_ALONE_CHECKS = ("LABEL", "UNKNOWN_LABEL", "ORDER")
 
 
 def fail_without_agent():
-    return (os.environ.get("EAGLE_FAIL_WITHOUT_AGENT") or "0").strip().lower() in ("1", "true", "yes", "on")
+    return (os.environ.get("EAGLE_FAIL_WITHOUT_AGENT") or "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _xywh(b):
@@ -53,9 +60,12 @@ def _one(f, d, agent_on, strong_alone):
                                                                    f"weak evidence"], geo + ["Claude"]
         if verdict == "CONFIRMED_OK":
             return "PASS", f["expected"], [reason, "agent overturned the automated candidate"], ["Claude"]
-        if not agent_on and strong_alone and strength == "strong":
-            return "FAIL", f["found"], ["deterministic-only mode (EAGLE_FAIL_WITHOUT_AGENT): strong evidence"], geo
-        why = reason or ("agent off: a second, independent signal is needed for FAIL" if not agent_on
+        if not agent_on and strong_alone and strength == "strong" and f.get("check") in STRONG_ALONE_CHECKS:
+            return "FAIL", f["found"], ["two independent OCR passes agree on this read and its position (no AI "
+                                        "verifier needed)"], geo + ["2nd OCR pass"]
+        why = reason or (("nothing readable where the drawing places it: a hidden label and a missing part look "
+                          "the same, so a person checks" if f.get("check") == "MISSING" else
+                          "the evidence is not strong enough for FAIL on its own") if not agent_on
                          else "agent could not settle it")
         return "REVIEW", f"Unverified: {f['found']}", [why], geo + (["Claude"] if d else [])
     # UNCERTAIN

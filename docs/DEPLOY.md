@@ -35,13 +35,13 @@ environment; nothing secret is ever shipped to the browser.
 | `EAGLE_CORS_ORIGINS` | console URL + localhost | Comma-separated allowed origins |
 | `EAGLE_OCR_MODE` / `EAGLE_OCR_WORKERS` | `FULL` / `2` | OCR passes and parallel lanes (match the vCPUs) |
 | `EAGLE_OCR_GATE` | `0` | `1` skips tiles where a low-resolution pass sees no text: ~3x faster, but loses small labels (whole-cabinet and rear photos) |
-| `ANTHROPIC_API_KEY` | unset | Enables the Claude vision agent. Unset = deterministic engine only (uncertain items go to REVIEW) |
+| `ANTHROPIC_API_KEY` | unset | Optional Claude second opinion. Unset = deterministic engine (no API key, no training needed) |
 | `EAGLE_AGENT_ENABLED` | `1` | `0` switches the agent off even with a key |
 | `EAGLE_AGENT_MODEL` | `auto` | Main model: `claude-fable-5-1` when the key can use it, else `claude-opus-5-5` |
 | `EAGLE_AGENT_FAST_MODEL` | `claude-opus-5-5` | Per-finding verification model |
 | `EAGLE_AGENT_MAX_CALLS` | `25` | API requests per photo (hard cap) |
 | `EAGLE_AGENT_TIMEOUT` | `60` | Seconds per API request |
-| `EAGLE_FAIL_WITHOUT_AGENT` | `0` | `1` lets a *strong* deterministic candidate FAIL when the agent is off (on-prem, no-cloud mode) |
+| `EAGLE_FAIL_WITHOUT_AGENT` | `1` | Without the agent, wrong / unknown / swapped labels read with certainty FAIL on their own (missing parts stay REVIEW); `0` = everything unconfirmed is REVIEW |
 | `EAGLE_MAX_PHOTO_MB` / `EAGLE_MAX_PDF_MB` | `25` / `30` | Upload limits |
 | `EAGLE_RATE_PER_MIN` | `6` | Inspections per client IP per minute |
 

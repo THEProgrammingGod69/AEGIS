@@ -110,8 +110,9 @@ def _warnings(reg, photo, agent_st, items, kb):
                   ". Unreadable labels are NOT_IN_VIEW or REVIEW, never FAIL."})
     if not agent_st.get("enabled") and any(r["result"] == "REVIEW" and r.get("candidate") == "CANDIDATE_FAULT"
                                            for r in items):
-        w.append({"code": "agent_off", "message": "Claude verifier is off (" + str(agent_st.get("reason")) + "): "
-                  "a candidate fault needs a second, independent signal to become FAIL, so it stays REVIEW."})
+        w.append({"code": "agent_off", "message": "Deterministic mode (no AI verifier): wrong, unknown or swapped labels "
+                  "read with certainty FAIL on their own; anything the photo cannot prove - a label that cannot be read, "
+                  "a weak read - is REVIEW with a re-photo hint."})
     return w
 
 
