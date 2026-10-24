@@ -109,6 +109,12 @@ def _project(fit, xy):
 
 def _warnings(reg, photo, agent_st, items, kb):
     w = []
+    why = ocr.fallback_reason()
+    if why:
+        w.append({"code": "ocr_fallback",
+                  "message": f"PP-OCRv4 could not be loaded ({why}), so this photo was read by the Tesseract fallback, "
+                             "which misses many labels on real photos (more NOT_IN_VIEW and REVIEW). Use Python 3.10-3.12 "
+                             "and pip install --no-deps rapidocr-onnxruntime==1.4.4, then inspect again."})
     if not reg["localised"]:
         w.append({"code": "weak_registration",
                   "message": (reg["hint"] or "The photo could not be placed on the drawing.") +

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Dices, Eye, EyeOff, FlaskConical, Gauge, Play, ShieldCheck, Target, Terminal, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { ForgeGap } from "../components/ForgeGap";
 import { PhotoViewer } from "../components/PhotoViewer";
 import { Running } from "../components/Running";
 import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
@@ -332,6 +333,15 @@ export function Forge({ auto = false }: { auto?: boolean }) {
           <p>These historical results use generated cabinets based on the demo layout. They do not measure the current engine on real Emerson photographs. The evaluation comparison above reports available provenance and leaves unmeasured metrics explicit.</p>
         </Reveal>
         <SelfTest />
+      </section>
+
+      <section className="section">
+        <Reveal className="section-head">
+          <span className="eyebrow">Planted faults, synthetic vs real</span>
+          <h2>The same faults, planted in generated and real photos.</h2>
+          <p>Fault Forge plants the same kinds of fault in generated cabinets and in photos of Emerson's real cabinet, and scores both the same way: confirmed (FAIL), referred (REVIEW), incorrect PASS, or not assessed. The gap shows what real photos cost.</p>
+        </Reveal>
+        <ForgeGap />
       </section>
       <div className="tiny faint row" style={{ ["--gap" as string]: "6px", marginTop: 18 }}><Terminal size={13} /> Live tally and history are stored {STATIC ? "in this browser (IndexedDB); the cloud engine keeps nothing" : <>in <span className="mono">out/runs/</span></>}.</div>
     </div>
