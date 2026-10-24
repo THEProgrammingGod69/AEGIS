@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
 import { BarChart3, Clock4, Flame, ShieldAlert, ShieldCheck, ShieldQuestion, Table2, TrendingUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FaultPareto } from "../components/FaultPareto";
-import { Kpi, Seg, StatusBadge } from "../components/ui";
+import { Ring, useChartIn } from "../components/motion";
+import { Count, Kpi, Seg, StatusBadge } from "../components/ui";
+import { calm, gsap } from "../lib/gsap";
 import { api, url } from "../lib/api";
 import type { ParetoBy } from "../lib/assembly";
 import { CHECK_TITLE, STATUS_COLOR, runDate } from "../lib/format";
@@ -28,12 +30,25 @@ function Heatmap({ base, heat, scope, focus }: { base: RunPayload; heat: Map<str
   const k = size.w ? size.w / W : 0;
   const items = base.results.filter((r) => heat.has(r.id));
   const hot = hover ? items.find((r) => r.id === hover) : null;
+  const svg = useRef<SVGSVGElement>(null);
+  /** #37 ripple from the clicked bubble: a ring spreads out and every other bubble answers, delayed by its distance. */
+  const ripple = (cx: number, cy: number) => {
+    if (calm() || !svg.current) return;
+    const ring = svg.current.querySelector(".heat-ripple")!;
+    gsap.fromTo(ring, { attr: { cx, cy, r: 20 }, opacity: 0.9 }, { attr: { r: Math.max(W, H) * 0.6 }, opacity: 0, duration: 1.1, ease: "power2.out" });
+    const cores = gsap.utils.toArray<SVGCircleElement>(".heat-core", svg.current);
+    gsap.fromTo(cores, { scale: 0.85 }, {
+      scale: 1, duration: 0.6, ease: "elastic.out(1, 0.4)", transformOrigin: "50% 50%",
+      delay: (i) => Math.hypot(Number(cores[i].getAttribute("cx")) - cx, Number(cores[i].getAttribute("cy")) - cy) / (Math.max(W, H) * 1.6),
+    });
+  };
   return (
     <div className="heat" ref={ref} style={{ aspectRatio: `${W} / ${H}` }}>
       <img src={url.file(base.meta.id, "rectified")} alt="Cabinet backplate, aligned to the drawing" />
       <div className="heat-dim" />
       {k > 0 && (
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Fault locations on the cabinet (${scope})`}>
+        <svg ref={svg} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Fault locations on the cabinet (${scope})`}>
+          <circle className="heat-ripple" cx={0} cy={0} r={0} />
           {base.layout.map((l) => (
             <rect key={l.tag} x={l.box[0] * R} y={l.box[1] * R} width={l.box[2] * R} height={l.box[3] * R} className="heat-box" />
           ))}
@@ -43,10 +58,10 @@ function Heatmap({ base, heat, scope, focus }: { base: RunPayload; heat: Map<str
             const cy = (r.box[1] + r.box[3] / 2) * R;
             const rad = 22 + 70 * Math.sqrt(v.n / max);
             return (
-              <g key={r.id} className={`heat-spot${hover === r.id ? " on" : ""}${focus && !focus.has(r.id) ? " dim" : ""}`} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)}>
+              <g key={r.id} className={`heat-spot${hover === r.id ? " on" : ""}${focus && !focus.has(r.id) ? " dim" : ""}`} onMouseEnter={() => setHover(r.id)} onMouseLeave={() => setHover(null)} onClick={() => ripple(cx, cy)}>
                 <circle cx={cx} cy={cy} r={rad + 24} fill="transparent" />
                 <circle cx={cx} cy={cy} r={rad} className="heat-glow" style={{ opacity: 0.25 + 0.55 * (v.n / max) }} />
-                <circle cx={cx} cy={cy} r={Math.max(14, rad * 0.42)} className="heat-core" />
+                <circle cx={cx} cy={cy} r={Math.max(14, rad * 0.42)} className="heat-core" data-pop="" />
                 <text x={cx} y={cy + 9} textAnchor="middle" className="heat-n">{v.n}</text>
               </g>
             );
@@ -115,6 +130,8 @@ export function Analytics() {
     return { first, fpy, fails, items, reviews, closed, open, avg, decided, agree, byCheck, heat, last, verdicts };
   }, [metas]);
 
+  const charts = useRef<HTMLDivElement>(null);
+  useChartIn(charts, [scope, table, metas.length, !!base]);
   const n = metas.length;
   const savedH = Math.max(0, (n * (manual * 60 - s.avg)) / 3600);
   const maxCheck = Math.max(1, ...Object.values(s.byCheck));
@@ -137,10 +154,17 @@ export function Analytics() {
       )}
 
       {n > 0 && (
-        <>
+        <div ref={charts}>
           <div className="an-kpis">
             <Kpi value={n} label="cabinets inspected" color="var(--accent)" note={`${s.items.toLocaleString()} items checked`} />
-            <Kpi value={s.fpy * 100} suffix="%" label="first-pass yield" color="var(--pass)" note={`${s.first.filter((m) => m.verdict.label === "PASS").length} of ${s.first.length} first inspections`} />
+            <div className="kpi ring-kpi" data-spotlight="" style={{ ["--c" as string]: "var(--pass)" }}>
+              <div>
+                <div className="kpi-value"><Count value={s.fpy * 100} /><span style={{ fontSize: "0.55em", marginLeft: 3, opacity: 0.8 }}>%</span></div>
+                <div className="kpi-label">first-pass yield</div>
+                <div className="kpi-note">{s.first.filter((m) => m.verdict.label === "PASS").length} of {s.first.length} first inspections</div>
+              </div>
+              <Ring value={s.fpy} size={52} stroke={6} color="var(--pass)" />
+            </div>
             <Kpi value={s.fails} label="faults caught" color="var(--fail)" note="each with expected-vs-found proof" />
             <Kpi value={s.closed + s.open ? (s.closed / (s.closed + s.open)) * 100 : 0} suffix="%" label="fix closure" color="var(--closed)" note={`${s.closed} closed · ${s.open} open on re-check`} />
             <Kpi value={s.avg} decimals={1} suffix="s" label="per cabinet" color="var(--accent-3)" note="engine time, CPU only" />
@@ -165,10 +189,10 @@ export function Analytics() {
                   <span className="tiny faint">{s.fails} FAIL</span>
                 </div>
                 <div className="hbars">
-                  {Object.entries(s.byCheck).sort((a, b) => b[1] - a[1]).map(([k, v], i) => (
+                  {Object.entries(s.byCheck).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
                     <div key={k} className="hbar-row tip" data-tip={`${CHECK_TITLE[k] ?? k}: ${v} FAIL (${s.fails ? Math.round((v / s.fails) * 100) : 0}%)`}>
                       <span className="small">{CHECK_TITLE[k] ?? k}</span>
-                      <div className="hbar-track"><motion.i initial={{ width: 0 }} animate={{ width: `${(v / maxCheck) * 100}%` }} transition={{ duration: 0.8, delay: i * 0.05 }} /></div>
+                      <div className="hbar-track"><i data-grow-x="" style={{ width: `${(v / maxCheck) * 100}%` }} /></div>
                       <span className="mono small">{v}</span>
                     </div>
                   ))}
@@ -182,7 +206,7 @@ export function Analytics() {
                 </div>
                 <div className="outcome-bar" role="img" aria-label={`PASS ${s.verdicts.PASS}, HOLD ${s.verdicts.HOLD}, REVIEW ${s.verdicts.REVIEW}`}>
                   {(["PASS", "HOLD", "REVIEW"] as const).filter((k) => s.verdicts[k]).map((k) => (
-                    <i key={k} className="tip" data-tip={`${VERDICT_TEXT[k]}: ${s.verdicts[k]} (${Math.round((s.verdicts[k] / n) * 100)}%)`} style={{ flexGrow: s.verdicts[k], background: STATUS_COLOR[k] }} />
+                    <i key={k} className="tip" data-grow-x="" data-tip={`${VERDICT_TEXT[k]}: ${s.verdicts[k]} (${Math.round((s.verdicts[k] / n) * 100)}%)`} style={{ flexGrow: s.verdicts[k], background: STATUS_COLOR[k] }} />
                   ))}
                 </div>
                 <div className="outcome-legend">
@@ -239,7 +263,7 @@ export function Analytics() {
                   <div className="cols-grid"><i /><i /><i /></div>
                   {chrono.map((m) => (
                     <a key={m.id} href={`#/run/${m.id}`} className="col tip" data-tip={`${m.label}\n${runDate(m.created)} · ${m.counts.FAIL} FAIL · ${m.verdict.label}`}>
-                      <i style={{ height: `${Math.max(4, (m.counts.FAIL / maxFail) * 100)}%`, background: STATUS_COLOR[m.verdict.label] }} />
+                      <i data-grow-y="" style={{ height: `${Math.max(4, (m.counts.FAIL / maxFail) * 100)}%`, background: STATUS_COLOR[m.verdict.label] }} />
                     </a>
                   ))}
                 </div>
@@ -260,7 +284,7 @@ export function Analytics() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

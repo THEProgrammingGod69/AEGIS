@@ -1,10 +1,11 @@
 /** Cross-cabinet fault Pareto: recurring FAILs ranked by fault, device family, cabinet area or line station, with their
  *  cumulative share, so QC findings go back to the station that causes them. Picking a row focuses the heatmap. */
 import { Factory } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { checkOfId, pareto, type ParetoBy, type ParetoRow } from "../lib/assembly";
 import { CHECK_TITLE } from "../lib/format";
 import type { RunMeta, RunPayload } from "../lib/types";
+import { useChartIn } from "./motion";
 import { Seg } from "./ui";
 
 const BY: { value: ParetoBy; label: string }[] = [
@@ -41,14 +42,14 @@ function Chart({ rows, focus, onFocus }: { rows: ParetoRow[]; focus: string | nu
       <text className="pareto-axis" x={W - M.r + 6} y={yP(0.8) + 4}>80%</text>
       {rows.map((r, k) => (
         <g key={r.key} className={`pareto-bar${focus === r.key ? " on" : ""}${r.key === "__other" ? " other" : ""}`} onClick={() => r.key !== "__other" && onFocus(r)}>
-          <rect x={x(k) - bw / 2} y={yN(Math.min(r.n, max))} width={bw} height={Math.max(1, M.t + ih - yN(Math.min(r.n, max)))} rx={4} />
+          <rect data-grow-y="" x={x(k) - bw / 2} y={yN(Math.min(r.n, max))} width={bw} height={Math.max(1, M.t + ih - yN(Math.min(r.n, max)))} rx={4} />
           {r.n > max && <path className="pareto-break" d={`M${x(k) - bw / 2 - 3},${yN(max) + 14} l${bw + 6},-6 m0,7 l${-bw - 6},6`} />}
           <text className="pareto-n" x={x(k)} y={yN(Math.min(r.n, max)) - 5} textAnchor="middle">{r.n}</text>
           <text className="pareto-axis" x={x(k)} y={H - M.b + 16} textAnchor="middle">{r.key === "__other" ? "Other" : `#${k + 1}`}</text>
         </g>
       ))}
-      <path className="pareto-cum" d={line} />
-      {rows.map((r, k) => <circle key={r.key} className="pareto-dot" cx={x(k)} cy={yP(r.cum)} r={3.5} />)}
+      <path className="pareto-cum" d={line} data-draw-line="" />
+      {rows.map((r, k) => <circle key={r.key} className="pareto-dot" cx={x(k)} cy={yP(r.cum)} r={3.5} data-pop="" />)}
     </svg>
   );
 }
@@ -58,11 +59,13 @@ export function FaultPareto({ metas, base, by, onBy, focus, onFocus }: {
   focus: string | null; onFocus: (row: ParetoRow | null) => void;
 }) {
   const { rows, total } = useMemo(() => pareto(metas, by, base), [metas, by, base]);
+  const chart = useRef<HTMLDivElement>(null);
+  useChartIn(chart, [by, total]);
   const head = rows.filter((r) => r.key !== "__other");
   const top = head[0];
   const pick = (r: ParetoRow) => onFocus(focus === r.key ? null : r);
   return (
-    <div className="card pad pareto">
+    <div className="card pad pareto" ref={chart}>
       <div className="card-head">
         <div>
           <div className="card-title"><Factory /> Fault Pareto: send it back to the line</div>

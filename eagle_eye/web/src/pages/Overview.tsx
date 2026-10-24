@@ -115,7 +115,7 @@ export function Overview({ onPresent }: { onPresent?: () => void }) {
         {/* ---------------- stats band ---------------- */}
         <Reveal className="stats-band card aurora-border" data-spotlight="">
           <div className="stat stat-hero">
-            <div className="stat-v"><Odometer value={s?.caught ?? 87} className="aurora-num" /><span className="stat-of">/{s?.planted ?? 87}</span></div>
+            <div className="stat-v"><Odometer value={s?.caught ?? 87} className="odo-aurora" /><span className="stat-of">/{s?.planted ?? 87}</span></div>
             <div className="stat-l">synthetic faults caught</div>
             <div className="stat-s">{s?.cabinets ?? 50} generated cabinet images · recorded baseline</div>
           </div>

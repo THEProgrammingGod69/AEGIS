@@ -1,8 +1,10 @@
-import { ArrowLeft, CheckSquare, ClipboardList, Printer, RefreshCcw, Square, Timer, Wrench } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CheckSquare, ClipboardList, PenLine, Printer, RefreshCcw, Square, Timer, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProofCrop } from "../components/ProofCard";
 import { Marker, StatusBadge } from "../components/ui";
 import { api } from "../lib/api";
+import { confettiFrom } from "../lib/confetti";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { fixFor } from "../lib/fixes";
 import { CHECK_TITLE, isIssue, runDate, shortId, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
@@ -40,6 +42,42 @@ export function WorkOrder({ id }: { id: string }) {
   }, [p]);
   const cleared = p ? p.results.filter((it) => isIssue(it) && it.result !== "PASS" && finalResult(it, p.meta) === "PASS") : [];
 
+  // #6 sign-off: an Emerson Blue stamp slams onto the sheet (tiny paper shake), then brand confetti from the stamp
+  const signKey = `ee_wo_sign_${id}`;
+  const [signed, setSigned] = useState<{ by: string; at: string } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(signKey) ?? "null");
+    } catch {
+      return null;
+    }
+  });
+  const sheet = useRef<HTMLElement>(null);
+  const justSigned = useRef(false);
+  const signOff = () => {
+    const s = { by: inspectorName(), at: new Date().toISOString() };
+    try {
+      localStorage.setItem(signKey, JSON.stringify(s));
+    } catch {
+      /* private window */
+    }
+    justSigned.current = true;
+    setSigned(s);
+  };
+  useGSAP(() => {
+    if (!signed || !justSigned.current || calm()) return;
+    justSigned.current = false;
+    const stamp = sheet.current!.querySelector(".wo-signoff");
+    gsap.timeline()
+      .fromTo(stamp, { scale: 2.2, rotation: -18, opacity: 0 }, { scale: 1, rotation: -8, opacity: 1, duration: 0.35, ease: "power4.in" })
+      .to(sheet.current, { x: 3, duration: 0.05, repeat: 3, yoyo: true, clearProps: "x" }, ">-0.02")
+      .add(() => confettiFrom(stamp));
+  }, { scope: sheet, dependencies: [signed?.at] });
+  // the fixes rise in, one after another
+  useGSAP(() => {
+    if (calm() || !sheet.current) return;
+    gsap.from(sheet.current.querySelectorAll(".wo-step"), { y: 18, opacity: 0, stagger: 0.07, duration: 0.6, ease: "expo.out", delay: 0.15 });
+  }, { scope: sheet, dependencies: [!!p] });
+
   if (error) return <div className="main"><div className="card pad empty">Could not load run: {error}</div></div>;
   if (!p) return <div className="main"><div className="skeleton" style={{ height: 900 }} /></div>;
 
@@ -60,13 +98,26 @@ export function WorkOrder({ id }: { id: string }) {
         </div>
         <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
           <button className="btn" onClick={() => window.print()}><Printer /> Print / save PDF</button>
+          {!signed && (
+            <button className="btn btn-brand" onClick={signOff} disabled={steps.length > 0 && nDone < steps.length}
+              title={steps.length > 0 && nDone < steps.length ? "Tick every fix as done first" : "Sign the work order off"}>
+              <PenLine /> Sign off
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => { go(`run/${id}`); setTimeout(() => document.getElementById("recheck")?.scrollIntoView({ behavior: "smooth", block: "center" }), 450); }}>
             <RefreshCcw /> Fixed: re-check
           </button>
         </div>
       </div>
 
-      <article className="wo-sheet">
+      <article className="wo-sheet" ref={sheet}>
+        {signed && (
+          <div className="wo-signoff" aria-label={`Signed off by ${signed.by}`}>
+            <b>SIGNED OFF</b>
+            <span>{signed.by} · {runDate(signed.at)}</span>
+            <i>re-check to verify</i>
+          </div>
+        )}
         <header className="wo-head">
           <div>
             <div className="wo-brand">EAGLE EYE · QC WORK ORDER</div>

@@ -1,9 +1,10 @@
 /** Confidence calibration from Fault Forge runs (eagle_eye/calibration.py): a reliability diagram of the engine's raw
  *  item score and of the calibrated confidence, both scored on held-out images, with the maps the console applies. */
 import { Target } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CALIBRATION, pct } from "../lib/confidence";
 import type { CalEngine, CurvePoint } from "../lib/types";
+import { useChartIn } from "./motion";
 import { Kpi, Seg } from "./ui";
 
 const S = 340;
@@ -35,14 +36,21 @@ function Diagram({ e }: { e: CalEngine }) {
       ))}
       <line className="calib-diag" x1={x(lo)} y1={y(lo)} x2={x(1)} y2={y(1)} />
       <text className="calib-axis" x={x(lo + 0.62 * (1 - lo)) + 8} y={y(lo + 0.62 * (1 - lo)) + 4}>perfect calibration</text>
-      <path className="calib-raw" d={path(e.heldout.raw)} />
-      {e.heldout.raw.map((p) => <circle key={`r${p.lo}`} className="calib-raw-dot tip" cx={x(p.stated)} cy={y(p.observed)} r={r(p.n)}><title>{tip("Raw score", p)}</title></circle>)}
-      <path className="calib-cal" d={path(e.heldout.cal)} />
-      {e.heldout.cal.map((p) => <circle key={`c${p.lo}`} className="calib-cal-dot" cx={x(p.stated)} cy={y(p.observed)} r={r(p.n)}><title>{tip("Calibrated", p)}</title></circle>)}
+      <path className="calib-raw" d={path(e.heldout.raw)} data-draw-line="" />
+      {e.heldout.raw.map((p) => <circle key={`r${p.lo}`} data-pop="" className="calib-raw-dot tip" cx={x(p.stated)} cy={y(p.observed)} r={r(p.n)}><title>{tip("Raw score", p)}</title></circle>)}
+      <path className="calib-cal" d={path(e.heldout.cal)} data-draw-line="" />
+      {e.heldout.cal.map((p) => <circle key={`c${p.lo}`} data-pop="" className="calib-cal-dot" cx={x(p.stated)} cy={y(p.observed)} r={r(p.n)}><title>{tip("Calibrated", p)}</title></circle>)}
       <text className="calib-label" x={M.l + iw / 2} y={S - 6} textAnchor="middle">Stated confidence (%)</text>
       <text className="calib-label" x={12} y={M.t + ih / 2} textAnchor="middle" transform={`rotate(-90 12 ${M.t + ih / 2})`}>Observed: right (%)</text>
     </svg>
   );
+}
+
+/** The calibration card; its reliability diagram draws in (#38) and redraws when the engine changes. */
+function CalibCard({ eng, children }: { eng: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useChartIn(ref, [eng]);
+  return <div className="card pad calib" ref={ref}>{children}</div>;
 }
 
 export function CalibrationPanel() {
@@ -52,7 +60,7 @@ export function CalibrationPanel() {
   if (!e) return <div className="card pad small muted">No calibration yet. Run <span className="mono">python calibration.py</span>.</div>;
   const h = e.heldout;
   return (
-    <div className="card pad calib">
+    <CalibCard eng={eng}>
       <div className="card-head">
         <div>
           <div className="card-title"><Target /> Confidence calibration</div>
@@ -97,6 +105,6 @@ export function CalibrationPanel() {
           </div>
         </div>
       </div>
-    </div>
+    </CalibCard>
   );
 }

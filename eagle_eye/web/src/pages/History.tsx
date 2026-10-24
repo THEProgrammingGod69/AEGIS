@@ -95,7 +95,7 @@ export function History() {
       )}
       <div className="history-grid">
         {chains.map((c, ci) => (
-          <motion.div key={c[0].id} className={`card pad chain-card${c.length > 1 ? " multi" : ""}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(ci, 10) * 0.04 }}>
+          <motion.div key={c[0].id} className={`card pad chain-card${c.length > 1 ? " multi" : ""}`} data-spotlight="" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(ci, 10) * 0.04, ease: [0.22, 1, 0.36, 1] }}>
             <div className="row between wrap" style={{ marginBottom: 14 }}>
               <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
                 {c[0].showcase ? <Sparkles size={16} className="faint" /> : c[0].source === "forge" ? <FlaskConical size={16} className="faint" /> : <ImageIcon size={16} className="faint" />}

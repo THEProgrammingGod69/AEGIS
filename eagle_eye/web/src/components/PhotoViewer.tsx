@@ -1,6 +1,8 @@
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { STATUS_HEX } from "../lib/format";
+import { calm, gsap, useGSAP } from "../lib/gsap";
+import { onXray, xrayOn } from "../lib/interactions";
 import { useSize } from "../lib/hooks";
 import { polygonBounds } from "../lib/geometry";
 import type { Pt, Status } from "../lib/types";
@@ -69,6 +71,10 @@ export function PhotoViewer({
 }: Props) {
   const [W, H] = size;
   const [ref, box] = useSize<HTMLDivElement>();
+  // Bonus X-ray mode (press X): every photo shows its GA overlay
+  const [xray, setXray] = useState(() => xrayOn());
+  useEffect(() => onXray(setXray), []);
+  const show = { ...layers, drawing: layers.drawing || (xray && layout.length > 0) };
   const [view, setView] = useState({ s: 0, x: 0, y: 0 });
   const [anim, setAnim] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -152,6 +158,16 @@ export function PhotoViewer({
     onSelect?.(id);
   };
 
+  // #3 / #32: the GA boxes draw themselves when the drawing layer opens; anchor rings draw and off-pattern anchors pulse
+  useGSAP(() => {
+    if (calm() || !view.s) return;
+    if (show.drawing) gsap.from(".layer-drawing polygon", { drawSVG: 0, duration: 0.7, stagger: 0.02, ease: "power2.out" });
+    if (show.anchors) {
+      gsap.from(".pv-ring", { drawSVG: 0, duration: 0.4, stagger: 0.02 });
+      gsap.to(".pv-ring.off", { scale: 1.25, transformOrigin: "50% 50%", repeat: 3, yoyo: true, duration: 0.18, delay: 0.3 });
+    }
+  }, { scope: ref, dependencies: [show.drawing, show.anchors, view.s > 0] });
+
   const u = view.s ? 1 / view.s : 1; // overlay units per screen pixel
   const zoomPct = fit.s ? Math.round((view.s / fit.s) * 100) : 100;
 
@@ -183,10 +199,10 @@ export function PhotoViewer({
           <img src={src} width={W} height={H} draggable={false} alt="" onLoad={() => setLoaded(true)} style={{ opacity: loaded ? 1 : 0 }} />
           {overlaySrc && <img className="viewer-overlay" src={overlaySrc} width={W} height={H} draggable={false} alt="" style={{ opacity: overlayOpacity }} />}
           <svg className="viewer-svg" viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-            {backplate && polygonBounds(backplate) && (layers.drawing || layers.anchors) && (
+            {backplate && polygonBounds(backplate) && (show.drawing || show.anchors) && (
               <polygon points={backplate.map((p) => p.join(",")).join(" ")} fill="none" stroke="#5be3ff" strokeWidth={1.4} strokeDasharray="8 6" vectorEffect="non-scaling-stroke" opacity={0.75} />
             )}
-            {layers.drawing && (
+            {show.drawing && (
               <g className="layer-drawing">
                 {layout.map((l, i) => {
                   const b = polygonBounds(l.quad);
@@ -212,7 +228,7 @@ export function PhotoViewer({
                     {a.inlier === false && (
                       <line x1={a.found[0]} y1={a.found[1]} x2={a.expected[0]} y2={a.expected[1]} stroke={c} strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
                     )}
-                    <circle cx={a.expected[0]} cy={a.expected[1]} r={7 * u} fill="none" stroke="#5be3ff" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.8} />
+                    <circle className={`pv-ring${a.inlier === false ? " off" : ""}`} cx={a.expected[0]} cy={a.expected[1]} r={7 * u} fill="none" stroke="#5be3ff" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.8} />
                     <circle cx={a.found[0]} cy={a.found[1]} r={3.6 * u} fill={c} stroke="#040b15" strokeWidth={1} vectorEffect="non-scaling-stroke" />
                     {a.inlier === false && <Chip x={a.found[0] - 18 * u} y={a.found[1] - (i % 2 ? 44 : 26) * u} u={u} color={c} text={a.tag} small />}
                   </g>
@@ -253,9 +269,9 @@ export function PhotoViewer({
           <div className="scan-grid" />
         </div>
       )}
-      {(layers.anchors || layers.drawing) && (
+      {(show.anchors || show.drawing) && (
         <div className="viewer-legend">
-          {layers.drawing && <span><i className="sq" style={{ ["--c" as string]: "#5be3ff" }} /> Drawing, laid onto the photo</span>}
+          {show.drawing && <span><i className="sq" style={{ ["--c" as string]: "#5be3ff" }} /> Drawing, laid onto the photo</span>}
           {layers.anchors && (
             <>
               <span><i style={{ ["--c" as string]: "#2bd49a" }} /> Anchor fits the drawing</span>

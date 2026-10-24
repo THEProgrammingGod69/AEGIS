@@ -1156,3 +1156,320 @@
   width: 14px;
   height: 14px;
 }
+/* ---------- #35 review swipe cards ---------- */
+.swipe-zone {
+  position: relative;
+  display: grid;
+  gap: 16px;
+}
+.swipe-under {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 120px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 22px;
+  pointer-events: none;
+}
+.swipe-under span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.swipe-under .pass { color: var(--pass); }
+.swipe-under .fail { color: var(--fail); }
+.review-card {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+.review-card.swipeable {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.review-card.swipeable:active {
+  cursor: grabbing;
+}
+.swipe-stamp {
+  position: absolute;
+  top: 54px;
+  z-index: 5;
+  padding: 6px 14px;
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+  background: color-mix(in srgb, currentColor 10%, #fff);
+  opacity: 0;
+  pointer-events: none;
+}
+.stamp-pass {
+  right: 24px;
+  color: var(--pass);
+  transform: rotate(8deg);
+}
+.stamp-fail {
+  left: 24px;
+  color: var(--fail);
+  transform: rotate(-8deg);
+}
+.decide.flat {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+@media (pointer: coarse) {
+  .swipe-hint { display: none; }
+}
+/* ---------- #6 work-order sign-off stamp (Emerson Blue on paper) ---------- */
+.wo-sheet {
+  position: relative;
+}
+.wo-signoff {
+  position: absolute;
+  right: clamp(18px, 6vw, 72px);
+  top: 120px;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 18px 8px;
+  border: 3px double var(--brand);
+  border-radius: 12px;
+  color: var(--brand);
+  background: rgba(255, 255, 255, 0.72);
+  font-family: var(--font-mono);
+  transform: rotate(-8deg);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.wo-signoff b {
+  font-size: 20px;
+  letter-spacing: 0.14em;
+}
+.wo-signoff span {
+  font-size: 11px;
+  font-weight: 600;
+}
+.wo-signoff i {
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+@media print {
+  .wo-signoff {
+    mix-blend-mode: normal;
+  }
+}
+/* ---------- analytics: FPY ring tile, heatmap ripple (#37) ---------- */
+.ring-kpi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.heat-ripple {
+  fill: none;
+  stroke: #ff5468;
+  stroke-width: 6;
+  opacity: 0;
+  pointer-events: none;
+}
+.heat-spot {
+  cursor: pointer;
+}
+/* ---------- #34 Lab PASS → REVIEW migration ---------- */
+.migration-ctl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.migration-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--review-fill);
+  border: 1px solid rgba(255, 181, 71, 0.5);
+}
+.migration-count b {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--review);
+}
+.migration-count span {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+}
+.migration-count.safe {
+  background: var(--pass-fill);
+  border-color: rgba(8, 135, 90, 0.3);
+}
+.migration-count.safe b {
+  color: var(--pass);
+}
+.lab-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 12px;
+}
+.lab-col {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
+  background: color-mix(in srgb, var(--c) 6%, var(--surface));
+  min-height: 150px;
+}
+.lab-col-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-2);
+}
+.lab-col-head b {
+  color: var(--text);
+}
+.lab-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+.lab-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent);
+}
+.lab-col.review .lab-dot.moved {
+  box-shadow: 0 0 0 3px rgba(255, 181, 71, 0.35), 0 0 12px rgba(255, 181, 71, 0.6);
+}
+.lab-empty {
+  color: var(--pass);
+  line-height: 1.4;
+}
+@media (max-width: 860px) {
+  .migration-ctl {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .migration-ctl .ctl {
+    grid-column: 1 / -1;
+  }
+  .lab-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* ---------- #40 presenter slides (dark, full screen) ---------- */
+.slides {
+  position: fixed;
+  inset: 0;
+  z-index: 280;
+  overflow: hidden;
+  background:
+    radial-gradient(900px 500px at 85% 10%, rgba(10, 102, 232, 0.35), transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, rgba(108, 71, 217, 0.22), transparent 60%),
+    linear-gradient(160deg, #061428, #040b15 60%);
+}
+.slides-mesh .s1 { width: 520px; height: 520px; left: -10%; top: 30%; background: #0a66e8; opacity: 0.25; }
+.slides-mesh .s2 { width: 420px; height: 420px; right: 10%; top: -20%; background: #6c47d9; opacity: 0.22; }
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 26px;
+  padding: 0 max(6vw, 28px);
+  max-width: 1200px;
+}
+.slide-n {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+}
+.slide-title {
+  font-size: clamp(40px, 6vw, 84px);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: #fff;
+}
+.slide-say {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 12px;
+  max-width: 900px;
+  font-size: clamp(17px, 1.8vw, 24px);
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.slides-close {
+  position: absolute;
+  right: 20px;
+  top: 18px;
+  z-index: 3;
+}
+.slides-foot {
+  position: absolute;
+  left: max(6vw, 28px);
+  right: max(6vw, 28px);
+  bottom: 26px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+}
+.slides-dots {
+  display: flex;
+  gap: 8px;
+}
+.slides-dots button {
+  width: 22px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  transition: background 0.3s, width 0.3s var(--ease);
+}
+.slides-dots button.on {
+  width: 40px;
+  background: var(--accent);
+}
+/* ---------- Forge: odometer tile, clickable cabinets ---------- */
+.odo-kpi .kpi-value {
+  display: flex;
+  align-items: baseline;
+}
+.odo-of {
+  margin-left: 3px;
+  font-size: 0.5em;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+.cells .cell {
+  cursor: pointer;
+}

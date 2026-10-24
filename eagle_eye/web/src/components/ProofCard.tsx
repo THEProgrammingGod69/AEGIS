@@ -1,14 +1,87 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Bot, Camera, FileImage, Layers, ScanLine } from "lucide-react";
-import { useState } from "react";
+import { Flip } from "gsap/Flip";
+import { ArrowRight, Bot, Camera, FileImage, Layers, Maximize2, ScanLine, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { STATIC, url } from "../lib/api";
 import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf, wireClassPhrase } from "../lib/format";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { gaFor } from "../lib/static";
 import type { Item, Pt } from "../lib/types";
 import { ConfidenceChip } from "./Confidence";
 import { CropView } from "./CropView";
 import { WireCode } from "./WireRule";
-import { Marker, Meter, Seg, StatusBadge } from "./ui";
+import { Marker, Meter, Seg, StatusBadge, Switch } from "./ui";
+
+gsap.registerPlugin(Flip);
+
+type CropKind = "expected" | "found" | "aligned";
+
+/** #31 a proof crop expands into the modal: the thumbnail and the modal image share a data-flip-id, so Flip grows one
+ *  into the other. The modal shows every crop large, with an X-ray toggle that lays the drawing over the
+ *  drawing-aligned photo crop (demo engine, where the two share one coordinate frame). */
+function ProofZoom({ run, it, geo, from, state, onClose }: {
+  run: string; it: Item; geo?: Geo; from: CropKind; state: Flip.FlipState | null; onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [xray, setXray] = useState(false);
+  const real = isReal(it, geo);
+  const kinds: CropKind[] = real ? ["expected", "found"] : ["expected", "found", "aligned"];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  useGSAP(() => {
+    if (calm()) return;
+    const el = ref.current!;
+    gsap.from(el.querySelector(".pz-back"), { opacity: 0, duration: 0.3 });
+    if (state) Flip.from(state, { targets: el.querySelector(`[data-flip-id="crop-${it.id}-${from}"]`), duration: 0.6, ease: "expo.inOut", absolute: true, scale: true, zIndex: 260 });
+    gsap.from(el.querySelectorAll(".pz-fig:not(.pz-from), .pz-meta > *"), { opacity: 0, y: 12, stagger: 0.05, delay: 0.25, duration: 0.45 });
+  }, { scope: ref });
+  const crop = (k: CropKind) => (STATIC && geo ? <StaticCrop run={run} it={it} kind={k} geo={geo} /> : <img src={url.crop(run, it.id, k)} alt={`${k} crop for ${it.id}`} />);
+  return createPortal(
+    <div className="proof-zoom" ref={ref} role="dialog" aria-label={`Proof for ${it.id}`}>
+      <div className="pz-back" onClick={onClose} />
+      <div className="pz-card card">
+        <div className="row between pz-head">
+          <div className="row" style={{ ["--gap" as string]: "10px" }}>
+            {it.marker != null && <Marker n={it.marker} s={statusOf(it)} lg />}
+            <div>
+              <div className="mono proof-id">{it.id}</div>
+              <div className="tiny faint">{CHECK_TITLE[it.check] ?? it.check} · {it.target}</div>
+            </div>
+            <StatusBadge s={statusOf(it)} lg />
+          </div>
+          <div className="row" style={{ ["--gap" as string]: "10px" }}>
+            {!real && <Switch on={xray} onChange={setXray} label="X-ray: drawing over the photo" />}
+            <button className="btn btn-icon btn-ghost" onClick={onClose} aria-label="Close"><X /></button>
+          </div>
+        </div>
+        <div className={`pz-grid n${kinds.length}`}>
+          {kinds.map((k) => (
+            <figure key={k} className={`pz-fig${k === from ? " pz-from" : ""}`}>
+              <figcaption>{k === "expected" ? "Expected · GA drawing" : k === "found" ? "Found · photo" : "Aligned to the drawing"}</figcaption>
+              <div className={`pz-img${k === "expected" ? " drawing" : ""}`} data-flip-id={`crop-${it.id}-${k}`} style={{ ["--c" as string]: STATUS_COLOR[statusOf(it)] }}>
+                {crop(k)}
+                {k === "aligned" && xray && <div className="pz-xray">{crop("expected")}</div>}
+              </div>
+            </figure>
+          ))}
+        </div>
+        <div className="pz-meta">
+          <div className="proof-ef">
+            <div><div className="tiny faint">Expected (drawing)</div><div className="mono">{it.expected}</div></div>
+            <ArrowRight size={16} className="faint" />
+            <div><div className="tiny faint">Found (photo)</div><div className="mono" style={{ color: STATUS_COLOR[statusOf(it)] }}>{it.found}</div></div>
+          </div>
+          <p className="proof-why">{explain(it)}</p>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 function RailDiagram({ it }: { it: Item }) {
   const swapped = new Set((it.swaps ?? []).flat());
@@ -88,7 +161,21 @@ export function ProofCrop({ run, it, kind, geo }: { run: string; it: Item; kind:
 
 export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }) {
   const [found, setFound] = useState<"found" | "aligned">("found");
+  const [zoom, setZoom] = useState<{ kind: CropKind; state: Flip.FlipState | null } | null>(null);
+  const imgs = useRef<HTMLDivElement>(null);
   const s = statusOf(it);
+  const open = (kind: CropKind) => {
+    const el = imgs.current?.querySelector(`[data-flip-id="crop-${it.id}-${kind}"]`);
+    setZoom({ kind, state: el && !calm() ? Flip.getState(el) : null });
+  };
+  // #32 proof layer wipe: the photo crop wipes in over its frame each time an item opens
+  useGSAP(() => {
+    if (calm() || !imgs.current) return;
+    const photo = imgs.current.querySelector(".proof-img:not(.drawing) > *");
+    const drawing = imgs.current.querySelector(".proof-img.drawing > *");
+    gsap.fromTo(photo, { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power2.inOut", delay: 0.15, clearProps: "clipPath" });
+    gsap.fromTo(drawing, { opacity: 0 }, { opacity: 1, duration: 0.35, clearProps: "opacity" });
+  }, { dependencies: [it.id, found] });
   const isPass = it.result === "PASS" && !it.recheck;
   const real = isReal(it, geo);
   if (it.check === "REGISTRATION" || it.id === "REG-DRAWING") return <div className="proof">
@@ -114,10 +201,12 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
           </div>
         </div>
 
-        <div className="proof-imgs">
+        <div className="proof-imgs" ref={imgs}>
           <figure>
             <figcaption><FileImage size={13} /> Expected · GA drawing</figcaption>
-            <div className="proof-img drawing">
+            <div className="proof-img drawing zoomable" data-flip-id={`crop-${it.id}-expected`} role="button" tabIndex={0} title="Open the proof large"
+              onClick={() => open("expected")} onKeyDown={(e) => e.key === "Enter" && open("expected")}>
+              <span className="zoom-hint"><Maximize2 size={12} /></span>
               {STATIC && geo ? <StaticCrop run={run} it={it} kind="expected" geo={geo} /> : <img src={url.crop(run, it.id, "expected")} alt={`Drawing crop for ${it.id}`} />}
             </div>
           </figure>
@@ -126,7 +215,9 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
               <span className="row" style={{ ["--gap" as string]: "6px" }}><ScanLine size={13} /> Found · photo</span>
               {!real && <Seg value={found} onChange={setFound} options={[{ value: "found", label: "Photo", title: "Zoomed crop of the original photo" }, { value: "aligned", label: <><Layers size={12} />Aligned</>, title: "Perspective-corrected, pixel-aligned with the drawing" }]} />}
             </figcaption>
-            <div className="proof-img" style={{ ["--c" as string]: STATUS_COLOR[s] }}>
+            <div className="proof-img zoomable" data-flip-id={`crop-${it.id}-${real ? "found" : found}`} style={{ ["--c" as string]: STATUS_COLOR[s] }} role="button" tabIndex={0} title="Open the proof large"
+              onClick={() => open(real ? "found" : found)} onKeyDown={(e) => e.key === "Enter" && open(real ? "found" : found)}>
+              <span className="zoom-hint"><Maximize2 size={12} /></span>
               {STATIC && geo ? <StaticCrop key={found} run={run} it={it} kind={real ? "found" : found} geo={geo} /> : <img key={found} src={url.crop(run, it.id, real ? "found" : found)} alt={`Photo crop for ${it.id}`} />}
             </div>
           </figure>
@@ -206,6 +297,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
           <span className="mono ellipsis" title={it.evidence.join("; ")}>{it.evidence.join(" · ")}</span>
           <ConfidenceChip it={it} eng={isReal(it, geo) ? "real" : "demo"} wide />
         </div>
+        {zoom && <ProofZoom run={run} it={it} geo={geo} from={zoom.kind} state={zoom.state} onClose={() => setZoom(null)} />}
       </motion.div>
     </AnimatePresence>
   );

@@ -2,7 +2,9 @@
  *  camera turned sideways, inspected with the flat registration alone and with the perspective search. Shows how many
  *  of the labels read still land on the drawing, what the engine verified, and the camera angle it measured. */
 import { Compass } from "lucide-react";
+import { useRef } from "react";
 import SWEEP from "../data/angle_sweep.json";
+import { useChartIn } from "./motion";
 import { Kpi } from "./ui";
 
 interface Row {
@@ -37,10 +39,10 @@ function Chart({ rows }: { rows: Row[] }) {
         </g>
       ))}
       {angles.map((a) => <text key={a} className="calib-axis" x={x(a)} y={M.t + ih + 16} textAnchor="middle">{a}°</text>)}
-      <path className="calib-raw" d={line("flat")} />
-      <path className="calib-cal" d={line("perspective")} />
+      <path className="calib-raw" d={line("flat")} data-draw-line="" />
+      <path className="calib-cal" d={line("perspective")} data-draw-line="" />
       {rows.map((r) => (
-        <circle key={`${r.mode}${r.angle}`} className={r.mode === "flat" ? "calib-raw-dot" : "calib-cal-dot"} cx={x(r.angle)} cy={y(share(r))} r={4.5}>
+        <circle key={`${r.mode}${r.angle}`} data-pop="" className={r.mode === "flat" ? "calib-raw-dot" : "calib-cal-dot"} cx={x(r.angle)} cy={y(share(r))} r={4.5}>
           <title>{`${r.mode === "flat" ? "Flat registration" : "With the perspective search"} at ${r.angle}°: ${r.inliers} of ${r.anchors} read labels placed (${Math.round(share(r) * 100)}%)`}</title>
         </circle>
       ))}
@@ -52,6 +54,8 @@ function Chart({ rows }: { rows: Row[] }) {
 
 export function AnglePanel() {
   const rows = DATA.rows ?? [];
+  const chart = useRef<HTMLDivElement>(null);
+  useChartIn(chart);
   if (!rows.length) return <div className="card pad small muted">No angle sweep yet. Run <span className="mono">python eval_angle.py</span>.</div>;
   const top = Math.max(...DATA.angles);
   const at = (a: number, m: Row["mode"]) => rows.find((r) => r.angle === a && r.mode === m);
@@ -60,7 +64,7 @@ export function AnglePanel() {
   const meanErr = err.length ? err.reduce((s, r) => s + (r.measured_error ?? 0), 0) / err.length : null;
   const falseFails = rows.filter((r) => r.mode === "perspective").reduce((s, r) => s + r.fail, 0);
   return (
-    <div className="card pad calib">
+    <div className="card pad calib" ref={chart}>
       <div className="card-head">
         <div>
           <div className="card-title"><Compass /> Photos taken from the side</div>

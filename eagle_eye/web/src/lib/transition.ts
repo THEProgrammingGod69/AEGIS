@@ -20,10 +20,10 @@ export function blinkTo(hash: string, label: string) {
   if (busy) return;
   busy = true;
   lab.textContent = "";
-  gsap.timeline({ onComplete: () => void (busy = false), defaults: { overwrite: true } })
+  gsap.timeline({ onComplete: () => void (busy = false) })
     .set([top, bottom], { visibility: "visible" })
-    .fromTo(top, { yPercent: -101 }, { yPercent: 0, duration: 0.26, ease: "power3.in" })
-    .fromTo(bottom, { yPercent: 101 }, { yPercent: 0, duration: 0.26, ease: "power3.in" }, "<")
+    .fromTo(top, { y: 0, yPercent: -101 }, { yPercent: 0, duration: 0.26, ease: "power3.in" })
+    .fromTo(bottom, { y: 0, yPercent: 101 }, { yPercent: 0, duration: 0.26, ease: "power3.in" }, "<")
     .set(lab, { autoAlpha: 1 }, "-=0.04")
     .to(lab, { duration: 0.24, scrambleText: { text: label.toUpperCase(), chars: "CBPSX0123456789:", speed: 1 } }, "<")
     .add(() => jump(h))

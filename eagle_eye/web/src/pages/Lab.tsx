@@ -1,12 +1,103 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, CloudOff, FlaskRound, Gauge, Microscope, Play, RotateCcw, ShieldQuestion, Sparkles, XCircle } from "lucide-react";
+import { Flip } from "gsap/Flip";
+import { CheckCircle2, CloudOff, Compass, FlaskRound, Gauge, Microscope, Play, RotateCcw, ShieldQuestion, Sparkles, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Running } from "../components/Running";
-import { Seg, StatusBadge, useToast } from "../components/ui";
+import { Count, Seg, StatusBadge, useToast } from "../components/ui";
+import SWEEP from "../data/angle_sweep.json";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { api, followJob, url, useCanLive } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { NEUTRAL, PRESETS, describe, loadImage, render, toFile, type Perturb } from "../lib/perturb";
 import type { JobView, RunMeta } from "../lib/types";
+
+gsap.registerPlugin(Flip);
+
+/* ---------------- #34 PASS → REVIEW migration ---------------- */
+interface SweepRow { angle: number; mode: "flat" | "perspective"; pass: number; fail: number; review: number; not_in_view: number }
+const SW = SWEEP as unknown as { angles: number[]; rows: SweepRow[]; note: string; engine_version: string };
+const DOTS = 50; // each dot is 2% of the judged items
+const COLS = [
+  { key: "PASS", label: "PASS", c: "var(--pass)" },
+  { key: "REVIEW", label: "REVIEW · re-photo", c: "var(--review-bar)" },
+  { key: "FAIL", label: "FAIL", c: "var(--fail)" },
+] as const;
+
+function split(r: SweepRow | undefined) {
+  if (!r) return { PASS: DOTS, REVIEW: 0, FAIL: 0 };
+  const judged = Math.max(1, r.pass + r.review + r.fail);
+  const FAIL = r.fail ? Math.max(1, Math.round((DOTS * r.fail) / judged)) : 0;
+  const REVIEW = r.review ? Math.max(1, Math.round((DOTS * r.review) / judged)) : 0;
+  return { PASS: DOTS - REVIEW - FAIL, REVIEW, FAIL };
+}
+
+/** As the photo gets worse, findings move to REVIEW (re-photo), never to a false FAIL. Each finding is a dot; when the
+ *  camera angle changes, verdicts are recomputed from the measured sweep and the dots Flip between columns. */
+function Migration() {
+  const [ai, setAi] = useState(0);
+  const [mode, setMode] = useState<"flat" | "perspective">("perspective");
+  const scope = useRef<HTMLDivElement>(null);
+  const flip = useRef<Flip.FlipState | null>(null);
+  const row = SW.rows.find((r) => r.angle === SW.angles[ai] && r.mode === mode);
+  const base = split(SW.rows.find((r) => r.angle === SW.angles[0] && r.mode === mode));
+  const now = split(row);
+  const moved = Math.max(0, now.REVIEW - base.REVIEW);
+  const colOf = (i: number) => (i < now.PASS ? "PASS" : i < now.PASS + now.REVIEW ? "REVIEW" : "FAIL");
+  const change = (fn: () => void) => {
+    if (!calm() && scope.current) flip.current = Flip.getState(scope.current.querySelectorAll(".lab-dot"));
+    fn();
+  };
+  useGSAP(() => {
+    const st = flip.current;
+    flip.current = null;
+    if (!st) return;
+    Flip.from(st, {
+      targets: scope.current!.querySelectorAll(".lab-dot"), duration: 0.6, ease: "ee", stagger: 0.008, absolute: true,
+      onComplete: () => void gsap.fromTo(scope.current!.querySelectorAll(".lab-col.review .lab-dot.moved"), { scale: 1.6 }, { scale: 1, duration: 0.4, ease: "back.out(2)" }),
+    });
+  }, { scope, dependencies: [ai, mode] });
+
+  return (
+    <div className="card pad migration" ref={scope}>
+      <div className="card-head">
+        <div>
+          <div className="card-title"><Compass /> As the camera turns, findings move to REVIEW, never to FAIL</div>
+          <div className="card-sub">Measured: {SW.note.toLowerCase()} (engine {SW.engine_version}). Each dot is 2% of the items the engine judged; items outside the view are not judged and not shown.</div>
+        </div>
+        <Seg value={mode} onChange={(v) => change(() => setMode(v))} options={[{ value: "flat", label: "Flat registration" }, { value: "perspective", label: "With perspective search" }]} />
+      </div>
+      <div className="migration-ctl">
+        <label className="ctl grow">
+          <span className="row between tiny"><span className="muted">Camera turned sideways</span><b className="mono">{SW.angles[ai]}°</b></span>
+          <input className="range" type="range" min={0} max={SW.angles.length - 1} step={1} value={ai}
+            onChange={(e) => change(() => setAi(+e.target.value))} style={{ ["--p" as string]: `${(ai / (SW.angles.length - 1)) * 100}%` }} aria-label="Camera angle" />
+          <span className="row between tiny faint">{SW.angles.map((a) => <span key={a}>{a}°</span>)}</span>
+        </label>
+        <div className="migration-count">
+          <b className="mono"><Count value={moved} /></b>
+          <span>dots moved to REVIEW,<br />not PASS</span>
+        </div>
+        <div className="migration-count safe">
+          <b className="mono">{now.FAIL}</b>
+          <span>false FAILs<br />(no fault planted)</span>
+        </div>
+      </div>
+      <div className="lab-cols">
+        {COLS.map((c) => (
+          <div key={c.key} className={`lab-col ${c.key.toLowerCase()}`} style={{ ["--c" as string]: c.c }}>
+            <div className="lab-col-head mono"><span>{c.label}</span><b>{now[c.key]}</b></div>
+            <div className="lab-dots">
+              {Array.from({ length: DOTS }, (_, i) => i).filter((i) => colOf(i) === c.key).map((i) => (
+                <i key={i} className={`lab-dot${c.key === "REVIEW" && i < base.PASS ? " moved" : ""}`} data-flip-id={`dot-${i}`} />
+              ))}
+              {c.key === "FAIL" && now.FAIL === 0 && <span className="lab-empty tiny">empty at every angle: an unreadable photo is never a guessed FAIL</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface Trial {
   id: string;
@@ -171,6 +262,8 @@ export function Lab() {
           </div>
         </div>
       </div>
+
+      <div style={{ marginTop: 20 }}><Migration /></div>
 
       {busy && job && (
         <div style={{ marginTop: 20 }}>

@@ -1,8 +1,14 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Mic, Play, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Observer } from "gsap/Observer";
+import { ChevronLeft, ChevronRight, Maximize2, Mic, Play, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../lib/api";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { go } from "../lib/router";
+import { Lightning } from "./Lightning";
+
+gsap.registerPlugin(Observer);
 
 interface Step {
   title: string;
@@ -72,6 +78,73 @@ export const STEPS: Step[] = [
   },
 ];
 
+/** #40 presenter slide engine: the demo script as dark full-screen slides. Wheel, touch, arrows and the clicker's
+ *  PgUp/PgDn move between slides (Observer); Enter or the button performs the step and returns to the console. */
+function Slides({ start, onClose, onRun }: { start: number; onClose: () => void; onRun: (i: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [i, setI] = useState(start);
+  const goRef = useRef<(n: number) => void>(() => {});
+  useGSAP(() => {
+    const root = ref.current!;
+    const slides = gsap.utils.toArray<HTMLElement>(".slide", root);
+    let cur = start;
+    let busy = false;
+    gsap.set(slides, { autoAlpha: 0 });
+    gsap.set(slides[cur], { autoAlpha: 1 });
+    if (!calm()) gsap.from(root, { autoAlpha: 0, duration: 0.35 });
+    const go = (n: number) => {
+      if (busy || n < 0 || n >= slides.length || n === cur) return;
+      const dir = n > cur ? 1 : -1;
+      busy = true;
+      const d = calm() ? 0 : 1;
+      gsap.timeline({ onComplete: () => void (busy = false) })
+        .to(slides[cur], { yPercent: -8 * dir, opacity: 0, duration: 0.35 * d })
+        .set(slides[cur], { visibility: "hidden", yPercent: 0 })
+        .fromTo(slides[n], { yPercent: 8 * dir, autoAlpha: 0 }, { yPercent: 0, autoAlpha: 1, duration: 0.45 * d }, "<0.1")
+        .from(slides[n].querySelectorAll(".slide-say li"), { y: 14, opacity: 0, stagger: 0.08, duration: 0.4 * d }, "<0.15");
+      cur = n;
+      setI(n);
+    };
+    goRef.current = go;
+    Observer.create({ target: root, type: "wheel,touch", tolerance: 12, preventDefault: true, onDown: () => go(cur + 1), onUp: () => go(cur - 1) });
+    const onKey = (e: KeyboardEvent) => {
+      if (["ArrowDown", "ArrowRight", "PageDown", " ", "]"].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+      else if (["ArrowUp", "ArrowLeft", "PageUp", "["].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+      else if (e.key === "Escape") { e.preventDefault(); onClose(); }
+      else if (e.key === "Enter") { e.preventDefault(); onRun(cur); }
+    };
+    window.addEventListener("keydown", onKey);
+    const html = document.documentElement;
+    const prev = html.style.overflow;
+    html.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      html.style.overflow = prev;
+    };
+  }, { scope: ref });
+
+  return createPortal(
+    <div className="slides device" ref={ref} role="dialog" aria-label="Presenter slides">
+      <Lightning hue={212} xOffset={-1.1} speed={0.45} intensity={0.36} size={1.4} />
+      <div className="slides-mesh" aria-hidden="true"><i className="blob s1" /><i className="blob s2" /></div>
+      <button className="btn btn-icon btn-ghost slides-close" onClick={onClose} aria-label="Close slides"><X /></button>
+      {STEPS.map((st, n) => (
+        <section key={st.title} className="slide" aria-hidden={n !== i}>
+          <div className="slide-n mono">{String(n + 1).padStart(2, "0")} / {String(STEPS.length).padStart(2, "0")}</div>
+          <h2 className="slide-title">{st.title}</h2>
+          <ul className="slide-say">{st.say.map((x) => <li key={x}>{x}</li>)}</ul>
+          <button className="btn btn-primary btn-xl" onClick={() => onRun(n)} data-magnetic=""><i className="shine" aria-hidden="true" /><Play /> <span>{st.action}</span></button>
+        </section>
+      ))}
+      <div className="slides-foot mono">
+        <div className="slides-dots">{STEPS.map((st, n) => <button key={st.title} className={n === i ? "on" : ""} aria-label={`Slide ${n + 1}`} onClick={() => goRef.current(n)} />)}</div>
+        <span>scroll · swipe · ← → · PgUp PgDn · Enter does the step · Esc</span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 export function Presenter({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [n, setN] = useState(() => {
     try {
@@ -81,6 +154,7 @@ export function Presenter({ open, onClose }: { open: boolean; onClose: () => voi
     }
   });
   const [min, setMin] = useState(false);
+  const [slides, setSlides] = useState(false);
   useEffect(() => {
     try {
       sessionStorage.setItem("ee_tour", String(n));
@@ -94,7 +168,7 @@ export function Presenter({ open, onClose }: { open: boolean; onClose: () => voi
   const run = (i = n) => void STEPS[i].run();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || slides) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
@@ -103,10 +177,12 @@ export function Presenter({ open, onClose }: { open: boolean; onClose: () => voi
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, n]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, n, slides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const s = STEPS[n];
   return (
+    <>
+    {open && slides && <Slides start={n} onClose={() => setSlides(false)} onRun={(i) => { setN(i); setSlides(false); run(i); }} />}
     <AnimatePresence>
       {open && (
         <motion.aside className={`presenter card${min ? " min" : ""}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} aria-label="Presenter mode">
@@ -114,7 +190,10 @@ export function Presenter({ open, onClose }: { open: boolean; onClose: () => voi
             <button className="row tiny faint" style={{ ["--gap" as string]: "7px" }} onClick={() => setMin(!min)} title={min ? "Expand" : "Collapse"}>
               <Mic size={13} /> <span className="mono">PRESENTER · {n + 1}/{STEPS.length}</span>
             </button>
-            <button className="btn btn-icon btn-sm btn-ghost" onClick={onClose} aria-label="Close presenter mode"><X /></button>
+            <div className="row" style={{ ["--gap" as string]: "4px" }}>
+              <button className="btn btn-icon btn-sm btn-ghost" onClick={() => setSlides(true)} aria-label="Full-screen slides" title="Full-screen slides"><Maximize2 /></button>
+              <button className="btn btn-icon btn-sm btn-ghost" onClick={onClose} aria-label="Close presenter mode"><X /></button>
+            </div>
           </div>
           {!min && (
             <>
@@ -136,5 +215,6 @@ export function Presenter({ open, onClose }: { open: boolean; onClose: () => voi
         </motion.aside>
       )}
     </AnimatePresence>
+    </>
   );
 }

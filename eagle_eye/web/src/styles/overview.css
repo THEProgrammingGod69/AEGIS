@@ -681,7 +681,7 @@
 .strike path {
   fill: none;
   stroke: var(--fail);
-  stroke-width: 2px;
+  stroke-width: 1.6;
   stroke-linecap: round;
   opacity: 0.8;
 }
@@ -847,7 +847,7 @@
   margin-bottom: 26px;
 }
 
-.xray {
+.lens-demo {
   max-width: 500px;
   margin: 0 auto;
 }
@@ -919,7 +919,7 @@
   cursor: grab;
 }
 
-.xray.active .lens {
+.lens-demo.active .lens {
   cursor: grabbing;
 }
 
@@ -1207,4 +1207,14 @@ html.calm .packet {
 
 .pipe-intro h2 {
   font-size: clamp(30px, 3vw, 44px);
+}
+
+@media (max-width: 720px) {
+  .strike {
+    display: none;
+  }
+  .vs-table .vs-a span {
+    text-decoration: line-through;
+    text-decoration-color: rgba(215, 38, 61, 0.75);
+  }
 }

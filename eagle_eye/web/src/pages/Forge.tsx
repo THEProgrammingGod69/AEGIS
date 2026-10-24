@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Dices, Eye, EyeOff, FlaskConical, Gauge, Play, ShieldCheck, Target, Terminal, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Odometer } from "../components/motion";
 import { AnglePanel } from "../components/AnglePanel";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ForgeGap } from "../components/ForgeGap";
@@ -9,6 +10,8 @@ import { Running } from "../components/Running";
 import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
 import { STATUS_COLOR, isIssue, statusOf } from "../lib/format";
+import { confettiFrom } from "../lib/confetti";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
 import type { EvaluationDataset, JobView, RunPayload } from "../lib/types";
 
@@ -62,9 +65,16 @@ function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) 
   const sc = f.score;
   const issues = p.results.filter(isIssue);
   const perfect = sc.caught === sc.n_planted && sc.false_alarms.length === 0;
+  // #6 confetti fires once, only when every planted fault was caught with no false alarm (never on a FAIL screen)
+  const scoreRef = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (!perfect || sc.n_planted === 0 || calm()) return;
+    const id = setTimeout(() => confettiFrom(scoreRef.current?.querySelector(".forge-verdict > svg") ?? null, 70), 500);
+    return () => clearTimeout(id);
+  }, { dependencies: [p.meta.id] });
   return (
     <motion.div className="forge-result" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="card viewer-card">
+      <div className="card viewer-card device">
         <div className="viewer-toolbar">
           <div className="row" style={{ ["--gap" as string]: "8px" }}>
             <span className="tag accent">Seed {f.seed}</span>
@@ -77,7 +87,7 @@ function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) 
           selected={sel} onSelect={setSel} focusKey={fk} />
       </div>
       <div className="stack" style={{ ["--gap" as string]: "16px" }}>
-        <div className="card pad" style={{ ["--c" as string]: perfect ? "var(--pass)" : "var(--fail)" }}>
+        <div className="card pad" ref={scoreRef} style={{ ["--c" as string]: perfect ? "var(--pass)" : "var(--fail)" }}>
           <div className="forge-verdict">
             {perfect ? <ShieldCheck style={{ color: "var(--pass)" }} /> : <XCircle style={{ color: "var(--fail)" }} />}
             <div>
@@ -147,11 +157,28 @@ function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) 
 function SelfTest() {
   const { data } = useAsync(api.selftest);
   const s = data?.summary;
+  const cellsRef = useRef<HTMLDivElement>(null);
+  // the 50 cabinets deal in from the centre; a click sends a ripple out from that cabinet (#37)
+  useGSAP(() => {
+    if (!cellsRef.current || calm()) return;
+    gsap.from(cellsRef.current.querySelectorAll(".cell"), {
+      scale: 0.5, opacity: 0, duration: 0.5, ease: "back.out(1.8)", stagger: { grid: "auto", from: "center", amount: 0.7 },
+      scrollTrigger: { trigger: cellsRef.current, start: "top 85%", once: true },
+    });
+  }, { scope: cellsRef, dependencies: [!!data] });
+  const ripple = (index: number) => {
+    if (calm() || !cellsRef.current) return;
+    gsap.fromTo(cellsRef.current.querySelectorAll(".cell"), { scale: 0.85 }, { scale: 1, duration: 0.6, ease: "elastic.out(1, 0.4)", stagger: { grid: "auto", from: index, amount: 0.5 }, overwrite: true });
+  };
   if (!s) return null;
   return (
     <div className="stack" style={{ ["--gap" as string]: "18px" }}>
       <div className="selftest-kpis">
-        <Kpi value={s.caught} label={`of ${s.planted} faults caught`} color="var(--pass)" note={`${(s.recall * 100).toFixed(0)}% recall`} />
+        <div className="kpi odo-kpi" data-spotlight="" style={{ ["--c" as string]: "var(--pass)" }}>
+          <div className="kpi-value"><Odometer value={s.caught} /><span className="odo-of">/{s.planted}</span></div>
+          <div className="kpi-label">faults caught</div>
+          <div className="kpi-note">{(s.recall * 100).toFixed(0)}% recall</div>
+        </div>
         <Kpi value={s.false_alarms} label="false alarms" color="var(--accent)" note={`over ${s.correct_items.toLocaleString()} correct items`} />
         <Kpi value={s.reviews} label="sent to review" color="var(--review)" note={`${(s.review_rate * 100).toFixed(1)}% of correct items`} />
         <Kpi value={s.clean_cabinets_zero_fail} label={`of ${s.clean_cabinets} clean cabinets`} color="var(--pass)" note="came back with zero FAIL" />
@@ -179,14 +206,14 @@ function SelfTest() {
               <span><i className="cell rv" /> has a REVIEW</span>
             </div>
           </div>
-          <div className="cells">
+          <div className="cells" ref={cellsRef}>
             {data!.cabinets.map((c, i) => {
               const cls = c.false_alarms || c.caught < c.planted ? "bad" : c.planted === 0 ? "clean" : "ok";
               return (
-                <motion.div key={c.i} className={`cell ${cls}${c.reviews ? " rv" : ""} tip`} initial={{ opacity: 0, scale: 0.5 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.012 }}
+                <div key={c.i} className={`cell ${cls}${c.reviews ? " rv" : ""} tip`} onClick={() => ripple(i)}
                   data-tip={`#${c.i} · camera ${c.strength}\n${c.planted ? c.faults.join("\n") : "no faults"}\ncaught ${c.caught}/${c.planted} · ${c.reviews} review`}>
                   <span>{c.planted || ""}</span>
-                </motion.div>
+                </div>
               );
             })}
           </div>

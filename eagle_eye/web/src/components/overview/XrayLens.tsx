@@ -101,7 +101,7 @@ export function XrayLens() {
   }, { scope: root });
 
   return (
-    <div className="xray" ref={root}>
+    <div className="lens-demo" ref={root}>
       <div className="xray-photo device" style={{ aspectRatio: `${SW} / ${SH}` }} data-cursor="Drag">
         <img src={url.sample("01", 1100)} alt="Emerson's example cabinet" draggable={false} loading="lazy" />
         <div className="xray-drawing" aria-hidden="true">

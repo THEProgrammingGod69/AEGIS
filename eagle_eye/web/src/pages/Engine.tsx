@@ -1,5 +1,7 @@
-import { Boxes, Cloud, Code2, Cpu, ExternalLink, FileCode2, Gauge, Network, Puzzle, ServerCog, Wrench } from "lucide-react";
+import { Boxes, Cloud, Code2, Cpu, ExternalLink, FileCode2, Gauge, Network, Puzzle, ServerCog, Terminal, Wrench } from "lucide-react";
+import { EngineLog } from "../components/motion";
 import { Reveal } from "../components/ui";
+import type { RunPayload } from "../lib/types";
 import { STATIC, api } from "../lib/api";
 import { useEngine } from "../lib/cloud";
 import { REPO_URL } from "../lib/static";
@@ -33,7 +35,39 @@ const API = [
 
 const TOOLS = ["Python", "OpenCV", "PyMuPDF", "Tesseract OCR", "NumPy", "openpyxl", "ReportLab", "FastAPI", "React", "Streamlit"];
 
+type Line = { t: string; k: string; v: string; tone?: "pass" | "fail" | "review" | "accent" };
+
+/** A recorded inspection, as the engine logged it, stage by stage. */
+function runLog(p: RunPayload): Line[] {
+  const t0 = new Date(p.meta.created).getTime() || Date.now();
+  let acc = 0;
+  const at = () => new Date(t0 + acc * 1000).toTimeString().slice(0, 8);
+  const t = p.timing;
+  const c = p.meta.counts;
+  const r = p.registration;
+  const out: Line[] = [];
+  out.push({ t: at(), k: "parse_ga", v: `${p.layout.length} drawn items · ${p.meta.items} checks to run` });
+  acc += t.parse;
+  if (t.ocr != null) { out.push({ t: at(), k: "ocr", v: `labels read in ${t.ocr.toFixed(2)} s` }); acc += t.ocr; }
+  out.push({ t: at(), k: "register", v: `${r.inliers}/${r.anchors} anchors · ${r.refined ? "homography" : "similarity"}${r.outliers.length ? ` · off-pattern ${r.outliers.join(", ")}` : ""}`, tone: "accent" });
+  acc += t.register;
+  for (const [k, sec] of Object.entries(t.checks)) {
+    const rs = p.results.filter((x) => x.check === k);
+    const f = rs.filter((x) => x.result === "FAIL").length;
+    out.push({ t: at(), k: k.toLowerCase(), v: `${f} FAIL · ${rs.filter((x) => x.result === "PASS").length} PASS · ${sec.toFixed(2)} s`, tone: f ? "fail" : "pass" });
+    acc += sec;
+  }
+  out.push({ t: at(), k: "consensus", v: `${c.FAIL} FAIL · ${c.REVIEW} REVIEW · ${c.SKIP} SKIP · ${c.PASS} PASS`, tone: c.FAIL ? "fail" : "pass" });
+  out.push({ t: at(), k: "report", v: `${t.total.toFixed(1)} s total · PDF · checklist · proof crops`, tone: "accent" });
+  return out;
+}
+
 export function Engine() {
+  const sample = useAsync(async () => {
+    const runs = await api.runs(80);
+    const m = runs.find((x) => x.source !== "forge" && x.version === 1 && x.counts.FAIL > 0) ?? runs.find((x) => x.source !== "forge") ?? runs[0];
+    return m ? api.run(m.id) : null;
+  });
   const checks = useAsync(api.checks);
   const health = useAsync(api.health);
   const eng = useEngine();
@@ -50,7 +84,7 @@ export function Engine() {
 
       <div className="engine-checks">
         {checks.data?.map((c, i) => (
-          <Reveal key={c.name} className="card pad check-card" delay={i * 0.05}>
+          <Reveal key={c.name} className="card pad check-card" delay={i * 0.05} data-spotlight="" data-tilt="6">
             <div className="row between">
               <span className="tag accent">@check("{c.name}")</span>
               <Puzzle size={16} className="faint" />
@@ -60,7 +94,7 @@ export function Engine() {
             <p className="tiny faint">{c.doc}</p>
           </Reveal>
         ))}
-        <Reveal className="card pad check-card add" delay={0.25}>
+        <Reveal className="card pad check-card add" delay={0.25} data-spotlight="">
           <div className="row between">
             <span className="tag">@check("EARTH")</span>
             <Wrench size={16} className="faint" />
@@ -114,6 +148,17 @@ export function Engine() {
           </div>
         </Reveal>
       </div>
+
+      {sample.data && (
+        <Reveal className="engine-log-row">
+          <div className="engine-log-copy">
+            <div className="card-title"><Terminal /> A real run, as the engine logged it</div>
+            <p className="small muted">{sample.data.meta.label} · cabinet <span className="mono">{sample.data.meta.cabinet}</span>. Parse, register, one narrow check per item, consensus, report: every line is a stage of the recorded inspection, with its own timing.</p>
+            <a className="btn btn-sm" href={`#/run/${sample.data.meta.id}`}>Open this inspection</a>
+          </div>
+          <EngineLog lines={runLog(sample.data)} title={`ENGINE LOG · RUN ${sample.data.meta.id.slice(-4).toUpperCase()}`} />
+        </Reveal>
+      )}
 
       <div className="engine-grid">
         <Reveal className="card pad">

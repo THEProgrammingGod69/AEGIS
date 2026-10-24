@@ -9,7 +9,7 @@ import { NAV, TopBar } from "./components/TopBar";
 import { ToastProvider } from "./components/ui";
 import { STATIC, api } from "./lib/api";
 import { setPreferLive, useEngine } from "./lib/cloud";
-import { ScrollTrigger, calm, gsap, introDone, setMotion, useGSAP } from "./lib/gsap";
+import { ScrollTrigger, SplitText, calm, gsap, introDone, setMotion, useGSAP } from "./lib/gsap";
 import { installClickSpark, installInteractions, installXray, toggleXray } from "./lib/interactions";
 import { go, useRoute } from "./lib/router";
 import { blinkTo } from "./lib/transition";
@@ -51,6 +51,23 @@ const seen = () => {
     return true;
   }
 };
+
+/** #11 on every page: the page title's lines rise out of a mask, then its eyebrow and lead fade up. Sits inside
+ *  Suspense, so it runs once the lazily loaded page has rendered. */
+function PageMotion({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useGSAP(() => {
+    if (calm()) return;
+    const h = ref.current!.querySelector<HTMLElement>(".page-head h1");
+    if (h) SplitText.create(h, {
+      type: "lines", mask: "lines", autoSplit: true,
+      onSplit: (self) => gsap.from(self.lines, { yPercent: 105, stagger: 0.08, duration: 0.9, ease: "expo.out", delay: 0.08 }),
+    });
+    const rest = ref.current!.querySelectorAll(".page-head .eyebrow, .page-head p");
+    if (rest.length) gsap.from(rest, { y: 12, autoAlpha: 0, stagger: 0.08, duration: 0.7, ease: "expo.out", delay: 0.15 });
+  }, { scope: ref });
+  return <div ref={ref}>{children}</div>;
+}
 
 function PageFallback() {
   return (
@@ -177,7 +194,7 @@ export function App() {
       )}
       <main key={page + (route[1] ?? "")} ref={mainRef}>
         <ErrorBoundary resetKey={route.join("/")}>
-          <Suspense fallback={<PageFallback />}>{view}</Suspense>
+          <Suspense fallback={<PageFallback />}><PageMotion>{view}</PageMotion></Suspense>
         </ErrorBoundary>
       </main>
       <footer className="footer">

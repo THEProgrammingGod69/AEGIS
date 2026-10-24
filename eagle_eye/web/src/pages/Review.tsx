@@ -1,14 +1,19 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ClipboardCheck, Inbox, ListChecks, ScrollText, ShieldQuestion, UserCheck, XCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Draggable } from "gsap/Draggable";
+import { InertiaPlugin } from "gsap/InertiaPlugin";
+import { CheckCircle2, ClipboardCheck, Hand, Inbox, ListChecks, ScrollText, ShieldQuestion, UserCheck, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProofCard } from "../components/ProofCard";
 import { Kpi, Marker, StatusBadge, useToast } from "../components/ui";
 import { api } from "../lib/api";
 import { STATUS_COLOR, runDate } from "../lib/format";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
 import { inspectorName, setInspectorName } from "../lib/reviews";
 import { go } from "../lib/router";
 import type { Result, Review as ReviewT, RunMeta, RunPayload } from "../lib/types";
+
+gsap.registerPlugin(Draggable, InertiaPlugin);
 
 type Tab = "review" | "confirm" | "audit";
 
@@ -63,8 +68,8 @@ export function Review() {
   useEffect(() => setNote(cur?.review?.note ?? ""), [cur?.run.id, cur?.item]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const decide = useCallback(async (d: ReviewT["decision"] | "CLEAR") => {
-    if (!cur) return;
-    if (cur.item === "REG-DRAWING" && d !== "CLEAR") { toast("error", "Drawing alignment must be resolved by a new inspection with matching inputs."); return; }
+    if (!cur) return false;
+    if (cur.item === "REG-DRAWING" && d !== "CLEAR") { toast("error", "Drawing alignment must be resolved by a new inspection with matching inputs."); return false; }
     try {
       const idx = list.indexOf(cur);
       await api.review(cur.run.id, cur.item, d, note, name);
@@ -73,16 +78,66 @@ export function Review() {
       setSel(next ? key(next) : null);
       setNote("");
       runs.reload();
+      return true;
     } catch (e) {
       toast("error", (e as Error).message);
+      return false;
     }
   }, [cur, list, note, name, t, toast, runs]);
+
+  /* #35 review swipe cards: drag the proof card left for PASS, right for FAIL. It rotates with the drag, a stamp fades
+     in, and past 140 px it flies off and records the decision; otherwise it springs back. The P / F keys fling it too. */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const decideRef = useRef(decide);
+  decideRef.current = decide;
+  const swipeable = !!cur && t !== "audit" && cur.item !== "REG-DRAWING";
+  const fling = useCallback((d: "PASS" | "FAIL") => {
+    const card = cardRef.current;
+    if (!card || calm() || !swipeable) return void decideRef.current(d);
+    const dir = d === "PASS" ? -1 : 1;
+    gsap.set(card.querySelector(d === "PASS" ? ".stamp-pass" : ".stamp-fail"), { opacity: 1 });
+    gsap.to(card, {
+      x: dir * (card.offsetWidth + 120), rotation: dir * 14, opacity: 0, duration: 0.35, ease: "power2.in",
+      onComplete: () => void decideRef.current(d).then((ok) => { if (!ok) gsap.to(card, { x: 0, rotation: 0, opacity: 1, duration: 0.6, ease: "elastic.out(1, 0.6)" }); }),
+    });
+  }, [swipeable]);
+
+  useGSAP(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    if (!calm()) gsap.from(card, { y: 14, opacity: 0, duration: 0.45, ease: "expo.out" });
+    if (!swipeable) return;
+    const pass = card.querySelector(".stamp-pass");
+    const fail = card.querySelector(".stamp-fail");
+    Draggable.create(card, {
+      type: "x", inertia: !calm(), dragClickables: false, zIndexBoost: false,
+      onDrag() {
+        gsap.set(this.target, { rotation: this.x / 18 });
+        gsap.set(pass, { opacity: gsap.utils.clamp(0, 1, -this.x / 140) });
+        gsap.set(fail, { opacity: gsap.utils.clamp(0, 1, this.x / 140) });
+      },
+      onDragEnd() {
+        if (Math.abs(this.x) > 140) {
+          const d = this.x < 0 ? "PASS" : "FAIL";
+          gsap.to(this.target, {
+            x: this.x * 3, rotation: this.x / 6, opacity: 0, duration: 0.35,
+            onComplete: () => void decideRef.current(d).then((ok) => {
+              if (!ok) gsap.to(card, { x: 0, rotation: 0, opacity: 1, duration: 0.6, ease: "elastic.out(1, 0.6)" });
+            }),
+          });
+        } else {
+          gsap.to(this.target, { x: 0, rotation: 0, duration: 0.6, ease: "elastic.out(1, 0.6)" });
+          gsap.to([pass, fail], { opacity: 0, duration: 0.2 });
+        }
+      },
+    });
+  }, { dependencies: [cur ? key(cur) : "", swipeable] });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA" || e.metaKey || e.ctrlKey) return;
-      if (e.key === "p" && t !== "audit") { e.preventDefault(); void decide("PASS"); }
-      if (e.key === "f" && t !== "audit") { e.preventDefault(); void decide("FAIL"); }
+      if (e.key === "p" && t !== "audit") { e.preventDefault(); fling("PASS"); }
+      if (e.key === "f" && t !== "audit") { e.preventDefault(); fling("FAIL"); }
       if (e.key === "ArrowDown" || e.key === "j" || e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         const i = cur ? list.indexOf(cur) : -1;
@@ -92,7 +147,7 @@ export function Review() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [decide, cur, list, t]);
+  }, [fling, cur, list, t]);
 
   const decided = lists.audit;
   const judged = decided.filter((e) => e.result === "FAIL");       // the engine took a position on these
@@ -167,31 +222,38 @@ export function Review() {
         </div>
 
         <div className="stack" style={{ ["--gap" as string]: "16px" }}>
-          <AnimatePresence mode="wait">
-            {cur ? (
-              <motion.div key={key(cur)} className="card pad" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+          {cur ? (
+            <div className="swipe-zone">
+              {swipeable && <div className="swipe-under" aria-hidden="true"><span className="pass"><CheckCircle2 size={16} /> PASS</span><span className="fail">FAIL <XCircle size={16} /></span></div>}
+              <div key={key(cur)} ref={cardRef} className={`card pad review-card${swipeable ? " swipeable" : ""}`}>
+                {swipeable && <><span className="swipe-stamp stamp-pass">PASS</span><span className="swipe-stamp stamp-fail">FAIL</span></>}
                 <div className="row between wrap" style={{ marginBottom: 14, ["--gap" as string]: "8px" }}>
                   <div className="tiny faint">Run <a href={`#/run/${cur.run.id}`} className="mono">{cur.run.id}</a> · {cur.run.label} · {cur.run.cabinet}</div>
-                  <a className="btn btn-sm btn-ghost" href={`#/run/${cur.run.id}`}>Open inspection</a>
+                  <div className="row" style={{ ["--gap" as string]: "8px" }}>
+                    {swipeable && <span className="tiny faint row swipe-hint" style={{ ["--gap" as string]: "5px" }}><Hand size={13} /> swipe ← PASS · FAIL →</span>}
+                    <a className="btn btn-sm btn-ghost" href={`#/run/${cur.run.id}`}>Open inspection</a>
+                  </div>
                 </div>
                 {p && it ? <ProofCard run={cur.run.id} it={it} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm }} /> : <div className="skeleton" style={{ height: 380 }} />}
-                {cur.item === "REG-DRAWING" ? <div className="decide"><p className="small muted">This is an input or alignment blocker. Start a new inspection with the matching drawing; a component PASS or FAIL decision cannot resolve it.</p><button className="btn btn-primary" onClick={() => go("inspect")}>Select matching inputs</button></div> : <div className="decide">
+              </div>
+              <div className="card pad">
+                {cur.item === "REG-DRAWING" ? <div className="decide flat"><p className="small muted">This is an input or alignment blocker. Start a new inspection with the matching drawing; a component PASS or FAIL decision cannot resolve it.</p><button className="btn btn-primary" onClick={() => go("inspect")}>Select matching inputs</button></div> : <div className="decide flat">
                   <textarea className="input" rows={2} placeholder={cur.result === "REVIEW" ? "What did you see on the cabinet? (kept in the audit trail)" : "Why do you confirm / overturn? (optional)"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
                   <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
-                    <button className="btn btn-lg decide-pass" onClick={() => void decide("PASS")}><CheckCircle2 /> {cur.result === "FAIL" ? "Overturn: it is correct" : "PASS: it is correct"} <kbd>P</kbd></button>
-                    <button className="btn btn-lg decide-fail" onClick={() => void decide("FAIL")}><XCircle /> {cur.result === "FAIL" ? "Confirm FAIL" : "FAIL: it is wrong"} <kbd>F</kbd></button>
+                    <button className="btn btn-lg decide-pass" onClick={() => fling("PASS")}><CheckCircle2 /> {cur.result === "FAIL" ? "Overturn: it is correct" : "PASS: it is correct"} <kbd>P</kbd></button>
+                    <button className="btn btn-lg decide-fail" onClick={() => fling("FAIL")}><XCircle /> {cur.result === "FAIL" ? "Confirm FAIL" : "FAIL: it is wrong"} <kbd>F</kbd></button>
                     {cur.review && <button className="btn btn-lg btn-ghost" onClick={() => void decide("CLEAR")}>Undo decision</button>}
                     <span className="tiny faint grow" style={{ textAlign: "right" }}><kbd>↑</kbd> <kbd>↓</kbd> move through the queue</span>
                   </div>
                 </div>}
-              </motion.div>
-            ) : (
-              <motion.div key="none" className="card pad empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ClipboardCheck />
-                <div className="muted">Queue empty.</div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </div>
+          ) : (
+            <motion.div key="none" className="card pad empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <ClipboardCheck />
+              <div className="muted">Queue empty.</div>
+            </motion.div>
+          )}
           <div className="card pad small muted row" style={{ ["--gap" as string]: "10px", alignItems: "flex-start" }}>
             <UserCheck size={18} style={{ flexShrink: 0, color: "var(--accent-3)" }} />
             <span>Decisions feed the work order (overturned FAILs drop out, confirmed REVIEWs become fixes) and the agreement rate in Analytics. The engine's own report stays untouched, so the audit trail always shows what the machine said and what the person decided.</span>

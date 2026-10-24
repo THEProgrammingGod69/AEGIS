@@ -1286,3 +1286,34 @@ select.input {
     margin-top: 80px;
   }
 }
+
+@media (max-width: 560px) {
+  .eyebrow {
+    height: auto;
+    min-height: 26px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    white-space: normal;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    line-height: 1.4;
+  }
+}
+
+/* segmented controls never push the page sideways on phones: they scroll inside themselves */
+@media (max-width: 720px) {
+  .seg {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .seg::-webkit-scrollbar {
+    display: none;
+  }
+  .seg button {
+    flex-shrink: 0;
+  }
+  .page-head > * {
+    max-width: 100%;
+  }
+}

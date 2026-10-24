@@ -1,6 +1,9 @@
 /** Reusable motion pieces from the v2 catalogue. Each returns early to its final frame in Calm. */
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { TextPlugin } from "gsap/TextPlugin";
 import { ScrollTrigger, calm, gsap, useGSAP } from "../lib/gsap";
+
+gsap.registerPlugin(TextPlugin);
 
 /** #20 aurora scroll-progress bar: transform-origin left, scaleX follows the page (smoothed like scrub: 0.3). */
 export function ScrollProgress() {
@@ -44,7 +47,7 @@ export function Odometer({ value, className, style, delay = 0 }: { value: number
     const strips = gsap.utils.toArray<HTMLElement>(".odo-strip", ref.current);
     const at = (el: HTMLElement) => -10 * Number(el.dataset.d);
     if (calm()) {
-      strips.forEach((el) => gsap.set(el, { yPercent: at(el) }));
+      strips.forEach((el) => gsap.set(el, { y: 0, yPercent: at(el) }));
       return;
     }
     strips.forEach((el, i) =>
@@ -116,4 +119,88 @@ export function Scramble({ text, chars = "0123456789.", className, delay = 0, as
     });
   }, { dependencies: [text] });
   return <Tag ref={ref as never} className={className} aria-label={text} />;
+}
+
+/** #38 charts draw when they scroll in (and again when their data changes): [data-draw-line] strokes draw,
+ *  [data-grow-y] bars grow from the baseline, [data-grow-x] bars from the left, [data-pop] dots pop in. */
+export function useChartIn(scope: RefObject<Element | null>, deps: unknown[] = []) {
+  useGSAP(() => {
+    const root = scope.current;
+    if (!root) return;
+    root.setAttribute("data-chart", "");
+    if (calm()) return;
+    // a nested chart animates its own marks: two from() tweens on one element would freeze it at its start value
+    const own = (sel: string) => Array.from(root.querySelectorAll(sel)).filter((el) => el.parentElement?.closest("[data-chart]") === root);
+    const tl = gsap.timeline({ scrollTrigger: { trigger: root, start: "top 88%", once: true } });
+    const ys = own("[data-grow-y]");
+    if (ys.length) tl.from(ys, { scaleY: 0, transformOrigin: "50% 100%", duration: 0.6, stagger: 0.04, ease: "expo.out" }, 0);
+    const xs = own("[data-grow-x]");
+    if (xs.length) tl.from(xs, { scaleX: 0, transformOrigin: "0% 50%", duration: 0.8, stagger: 0.05, ease: "expo.out" }, 0);
+    const lines = own("[data-draw-line]");
+    if (lines.length) tl.from(lines, { drawSVG: 0, duration: 1.2, stagger: 0.15, ease: "power2.inOut" }, 0.15);
+    const dots = own("[data-pop]");
+    if (dots.length) tl.from(dots, { scale: 0, opacity: 0, transformOrigin: "50% 50%", duration: 0.4, stagger: 0.025, ease: "back.out(2)" }, 0.45);
+  }, { scope, dependencies: deps, revertOnUpdate: true });
+}
+
+/** #38 progress ring: the value arc draws from 0 to its share (e.g. first-pass yield 36 of 41). */
+export function Ring({ value, size = 64, stroke = 7, color = "var(--azure)", children }: {
+  value: number; size?: number; stroke?: number; color?: string; children?: ReactNode;
+}) {
+  const ref = useRef<SVGSVGElement>(null);
+  const r = (size - stroke) / 2;
+  const v = Math.max(0, Math.min(1, value));
+  useGSAP(() => {
+    const arc = ref.current!.querySelector(".ring-value")!;
+    if (calm()) return;
+    gsap.fromTo(arc, { drawSVG: "0%" }, { drawSVG: `${v * 100}%`, duration: 1.2, ease: "power3.out", scrollTrigger: { trigger: ref.current, start: "top 92%", once: true } });
+  }, { dependencies: [v] });
+  return (
+    <span className="ring" style={{ width: size, height: size }}>
+      <svg ref={ref} viewBox={`0 0 ${size} ${size}`} width={size} height={size} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} className="ring-track" strokeWidth={stroke} />
+        <circle className="ring-value" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} stroke={color}
+          strokeDasharray={`${2 * Math.PI * r * v} ${2 * Math.PI * r}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      </svg>
+      {children && <span className="ring-label">{children}</span>}
+    </span>
+  );
+}
+
+/** #36 engine log typewriter inside a dark device panel: each new line types itself out (TextPlugin), the caret
+ *  blinks on the last one. Lines added later (a live job streaming) type in as they arrive. */
+export function EngineLog({ lines, title = "ENGINE LOG", className, startOnView = true }: {
+  lines: { t: string; k: string; v: string; tone?: "pass" | "fail" | "review" | "accent" }[]; title?: string; className?: string; startOnView?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const typed = useRef(0);
+  useGSAP(() => {
+    const rows = gsap.utils.toArray<HTMLElement>(".log-line", ref.current);
+    const fresh = rows.slice(typed.current);
+    typed.current = rows.length;
+    if (calm() || !fresh.length) return;
+    const tl = gsap.timeline({ paused: startOnView && fresh.length === rows.length });
+    fresh.forEach((row, i) => {
+      const msg = row.querySelector<HTMLElement>(".msg")!;
+      const text = msg.dataset.text ?? "";
+      tl.set(row, { autoAlpha: 1 }, i * 0.22).fromTo(msg, { text: "" }, { text: { value: text }, duration: Math.min(0.9, text.length * 0.012), ease: "none" }, i * 0.22);
+    });
+    gsap.set(fresh, { autoAlpha: 0 });
+    if (startOnView && fresh.length === rows.length) ScrollTrigger.create({ trigger: ref.current, start: "top 90%", once: true, onEnter: () => void tl.play() });
+  }, { scope: ref, dependencies: [lines.length] });
+  return (
+    <div className={`log-panel${className ? ` ${className}` : ""}`} ref={ref}>
+      <div className="log-head mono"><span className="rv-dots" aria-hidden="true"><i /><i /><i /></span>{title}</div>
+      <div className="log-body mono">
+        {lines.map((l, i) => (
+          <div key={i} className="log-line">
+            <span className="t">{l.t}</span>
+            <span className="k">{l.k}</span>
+            <span className={`msg${l.tone ? ` ${l.tone}` : ""}`} data-text={l.v}>{l.v}</span>
+          </div>
+        ))}
+        <span className="caret" aria-hidden="true" />
+      </div>
+    </div>
+  );
 }

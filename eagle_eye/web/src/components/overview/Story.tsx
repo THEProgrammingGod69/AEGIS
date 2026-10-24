@@ -120,7 +120,7 @@ export function VsTable({ rows }: { rows: [string, string, string][] }) {
             <span>
               {a}
               <svg className="strike" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M1,6 C20,3.5 38,7.5 56,4.8 S86,5.5 99,4.2" vectorEffect="non-scaling-stroke" />
+                <path d="M1,6 C20,3.5 38,7.5 56,4.8 S86,5.5 99,4.2" />
               </svg>
             </span>
           </div>

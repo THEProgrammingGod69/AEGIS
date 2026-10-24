@@ -4,7 +4,8 @@ import {
   GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanEye, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
   Timer, UserCheck, XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Flip } from "gsap/Flip";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CompareSlider } from "../components/CompareSlider";
 import { ConfidenceChip, PhotoConfidenceLine } from "../components/Confidence";
 import { DropZone } from "../components/DropZone";
@@ -18,11 +19,14 @@ import { inspectorName, reviewSummary } from "../lib/reviews";
 import { recheckOptions } from "../lib/static";
 import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
 import { straightener } from "../lib/geometry";
+import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
 import { engineOf, type Engine } from "../lib/confidence";
 import { approvalBlocker, reviewReason, safeInspection } from "../lib/inspection";
 import { go } from "../lib/router";
 import type { Item, JobView, Pt, Result, Review, RunMeta, RunPayload } from "../lib/types";
+
+gsap.registerPlugin(Flip);
 
 const R = 4; // rectified px per mm (matches inspector.R)
 const mmQuad = (b: number[]): Pt[] => [[b[0] * R, b[1] * R], [(b[0] + b[2]) * R, b[1] * R], [(b[0] + b[2]) * R, (b[1] + b[3]) * R], [b[0] * R, (b[1] + b[3]) * R]];
@@ -152,20 +156,38 @@ function IssueList({ items, eng, selected, hovered, onSelect, onHover }: {
   );
 }
 
+/** #30 checklist Flip regroup: rows stay mounted and toggle `hidden`, so a filter change moves the remaining rows to
+ *  their new places and fades the newly shown ones in. */
 function Checklist({ items, eng, selected, onSelect }: { items: Item[]; eng: Engine; selected: string | null; onSelect: (id: string) => void }) {
   const [f, setF] = useState<"ALL" | Result>("ALL");
   const [q, setQ] = useState("");
+  const scope = useRef<HTMLDivElement>(null);
+  const flipState = useRef<Flip.FlipState | null>(null);
   const counts = useMemo(() => {
     const c: Record<string, number> = { ALL: items.length, PASS: 0, FAIL: 0, REVIEW: 0, SKIP: 0, NOT_IN_VIEW: 0 };
     items.forEach((i) => c[i.result]++);
     return c;
   }, [items]);
-  const rows = items.filter((i) => (f === "ALL" || i.result === f) && (!q || `${i.id} ${i.expected} ${i.found}`.toLowerCase().includes(q.toLowerCase())));
+  const match = (i: Item) => (f === "ALL" || i.result === f) && (!q || `${i.id} ${i.expected} ${i.found}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = items.filter(match).length;
+  const changeFilter = (k: "ALL" | Result) => {
+    if (!calm()) flipState.current = Flip.getState(scope.current!.querySelectorAll(".check-row"));
+    setF(k);
+  };
+  useGSAP(() => {
+    const st = flipState.current;
+    flipState.current = null;
+    if (!st) return;
+    Flip.from(st, {
+      targets: scope.current!.querySelectorAll(".check-row"), duration: 0.45, ease: "ee",
+      onEnter: (els) => gsap.fromTo(els, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3 }),
+    });
+  }, { scope, dependencies: [f] });
   return (
-    <div className="checklist">
+    <div className="checklist" ref={scope}>
       <div className="row wrap" style={{ ["--gap" as string]: "6px", marginBottom: 10 }}>
         {(["ALL", "FAIL", "REVIEW", "SKIP", "PASS", "NOT_IN_VIEW"] as const).filter((k) => k !== "NOT_IN_VIEW" || counts[k] > 0).map((k) => (
-          <button key={k} className="chip" aria-pressed={f === k} style={{ ["--c" as string]: k === "ALL" ? "var(--accent)" : STATUS_COLOR[k] }} onClick={() => setF(k)}>
+          <button key={k} className="chip" aria-pressed={f === k} style={{ ["--c" as string]: k === "ALL" ? "var(--accent)" : STATUS_COLOR[k] }} onClick={() => changeFilter(k)}>
             {k === "ALL" ? "All" : k === "NOT_IN_VIEW" ? "Not in view" : k} <span className="count">{counts[k]}</span>
           </button>
         ))}
@@ -180,8 +202,8 @@ function Checklist({ items, eng, selected, onSelect }: { items: Item[]; eng: Eng
             <tr><th>Item</th><th>Expected</th><th>Found</th><th>Result</th><th className="tip" data-tip="Calibrated on Fault Forge runs. PASS/FAIL: chance the verdict is right. REVIEW: chance the item is faulty.">Confidence</th></tr>
           </thead>
           <tbody>
-            {rows.map((it) => (
-              <tr key={it.id} aria-selected={selected === it.id} onClick={() => onSelect(it.id)}>
+            {items.map((it) => (
+              <tr key={it.id} className="check-row" hidden={!match(it)} aria-selected={selected === it.id} onClick={() => onSelect(it.id)}>
                 <td className="mono nowrap">{it.id}</td>
                 <td className="mono small muted">{it.expected}</td>
                 <td className="small" style={{ color: it.result === "PASS" ? "var(--text-2)" : STATUS_COLOR[it.result] }}>{it.found}</td>
@@ -196,7 +218,7 @@ function Checklist({ items, eng, selected, onSelect }: { items: Item[]; eng: Eng
             ))}
           </tbody>
         </table>
-        {!rows.length && <div className="empty small">No items match.</div>}
+        {!shown && <div className="empty small">No items match.</div>}
       </div>
     </div>
   );
@@ -514,7 +536,7 @@ export function Run({ id }: { id: string }) {
       ))}
 
       <div className="workbench">
-        <div className="card viewer-card">
+        <div className="card viewer-card device">
           <div className="viewer-toolbar">
             <Seg value={mode} onChange={setMode} options={[
               { value: "photo", label: <><ImageIcon /> Photo</>, title: "The photo as taken, with every issue boxed" },

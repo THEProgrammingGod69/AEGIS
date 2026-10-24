@@ -31,13 +31,13 @@
 
 .lid-top {
   top: 0;
+  z-index: 401;
   border-radius: 0 0 50% 50% / 0 0 24% 24%;
   background:
     radial-gradient(60% 80% at 70% 100%, rgba(108, 71, 217, 0.55), transparent 70%),
     radial-gradient(50% 70% at 20% 80%, rgba(0, 184, 224, 0.4), transparent 70%),
     linear-gradient(175deg, #003a6e 0%, #004b8d 40%, #0a66e8 100%);
   box-shadow: 0 5px 0 -1px rgba(127, 231, 255, 0.75), 0 18px 40px rgba(0, 75, 141, 0.35);
-  transform: translateY(-101%);
 }
 
 .lid-bottom {
@@ -48,14 +48,13 @@
     radial-gradient(50% 70% at 85% 20%, rgba(108, 71, 217, 0.45), transparent 70%),
     linear-gradient(5deg, #003a6e 0%, #004b8d 40%, #0a66e8 100%);
   box-shadow: 0 -5px 0 -1px rgba(127, 231, 255, 0.75), 0 -18px 40px rgba(0, 75, 141, 0.35);
-  transform: translateY(101%);
 }
 
 .lid-label {
   position: fixed;
   left: 50%;
   top: 50%;
-  z-index: 401;
+  z-index: 402;
   transform: translate(-50%, -50%);
   color: #fff;
   font-size: 15px;
@@ -158,15 +157,15 @@
 /* #17 odometer */
 .odo {
   display: inline-flex;
-  line-height: 1;
-  height: 1em;
+  line-height: 1.12;
+  height: 1.12em;
   overflow: hidden;
   vertical-align: bottom;
 }
 
 .odo-d {
   display: inline-block;
-  height: 1em;
+  height: 1.12em;
   overflow: hidden;
 }
 
@@ -178,27 +177,17 @@
 
 .odo-strip > span {
   display: block;
-  height: 1em;
-  line-height: 1;
+  height: 1.12em;
+  line-height: 1.12;
 }
 
-.odo.aurora-num .odo-strip > span {
+.odo-aurora .odo-strip > span {
   background: var(--aurora-v);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-html.calm .odo-strip[data-d="0"] { transform: translateY(0); }
-html.calm .odo-strip[data-d="1"] { transform: translateY(-10%); }
-html.calm .odo-strip[data-d="2"] { transform: translateY(-20%); }
-html.calm .odo-strip[data-d="3"] { transform: translateY(-30%); }
-html.calm .odo-strip[data-d="4"] { transform: translateY(-40%); }
-html.calm .odo-strip[data-d="5"] { transform: translateY(-50%); }
-html.calm .odo-strip[data-d="6"] { transform: translateY(-60%); }
-html.calm .odo-strip[data-d="7"] { transform: translateY(-70%); }
-html.calm .odo-strip[data-d="8"] { transform: translateY(-80%); }
-html.calm .odo-strip[data-d="9"] { transform: translateY(-90%); }
 
 /* #16 marquee band */
 .marquee {
@@ -331,5 +320,137 @@ html.lenis.lenis-stopped {
   .cursor,
   .spark-canvas {
     display: none;
+  }
+}
+
+/* #36 dark device log panel */
+.log-panel {
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #071729, #040b15);
+  border: 1px solid rgba(127, 231, 255, 0.12);
+  box-shadow: 0 30px 70px -34px rgba(0, 40, 90, 0.6);
+}
+
+.log-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+}
+
+.log-head .rv-dots i {
+  width: 8px;
+  height: 8px;
+}
+
+.log-body {
+  position: relative;
+  padding: 12px 16px 16px;
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text-2);
+  min-height: 60px;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 64px 108px minmax(0, 1fr);
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.log-line .t {
+  color: var(--text-4);
+}
+
+.log-line .k {
+  color: var(--text);
+}
+
+.log-line .k::after {
+  content: " ........";
+  color: var(--text-4);
+}
+
+.log-line .msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-line .msg.pass { color: var(--pass); }
+.log-line .msg.fail { color: var(--fail); }
+.log-line .msg.review { color: var(--review); }
+.log-line .msg.accent { color: var(--accent); }
+
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  margin-top: 4px;
+  background: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% { opacity: 0; }
+}
+
+/* #38 progress ring */
+.ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ring svg {
+  display: block;
+}
+
+.ring-track {
+  fill: none;
+  stroke: var(--line);
+}
+
+.ring-value {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+/* #6 confetti */
+.confetti {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 700;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+@media (max-width: 560px) {
+  .log-line {
+    grid-template-columns: 56px 86px minmax(0, 1fr);
+    font-size: 11px;
   }
 }

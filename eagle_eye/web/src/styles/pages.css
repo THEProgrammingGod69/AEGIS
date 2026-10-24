@@ -593,10 +593,10 @@
 }
 
 .pl-node.done {
-  color: var(--accent-ink);
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 0 16px rgba(10, 102, 232, 0.4);
+  color: #fff;
+  background: var(--pass);
+  border-color: var(--pass);
+  box-shadow: 0 0 0 3px rgba(8, 135, 90, 0.14);
 }
 
 .pl-line {
@@ -615,7 +615,7 @@
   left: 0;
   top: 0;
   width: 100%;
-  background: linear-gradient(180deg, var(--accent), var(--accent-3));
+  background: linear-gradient(180deg, var(--pass), var(--azure));
 }
 
 .pl-body {
@@ -2564,4 +2564,339 @@
   border: 1px solid var(--line-2);
   border-radius: 10px;
   background: rgba(10, 102, 232, 0.05);
+}
+
+/* #28 drop zone: traced border (the dashed CSS border hides once a file is in) */
+.dz-border {
+  position: absolute;
+  inset: -1.5px;
+  width: calc(100% + 3px);
+  height: calc(100% + 3px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dz-border rect {
+  width: calc(100% - 1.5px);
+  height: calc(100% - 1.5px);
+  fill: none;
+  stroke: var(--pass);
+  stroke-width: 1.5;
+  opacity: 0;
+}
+
+.drop.has {
+  border-color: transparent;
+}
+
+.drop.has .dz-border rect {
+  opacity: 1;
+}
+
+.drop-icon svg path.dz-icon {
+  stroke: var(--pass);
+}
+
+/* #29 live run: beam follows progress, compact stepper with a halo on the running stage */
+.scan-beam.synced {
+  top: 0;
+  animation: none;
+}
+
+.running-progress {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: rgba(4, 11, 21, 0.75);
+  border: 1px solid rgba(91, 227, 255, 0.25);
+}
+
+.stepper {
+  list-style: none;
+  display: flex;
+  margin: 0 0 18px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.step {
+  position: relative;
+  flex: 1 0 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 64px;
+}
+
+.step + .step::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  right: calc(50% + 17px);
+  width: calc(100% - 34px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.step.done + .step::before,
+.step.done + .step.running::before {
+  background: var(--pass);
+}
+
+.step-node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1.5px solid var(--line-2);
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.step.done .step-node {
+  color: #fff;
+  background: var(--pass);
+  border-color: var(--pass);
+}
+
+.step.running .step-node {
+  color: #fff;
+  background: var(--azure);
+  border-color: var(--azure);
+}
+
+.step.running .step-node::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid rgba(10, 102, 232, 0.35);
+  animation: halo 1.4s var(--ease) infinite;
+}
+
+@keyframes halo {
+  0% { transform: scale(0.85); opacity: 1; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+.step-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.step.running .step-label {
+  color: var(--azure);
+}
+
+.step.done .step-label {
+  color: var(--pass);
+}
+
+/* #31 proof zoom: crops grow into a modal (Flip), X-ray overlays the drawing on the aligned crop */
+.zoomable {
+  cursor: zoom-in;
+}
+
+.zoom-hint {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  color: #fff;
+  background: rgba(4, 11, 21, 0.6);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.2s, transform 0.2s var(--ease);
+}
+
+.zoomable:hover .zoom-hint,
+.zoomable:focus-visible .zoom-hint {
+  opacity: 1;
+  transform: none;
+}
+
+.proof-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.pz-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 23, 38, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.pz-card {
+  position: relative;
+  width: min(1120px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+  box-shadow: var(--shadow-pop);
+}
+
+.pz-head {
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pz-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.pz-grid.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pz-grid.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.pz-fig {
+  margin: 0;
+  min-width: 0;
+}
+
+.pz-fig figcaption {
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.pz-img {
+  position: relative;
+  height: min(52vh, 460px);
+  border-radius: 14px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #0a1a2e;
+  border: 1px solid color-mix(in srgb, var(--c, var(--line-2)) 45%, transparent);
+}
+
+.pz-img.drawing {
+  background: #fff;
+  border-color: rgba(10, 102, 232, 0.3);
+}
+
+.pz-img > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.pz-xray {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  mix-blend-mode: multiply;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.pz-xray > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.pz-meta {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .pz-grid.n2,
+  .pz-grid.n3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pz-img {
+    height: 38vh;
+  }
+}
+
+/* #33 before/after: the handle is a Draggable; a wide invisible hit area makes it easy to grab */
+.compare-handle {
+  left: 0;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.compare-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -14px;
+  width: 30px;
+}
+
+.compare-handle:focus-visible span {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* engine page: typed log of a recorded run (#36) */
+.engine-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 22px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+}
+
+.engine-log-copy {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+@media (max-width: 900px) {
+  .engine-log-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.api-list .mono,
+.filemap .mono {
+  overflow-wrap: anywhere;
+  min-width: 0;
 }

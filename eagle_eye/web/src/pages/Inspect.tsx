@@ -32,7 +32,7 @@ function PresetCard({ presets, onRun, disabled }: { presets: Preset[]; onRun: (p
           </div>
           <div className="samples">
             {p.photos.map((ph) => (
-              <button key={ph.file} className="sample" disabled={disabled} onClick={() => onRun(p, ph.file)} title={ph.content}>
+              <button key={ph.file} className="sample" disabled={disabled} onClick={() => onRun(p, ph.file)} title={ph.content} data-spotlight="" data-tilt="8">
                 <div className="sample-img"><img src={url.presetPhoto(p.id, ph.file, 360)} alt={ph.file} loading="lazy" /></div>
                 <div className="sample-body">
                   <div className="sample-title mono" style={{ fontSize: 12 }}>{ph.file.replace(/^IMG_\d+_/, "").replace(/\.[a-z]+$/i, "")}</div>
@@ -50,7 +50,7 @@ function PresetCard({ presets, onRun, disabled }: { presets: Preset[]; onRun: (p
 export function SampleCard({ s, active, onClick }: { s: Sample; active: boolean; onClick: () => void }) {
   const c = s.counts;
   return (
-    <button className={`sample${active ? " active" : ""}`} onClick={onClick} aria-pressed={active}>
+    <button className={`sample${active ? " active" : ""}`} onClick={onClick} aria-pressed={active} data-spotlight="" data-tilt="8">
       <div className="sample-img">
         <img src={url.sample(s.id, 360)} alt={s.title} loading="lazy" />
         <span className="sample-id mono">{s.id}</span>
@@ -227,8 +227,8 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
           <h1>Photo in. Filled checklist with proof out.</h1>
           <p>Inspect a real cabinet against its matching drawing using local OCR and geometry. Generated samples have their own explicit demo mode.</p>
         </div>
-        <button className="btn btn-primary btn-xl" disabled={blocked} onClick={() => start()}>
-          <Play /> Inspect <kbd style={{ marginLeft: 4, background: "rgba(4,18,28,.15)", color: "inherit", borderColor: "rgba(4,18,28,.25)" }}>Ctrl ↵</kbd>
+        <button className="btn btn-primary btn-xl" disabled={blocked} onClick={() => start()} data-magnetic="">
+          <Play /> Inspect <kbd style={{ marginLeft: 4, background: "rgba(255,255,255,.16)", color: "inherit", borderColor: "rgba(255,255,255,.3)" }}>Ctrl ↵</kbd>
         </button>
       </div>
 
