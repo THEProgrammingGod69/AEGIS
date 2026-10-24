@@ -32,6 +32,8 @@ environment; nothing secret is ever shipped to the browser.
 | `EAGLE_EYE_CLOUD` | `1` in the image | `1` = stateless `/api/v2` only (hosted console); `0` = also serve the console (on-prem) |
 | `EAGLE_EYE_DATA` | `/tmp/eagle_eye` | Writable run store and caches (KB, OCR, agent) |
 | `EAGLE_EYE_REAL_DATA` | `/app/data/emerson` | Folder with a real drawing set + photos for the "Emerson 13GE03331" preset (mounted, never baked) |
+| `EAGLE_PRESET_BLOB` | unset | Prefix of a real-cabinet preset in the project's **private** Vercel Blob store (e.g. `presets/emerson/`); mirrored into `/tmp` on first use. Needs the store connected to the engine project (`BLOB_READ_WRITE_TOKEN`) |
+| `EAGLE_ADMIN_TOKEN` | unset | Enables `POST /api/v2/admin/preset` (header `x-admin-token`) to upload preset files into that private store; delete it after uploading |
 | `EAGLE_CORS_ORIGINS` | console URL + localhost | Comma-separated allowed origins |
 | `EAGLE_OCR_MODE` / `EAGLE_OCR_WORKERS` | `FULL` / `2` | OCR passes and parallel lanes (match the vCPUs) |
 | `EAGLE_OCR_GATE` | `0` | `1` skips tiles where a low-resolution pass sees no text: ~3x faster, but loses small labels (whole-cabinet and rear photos) |

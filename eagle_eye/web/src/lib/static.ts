@@ -282,7 +282,7 @@ async function parentData(parent: string) {
 }
 
 function recordedFor(i: InspectInput): string[] | null {
-  if (i.photo || i.ga || i.wires || i.checklist) return null;
+  if (i.photo || i.ga || i.wires || i.checklist || i.preset) return null;
   if (i.checks && IX.enabled.some((c) => !i.checks!.includes(c))) return null;
   const sample = i.sample ?? "01";
   if (i.parent) {

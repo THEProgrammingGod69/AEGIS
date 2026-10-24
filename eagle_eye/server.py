@@ -52,6 +52,10 @@ MAX_PDF = _mb("EAGLE_MAX_PDF_MB", 30)
 MAX_UPLOAD = max(MAX_PHOTO, MAX_PDF)
 RATE = max(0, int(os.environ.get("EAGLE_RATE_PER_MIN") or 6))
 REAL_DATA = Path(os.environ.get("EAGLE_EYE_REAL_DATA") or config.BASE.parent / "data" / "emerson")
+# Hosted preset: the drawing set + photos live in the engine's PRIVATE Vercel Blob store under this prefix (never in
+# git, never at a public URL); they are mirrored into the container's /tmp on first use.
+PRESET_BLOB = (os.environ.get("EAGLE_PRESET_BLOB") or "").strip()
+ADMIN_TOKEN = (os.environ.get("EAGLE_ADMIN_TOKEN") or "").strip()
 CLOUD = os.environ.get("EAGLE_EYE_CLOUD") == "1"          # hosted engine container: stateless API only
 CONSOLE_URL = os.environ.get("EAGLE_EYE_CONSOLE", "https://aegis-eagle-eye.vercel.app")
 STARTED = time.time()
@@ -204,8 +208,24 @@ def _rate_limit(request):
 
 
 # ------------------------------------------------------------------ real-cabinet presets
+def _real_data():
+    """Folder holding the real-cabinet preset: the private Blob store's copy when EAGLE_PRESET_BLOB is set, else
+    EAGLE_EYE_REAL_DATA (data/emerson locally)."""
+    if PRESET_BLOB:
+        import blobstore
+        if blobstore.enabled():
+            try:
+                return blobstore.sync(PRESET_BLOB, config.DATA / "presets" / PRESET_BLOB.strip("/").split("/")[-1])
+            except Exception:  # noqa: BLE001 - a storage hiccup must not take the engine down
+                traceback.print_exc()
+                d = config.DATA / "presets" / PRESET_BLOB.strip("/").split("/")[-1]
+                return d if d.is_dir() else REAL_DATA
+    return REAL_DATA
+
+
 def _presets():
-    """Real drawing sets with photos found in EAGLE_EYE_REAL_DATA (never in git, mounted or copied locally)."""
+    """Real drawing sets with photos (never in git): a private Blob store in the cloud, data/emerson locally."""
+    REAL_DATA = _real_data()
     if not REAL_DATA.is_dir():
         return []
     pdfs = sorted(REAL_DATA.glob("*.pdf"))
@@ -226,19 +246,49 @@ def _presets():
         except (OSError, ValueError):
             gt = {}
     title = f"{REAL_DATA.name.capitalize()} {cab}" if cab else f"Real cabinet ({pdfs[0].stem})"
-    return [dict(id=REAL_DATA.name.lower(), title=title, cabinet=cab, ga=pdfs[0],
+    try:
+        title = json.loads((REAL_DATA / "preset.json").read_text(encoding="utf-8")).get("title") or title
+    except (OSError, ValueError):
+        pass
+    return [dict(id=REAL_DATA.name.lower(), title=title, cabinet=cab, ga=pdfs[0], dir=REAL_DATA,
                  photos=[dict(file=p.name, content=gt.get(p.name, {}).get("content", "")) for p in photos])]
 
 
 def _preset(pid, photo_name=None):
     pre = next((p for p in _presets() if p["id"] == pid), None)
     if pre is None:
-        _err(404, f"Unknown preset '{pid}' (no real drawing set in {REAL_DATA.name}/)")
+        _err(404, f"Unknown preset '{pid}' (no real drawing set on this engine)")
     names = [p["file"] for p in pre["photos"]]
     name = photo_name or names[0]
     if name not in names:
         _err(404, f"Unknown photo '{name}' in preset '{pid}'")
-    return dict(pre, photo=REAL_DATA / name)
+    return dict(pre, photo=pre["dir"] / name)
+
+
+_PRESET_KINDS = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                 ".json": "application/json"}
+
+
+@app.post("/api/v2/admin/preset", include_in_schema=False)
+async def admin_preset_upload(request: Request, file: UploadFile = File(...)):
+    """Put one preset file into the engine's PRIVATE Blob store (EAGLE_ADMIN_TOKEN in the x-admin-token header).
+    Disabled unless both EAGLE_ADMIN_TOKEN (>= 24 chars) and EAGLE_PRESET_BLOB are set."""
+    import hmac
+    import blobstore
+    if len(ADMIN_TOKEN) < 24 or not PRESET_BLOB or not blobstore.enabled():
+        _err(404, "not found")
+    if not hmac.compare_digest(request.headers.get("x-admin-token", ""), ADMIN_TOKEN):
+        _err(403, "forbidden")
+    name = Path(file.filename or "").name
+    ext = Path(name).suffix.lower()
+    if not name or name.startswith(".") or ext not in _PRESET_KINDS:
+        _err(400, "file: .pdf / .jpg / .png / .json")
+    data = await file.read()
+    if not data:
+        _err(400, "empty file")
+    rec = blobstore.put(PRESET_BLOB.rstrip("/") + "/" + name, data, _PRESET_KINDS[ext])
+    blobstore.sync(PRESET_BLOB, config.DATA / "presets" / PRESET_BLOB.strip("/").split("/")[-1], force=True)
+    return dict(stored=rec.get("pathname"), bytes=len(data), access="private")
 
 
 # ------------------------------------------------------------------ API

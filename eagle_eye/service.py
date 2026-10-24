@@ -176,6 +176,19 @@ class NeedPhoto(InspectionError):
     """The engine has no stored result for this photo fingerprint: the photo itself has to be sent."""
 
 
+class WrongDrawing(InspectionError):
+    """Not one label of the drawing set was found in the photo: it is another cabinet's photo (or unreadable).
+    Asking for the right drawing set beats a report in which every item is REVIEW."""
+
+
+DEMO_MISMATCH = ("None of the {n} labels of the demo drawing {cab} were found in this photo, so it is not that cabinet. "
+                 "Add this cabinet's own drawing set (vector PDF) under Engineering inputs - or pick the real-cabinet "
+                 "preset if one is offered - and inspect again.")
+REAL_MISMATCH = ("None of the labels of drawing set {name} ({cab}) could be read in this photo. Check that the photo "
+                 "shows this cabinet, then re-photo one side at a time from about 1 m, straight on, so the device labels "
+                 "are sharp.")
+
+
 def verdict(c, n_items, warnings=None, rep=None):
     real = bool(rep and rep.get("engine_kind") == "real")
     weak = next((w for w in warnings or [] if w["code"] == "weak_registration"), None)
@@ -380,6 +393,8 @@ def _engine(kind, photo, inputs, enabled, emit, work, d, rec):
     if kind == "legacy":
         photo_path = prepare_photo(photo, work)
         rep, ctx = inspect(str(photo_path), inputs["ga"]["path"], inputs["wires"]["path"], enabled=enabled, on_event=emit)
+        if inputs["ga"].get("demo") and rep["registration"]["anchors"] == 0:
+            raise WrongDrawing(DEMO_MISMATCH.format(n=rep["registration"]["targets"], cab=rep["ga"]["cabinet"]))
         rgb = ctx.photo
         rim = Image.fromarray(ctx.rect)
         k = RECT_PX_PER_MM / R
@@ -389,6 +404,8 @@ def _engine(kind, photo, inputs, enabled, emit, work, d, rec):
         import pipeline
         [(rep, ctx)] = pipeline.inspect_real([photo], inputs["ga"]["path"], enabled=enabled, on_event=emit, run_dir=d,
                                              names=[rec["name"]])
+        if rep["registration"]["anchors"] == 0 and all(r["result"] == "NOT_IN_VIEW" for r in rep["results"]):
+            raise WrongDrawing(REAL_MISMATCH.format(name=inputs["ga"]["name"], cab=rep["ga"]["cabinet"]))
         rgb = ctx.photo["rgb"]
     _, scale = save_preview(rgb, art / FILES["preview"])
     full = Image.fromarray(np.ascontiguousarray(rgb))
