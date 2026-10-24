@@ -1,0 +1,284 @@
+{
+ "schema": "eagle-eye-gap/1",
+ "created": "2026-10-24T17:21:18+00:00",
+ "engine": "3.1.0",
+ "synthetic": {
+  "photos": 50,
+  "planted": 87,
+  "FAIL": 87,
+  "REVIEW": 0,
+  "PASS": 0,
+  "unassessed": 0,
+  "fail_rate": 1.0,
+  "flag_rate": 1.0,
+  "incorrect_pass_rate": 0.0,
+  "false_fail": 0,
+  "false_fail_rate": 0.0,
+  "review_rate": 0.0092,
+  "not_in_view_rate": 0.0,
+  "judged": 1950,
+  "sec_per_photo": 0.89,
+  "categories": {
+   "missing": {
+    "planted": 23,
+    "FAIL": 23,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "wrong_label": {
+    "planted": 19,
+    "FAIL": 19,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "swap": {
+    "planted": 12,
+    "FAIL": 12,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "ferrule": {
+    "planted": 22,
+    "FAIL": 22,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "colour": {
+    "planted": 11,
+    "FAIL": 11,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  "engine": "demo-cabinet engine",
+  "source": "generated cabinets #200-#249 (Fault Forge self-test)",
+  "selection": "faults planted anywhere on the cabinet"
+ },
+ "real": {
+  "photos": 12,
+  "planted": 12,
+  "FAIL": 6,
+  "REVIEW": 6,
+  "PASS": 0,
+  "unassessed": 0,
+  "fail_rate": 0.5,
+  "flag_rate": 1.0,
+  "incorrect_pass_rate": 0.0,
+  "false_fail": 0,
+  "false_fail_rate": 0.0,
+  "review_rate": 0.0386,
+  "not_in_view_rate": 0.7491,
+  "judged": 777,
+  "sec_per_photo": 21.53,
+  "categories": {
+   "missing": {
+    "planted": 4,
+    "FAIL": 0,
+    "REVIEW": 4,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "wrong_label": {
+    "planted": 4,
+    "FAIL": 4,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "swap": {
+    "planted": 4,
+    "FAIL": 2,
+    "REVIEW": 2,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.5,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "ferrule": {
+    "planted": 0,
+    "FAIL": 0,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 0.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "colour": {
+    "planted": 0,
+    "FAIL": 0,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 0.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  "engine": "real-cabinet engine",
+  "agent": "off",
+  "kind": "drawing_render",
+  "source": "images of Emerson's cabinet 13GE03331 rendered from its GA drawing with camera effects (render_real.py), faults planted by forge_real.py; no cabinet photos were available",
+  "selection": "faults planted only at labels the engine read with certainty; each render shows one of the cabinet's four sides, so most items are not in view by construction; renders have no wiring, shadows or occlusion, so these numbers are an upper bound for real photos"
+ },
+ "real_reason": null,
+ "gap": {
+  "fail_rate": -0.5,
+  "flag_rate": 0.0,
+  "incorrect_pass_rate": 0.0,
+  "false_fail_rate": 0.0,
+  "review_rate": 0.0294,
+  "not_in_view_rate": 0.7491
+ },
+ "categories": [
+  {
+   "id": "missing",
+   "label": "Missing part or label",
+   "synthetic": {
+    "planted": 23,
+    "FAIL": 23,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "real": {
+    "planted": 4,
+    "FAIL": 0,
+    "REVIEW": 4,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  {
+   "id": "wrong_label",
+   "label": "Wrong label",
+   "synthetic": {
+    "planted": 19,
+    "FAIL": 19,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "real": {
+    "planted": 4,
+    "FAIL": 4,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  {
+   "id": "swap",
+   "label": "Swapped devices",
+   "synthetic": {
+    "planted": 12,
+    "FAIL": 12,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "real": {
+    "planted": 4,
+    "FAIL": 2,
+    "REVIEW": 2,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.5,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  {
+   "id": "ferrule",
+   "label": "Wire ferrule",
+   "synthetic": {
+    "planted": 22,
+    "FAIL": 22,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "real": {
+    "planted": 0,
+    "FAIL": 0,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 0.0,
+    "incorrect_pass_rate": 0.0
+   }
+  },
+  {
+   "id": "colour",
+   "label": "Wire colour",
+   "synthetic": {
+    "planted": 11,
+    "FAIL": 11,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 1.0,
+    "flag_rate": 1.0,
+    "incorrect_pass_rate": 0.0
+   },
+   "real": {
+    "planted": 0,
+    "FAIL": 0,
+    "REVIEW": 0,
+    "PASS": 0,
+    "unassessed": 0,
+    "fail_rate": 0.0,
+    "flag_rate": 0.0,
+    "incorrect_pass_rate": 0.0
+   }
+  }
+ ],
+ "real_rows": [],
+ "published": true
+}

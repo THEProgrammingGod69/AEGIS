@@ -331,6 +331,8 @@ export interface GapSide {
   source: string;
   selection: string;
   agent?: string;
+  /** real side only: photos of the cabinet, or renders of its GA drawing (render_real.py) */
+  kind?: "photo" | "drawing_render";
 }
 export type GapRate = "fail_rate" | "flag_rate" | "incorrect_pass_rate" | "false_fail_rate" | "review_rate" | "not_in_view_rate";
 export interface ForgeGap {

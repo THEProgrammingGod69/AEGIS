@@ -50,3 +50,12 @@ def test_api_serves_the_comparison():
         assert res.status_code == 200
         body = res.json()
         assert body["schema"] == eval_gap.SCHEMA and {c["id"] for c in body["categories"]} >= {"missing", "swap"}
+
+
+def test_real_side_says_how_its_images_were_made(tmp_path):
+    assert eval_gap.real_meta(None)["kind"] == "photo"
+    (tmp_path / "render_info.json").write_text(json.dumps({"kind": "drawing_render", "cabinet": "13GE03331"}))
+    meta = eval_gap.real_meta(tmp_path)
+    assert meta["kind"] == "drawing_render" and "no cabinet photos" in meta["source"] and "upper bound" in meta["selection"]
+    rep = eval_gap.build(real=[_row(["FAIL"])], synth_path="/nonexistent.json", meta=meta)
+    assert rep["real"]["kind"] == "drawing_render" and rep["real_rows"][0]["photo"] == "missing.jpg"

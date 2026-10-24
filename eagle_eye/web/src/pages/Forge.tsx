@@ -338,8 +338,8 @@ export function Forge({ auto = false }: { auto?: boolean }) {
       <section className="section">
         <Reveal className="section-head">
           <span className="eyebrow">Planted faults, synthetic vs real</span>
-          <h2>The same faults, planted in generated and real photos.</h2>
-          <p>Fault Forge plants the same kinds of fault in generated cabinets and in photos of Emerson's real cabinet, and scores both the same way: confirmed (FAIL), referred (REVIEW), incorrect PASS, or not assessed. The gap shows what real photos cost.</p>
+          <h2>The same faults, planted in generated and real-cabinet images.</h2>
+          <p>Fault Forge plants the same kinds of fault in generated cabinets and in images of Emerson's real cabinet (photos, or renders of its GA drawing when no photos are available), and scores both the same way: confirmed (FAIL), referred (REVIEW), incorrect PASS, or not assessed. The gap shows what the real cabinet costs.</p>
         </Reveal>
         <ForgeGap />
       </section>

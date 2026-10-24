@@ -26,7 +26,8 @@ import config
 
 REAL = config.BASE.parent / "data" / "emerson"
 SYNTH_RESULTS = config.OUT / "forge" / "results.json"
-GAP_FILES = (config.DATA / "real_eval" / "gap.json", config.OUT / "real_eval" / "gap.json")
+PUBLISHED = config.OUT / "forge" / "gap_summary.json"     # totals only (--publish); committed, so hosted engines have it
+GAP_FILES = (config.DATA / "real_eval" / "gap.json", config.OUT / "real_eval" / "gap.json", PUBLISHED)
 SCHEMA = "eagle-eye-gap/1"
 
 CATEGORIES = [("missing", "Missing part or label"), ("wrong_label", "Wrong label"), ("swap", "Swapped devices"),
@@ -130,7 +131,26 @@ def real_rows(data=REAL, agent="off", on_photo=None):
     return out
 
 
-def build(real=None, real_reason=None, agent="off", synth_path=SYNTH_RESULTS):
+def real_meta(data=None):
+    """How the real side's images were made: photos of the cabinet, or renders of its GA drawing (render_real.py)."""
+    info = None
+    if data is not None:
+        try:
+            info = json.loads((Path(data) / "render_info.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+    if info and info.get("kind") == "drawing_render":
+        return {"kind": "drawing_render",
+                "source": f"images of Emerson's cabinet {info.get('cabinet')} rendered from its GA drawing with camera "
+                          f"effects (render_real.py), faults planted by forge_real.py; no cabinet photos were available",
+                "selection": "faults planted only at labels the engine read with certainty; each render shows one of "
+                             "the cabinet's four sides, so most items are not in view by construction; renders have no "
+                             "wiring, shadows or occlusion, so these numbers are an upper bound for real photos"}
+    return {"kind": "photo", "source": "photos of Emerson's cabinet 13GE03331, faults planted by forge_real.py",
+            "selection": "faults planted only at labels the engine read with certainty"}
+
+
+def build(real=None, real_reason=None, agent="off", synth_path=SYNTH_RESULTS, meta=None):
     """The comparison report (what gap.json holds and the console shows)."""
     syn_rows = synthetic_rows(synth_path) if Path(synth_path).exists() else None
     syn = summarize(syn_rows) if syn_rows else None
@@ -140,8 +160,7 @@ def build(real=None, real_reason=None, agent="off", synth_path=SYNTH_RESULTS):
         syn.update(engine="demo-cabinet engine", source=f"generated cabinets #{min(ids)}-#{max(ids)} (Fault Forge "
                    f"self-test)", selection="faults planted anywhere on the cabinet")
     if rea:
-        rea.update(engine="real-cabinet engine", agent=agent, source="photos of Emerson's cabinet 13GE03331, faults "
-                   "planted by forge_real.py", selection="faults planted only at labels the engine read with certainty")
+        rea.update(engine="real-cabinet engine", agent=agent, **(meta or real_meta(None)))
     return {"schema": SCHEMA, "created": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
             "engine": config.VERSION, "synthetic": syn, "real": rea,
             "real_reason": None if rea else (real_reason or NO_REAL),
@@ -200,6 +219,9 @@ def main(argv=None):
                     help="off: deterministic engine only; env: the AI verifier as configured in the environment")
     ap.add_argument("--no-real", action="store_true", help="synthetic side only")
     ap.add_argument("--out", default=str(config.OUT / "real_eval"))
+    ap.add_argument("--publish", action="store_true",
+                    help=f"also write the totals-only {PUBLISHED.relative_to(config.BASE)} (no image names or fault "
+                         f"texts), which can be committed so a hosted engine shows the comparison")
     a = ap.parse_args(argv)
     real, reason = None, None
     if not a.no_real:
@@ -210,12 +232,15 @@ def main(argv=None):
         real = real_rows(a.data, a.agent, on_photo=show)
         if real is None:
             reason = f"No forged photos in {Path(a.data) / 'forged'}: run python forge_real.py first."
-    rep = build(real, reason, a.agent)
+    rep = build(real, reason, a.agent, meta=real_meta(a.data))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "gap.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
     print(table(rep))
     print(f"written {out / 'gap.json'}")
+    if a.publish:
+        PUBLISHED.write_text(json.dumps(dict(rep, real_rows=[], published=True), indent=1), encoding="utf-8")
+        print(f"written {PUBLISHED} (totals only)")
     return rep
 
 

@@ -77,10 +77,15 @@ function Split({ c, empty }: { c: GapCategory | null; empty: string }) {
 }
 
 function SideHead({ title, s, empty, example }: { title: string; s: GapSide | null; empty: string; example?: boolean }) {
+  const render = s?.kind === "drawing_render";
   return (
     <div style={{ minWidth: 0 }}>
-      <div className="mono tiny faint">{title}{example && <span className="gap-example-tag">EXAMPLE</span>}</div>
-      <div className="small">{s ? `${s.photos} photos · ${s.planted} faults` : empty}</div>
+      <div className="mono tiny faint">
+        {title}
+        {example && <span className="gap-example-tag">EXAMPLE</span>}
+        {render && <span className="gap-render-tag tip" data-tip="Images rendered from the real cabinet's GA drawing, not photographs">DRAWING RENDER</span>}
+      </div>
+      <div className="small">{s ? `${s.photos} ${render ? "renders" : "photos"} · ${s.planted} faults` : empty}</div>
     </div>
   );
 }
@@ -161,7 +166,7 @@ function GapView({ g }: { g: Gap }) {
 
       {measured && g.real_rows.length > 0 && (
         <div className="card pad">
-          <div className="card-title" style={{ marginBottom: 6 }}>Real photos with a planted fault</div>
+          <div className="card-title" style={{ marginBottom: 6 }}>{measured.kind === "drawing_render" ? "Real-cabinet renders" : "Real photos"} with a planted fault</div>
           {g.real_rows.flatMap((row) => row.faults.map((f, i) => (
             <div key={`${row.photo}-${i}`} className="gap-item">
               <span className="gap-dot" style={{ background: OUTCOME[f.outcome][1] }} />
@@ -175,7 +180,7 @@ function GapView({ g }: { g: Gap }) {
 
       <div className="tiny muted">
         {s && <>Synthetic: {s.source}, {s.engine}, {s.selection}. </>}
-        {measured && <>Real: {measured.source}, {measured.engine} {measured.agent === "off" ? "without" : "with"} the AI verifier, {measured.selection}. </>}
+        {measured && <>Real: {measured.source}; {measured.engine} {measured.agent === "off" ? "without" : "with"} the AI verifier; {measured.selection}. </>}
         {showExample && <>Real: example data, not measured. </>}
         Same terms as the evaluation comparison at the top of this page: only FAIL confirms a fault; REVIEW is a referral.
       </div>

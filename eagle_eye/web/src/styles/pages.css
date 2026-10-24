@@ -2637,3 +2637,13 @@
 .gap-example-val {
   color: var(--review);
 }
+.gap-render-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
