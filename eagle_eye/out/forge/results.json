@@ -1,6 +1,7 @@
 [
  {
   "i": 200,
+  "engine_version": "3.1.0",
   "strength": 1.1462380978343853,
   "faults": [],
   "caught": {},
@@ -8,12 +9,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 18,
+  "anchors": 17,
   "found": {},
-  "sec": 0.88
+  "sec": 1.36
  },
  {
   "i": 201,
+  "engine_version": "3.1.0",
   "strength": 1.1391261999838518,
   "faults": [
    {
@@ -53,10 +55,11 @@
    "LBL-CB42": "FAIL",
    "LBL-1CBP02": "FAIL"
   },
-  "sec": 0.75
+  "sec": 0.92
  },
  {
   "i": 202,
+  "engine_version": "3.1.0",
   "strength": 1.320674189676445,
   "faults": [
    {
@@ -81,16 +84,17 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 2,
-  "anchors": 17,
+  "anchors": 14,
   "found": {
    "GA-CB44": "FAIL",
    "LBL-1CBP04": "FAIL",
    "GA-D12": "FAIL"
   },
-  "sec": 0.88
+  "sec": 0.97
  },
  {
   "i": 203,
+  "engine_version": "3.1.0",
   "strength": 1.395683818194017,
   "faults": [
    {
@@ -119,20 +123,25 @@
    "LBL-CB41": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1",
+   "FER-X3:2",
+   "FER-X3:4"
+  ],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 15,
+  "anchors": 16,
   "found": {
    "GA-D12": "FAIL",
    "FER-X3:1": "FAIL",
    "LBL-PS11": "FAIL",
    "LBL-CB41": "FAIL"
   },
-  "sec": 0.89
+  "sec": 1.06
  },
  {
   "i": 204,
+  "engine_version": "3.1.0",
   "strength": 1.3520552397480048,
   "faults": [
    {
@@ -159,31 +168,33 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 17,
+  "anchors": 18,
   "found": {
    "FER-X3:7": "FAIL",
    "ORD-RAIL-1": "FAIL",
    "FER-X3:3": "FAIL"
   },
-  "sec": 1.46
+  "sec": 1.17
  },
  {
   "i": 205,
+  "engine_version": "3.1.0",
   "strength": 1.2818654768291442,
   "faults": [],
   "caught": {},
   "false_alarms": [],
   "reviews": [
-   "FER-X3:4"
+   "FER-X3:7"
   ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 17,
+  "anchors": 19,
   "found": {},
-  "sec": 0.84
+  "sec": 1.06
  },
  {
   "i": 206,
+  "engine_version": "3.1.0",
   "strength": 1.179538032668162,
   "faults": [
    {
@@ -199,7 +210,7 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 18,
   "found": {
    "ORD-RAIL-1": "FAIL"
   },
@@ -207,6 +218,7 @@
  },
  {
   "i": 207,
+  "engine_version": "3.1.0",
   "strength": 0.8170751589547262,
   "faults": [
    {
@@ -234,16 +246,17 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 18,
+  "anchors": 19,
   "found": {
    "ORD-RAIL-1": "FAIL",
    "LBL-CB41": "FAIL",
    "FER-X3:6": "FAIL"
   },
-  "sec": 1.0
+  "sec": 0.94
  },
  {
   "i": 208,
+  "engine_version": "3.1.0",
   "strength": 1.3865441886318624,
   "faults": [
    {
@@ -268,19 +281,22 @@
    "COL-X3:1": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 16,
   "found": {
    "LBL-CB43": "FAIL",
    "FER-X3:7": "FAIL",
    "COL-X3:1": "FAIL"
   },
-  "sec": 1.19
+  "sec": 0.94
  },
  {
   "i": 209,
+  "engine_version": "3.1.0",
   "strength": 1.37056555198685,
   "faults": [
    {
@@ -292,17 +308,21 @@
    "LBL-PS11": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "FER-X3:4",
+   "FER-X3:5"
+  ],
   "n_items": 41,
   "n_skip": 0,
   "anchors": 18,
   "found": {
    "LBL-PS11": "FAIL"
   },
-  "sec": 1.14
+  "sec": 0.83
  },
  {
   "i": 210,
+  "engine_version": "3.1.0",
   "strength": 0.9949815423432893,
   "faults": [],
   "caught": {},
@@ -310,12 +330,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 20,
   "found": {},
-  "sec": 0.89
+  "sec": 0.86
  },
  {
   "i": 211,
+  "engine_version": "3.1.0",
   "strength": 1.132485341898196,
   "faults": [
    {
@@ -344,7 +365,9 @@
    "LBL-PE": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 0,
   "anchors": 16,
@@ -354,25 +377,25 @@
    "LBL-D12": "FAIL",
    "LBL-PE": "FAIL"
   },
-  "sec": 0.85
+  "sec": 0.93
  },
  {
   "i": 212,
+  "engine_version": "3.1.0",
   "strength": 1.2531611848461266,
   "faults": [],
   "caught": {},
   "false_alarms": [],
-  "reviews": [
-   "FER-X3:1"
-  ],
+  "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 18,
+  "anchors": 17,
   "found": {},
-  "sec": 1.16
+  "sec": 0.94
  },
  {
   "i": 213,
+  "engine_version": "3.1.0",
   "strength": 0.8663575217186203,
   "faults": [],
   "caught": {},
@@ -380,12 +403,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 20,
   "found": {},
-  "sec": 0.95
+  "sec": 0.82
  },
  {
   "i": 214,
+  "engine_version": "3.1.0",
   "strength": 1.0412217947143092,
   "faults": [
    {
@@ -401,14 +425,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 18,
   "found": {
    "COL-X3:8": "FAIL"
   },
-  "sec": 0.76
+  "sec": 0.83
  },
  {
   "i": 215,
+  "engine_version": "3.1.0",
   "strength": 0.82221649366214,
   "faults": [],
   "caught": {},
@@ -416,12 +441,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 19,
   "found": {},
-  "sec": 1.25
+  "sec": 0.83
  },
  {
   "i": 216,
+  "engine_version": "3.1.0",
   "strength": 1.2713039718046115,
   "faults": [
    {
@@ -440,10 +466,11 @@
   "found": {
    "GA-CB43": "FAIL"
   },
-  "sec": 0.81
+  "sec": 0.84
  },
  {
   "i": 217,
+  "engine_version": "3.1.0",
   "strength": 1.30972941032008,
   "faults": [
    {
@@ -462,21 +489,22 @@
   },
   "false_alarms": [],
   "reviews": [
-   "FER-X3:2",
+   "FER-X3:4",
    "FER-X3:5",
    "FER-X3:6"
   ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
+  "anchors": 14,
   "found": {
    "LBL-D12": "FAIL",
    "FER-X3:7": "FAIL"
   },
-  "sec": 1.59
+  "sec": 0.85
  },
  {
   "i": 218,
+  "engine_version": "3.1.0",
   "strength": 1.1497720374933578,
   "faults": [
    {
@@ -492,14 +520,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 17,
+  "anchors": 15,
   "found": {
    "LBL-PS12": "FAIL"
   },
-  "sec": 0.76
+  "sec": 0.77
  },
  {
   "i": 219,
+  "engine_version": "3.1.0",
   "strength": 0.8171012249369932,
   "faults": [
    {
@@ -528,20 +557,23 @@
    "LBL-CB44": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 14,
+  "anchors": 16,
   "found": {
    "FER-X3:8": "FAIL",
    "LBL-1CBP01": "FAIL",
    "LBL-PE": "FAIL",
    "LBL-CB44": "FAIL"
   },
-  "sec": 0.9
+  "sec": 0.74
  },
  {
   "i": 220,
+  "engine_version": "3.1.0",
   "strength": 1.176130749815074,
   "faults": [],
   "caught": {},
@@ -549,12 +581,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 18,
   "found": {},
-  "sec": 0.88
+  "sec": 0.77
  },
  {
   "i": 221,
+  "engine_version": "3.1.0",
   "strength": 0.9030241232095115,
   "faults": [
    {
@@ -574,10 +607,11 @@
   "found": {
    "FER-X3:2": "FAIL"
   },
-  "sec": 0.98
+  "sec": 0.72
  },
  {
   "i": 222,
+  "engine_version": "3.1.0",
   "strength": 0.8933743615539241,
   "faults": [
    {
@@ -592,14 +626,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 19,
+  "anchors": 18,
   "found": {
    "GA-CB43": "FAIL"
   },
-  "sec": 0.88
+  "sec": 0.85
  },
  {
   "i": 223,
+  "engine_version": "3.1.0",
   "strength": 1.3485539243349738,
   "faults": [],
   "caught": {},
@@ -609,10 +644,11 @@
   "n_skip": 0,
   "anchors": 19,
   "found": {},
-  "sec": 0.87
+  "sec": 0.86
  },
  {
   "i": 224,
+  "engine_version": "3.1.0",
   "strength": 1.3375671047619773,
   "faults": [
    {
@@ -631,10 +667,11 @@
   "found": {
    "LBL-PS11": "FAIL"
   },
-  "sec": 0.91
+  "sec": 0.92
  },
  {
   "i": 225,
+  "engine_version": "3.1.0",
   "strength": 1.1438107374762636,
   "faults": [],
   "caught": {},
@@ -642,12 +679,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 19,
   "found": {},
-  "sec": 0.75
+  "sec": 0.81
  },
  {
   "i": 226,
+  "engine_version": "3.1.0",
   "strength": 1.183656299310389,
   "faults": [],
   "caught": {},
@@ -655,12 +693,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
+  "anchors": 18,
   "found": {},
-  "sec": 0.9
+  "sec": 0.93
  },
  {
   "i": 227,
+  "engine_version": "3.1.0",
   "strength": 0.8528583542882249,
   "faults": [
    {
@@ -701,10 +740,11 @@
    "LBL-D12": "FAIL",
    "ORD-RAIL-1": "FAIL"
   },
-  "sec": 0.84
+  "sec": 1.18
  },
  {
   "i": 228,
+  "engine_version": "3.1.0",
   "strength": 0.8589666671804821,
   "faults": [
    {
@@ -734,20 +774,23 @@
    "FER-X3:3": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 16,
+  "anchors": 17,
   "found": {
    "LBL-CB44": "FAIL",
    "GA-1CBP03": "FAIL",
    "LBL-CB42": "FAIL",
    "FER-X3:3": "FAIL"
   },
-  "sec": 0.94
+  "sec": 0.97
  },
  {
   "i": 229,
+  "engine_version": "3.1.0",
   "strength": 1.1962188914390286,
   "faults": [
    {
@@ -759,17 +802,20 @@
    "LBL-CB43": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 0,
   "anchors": 17,
   "found": {
    "LBL-CB43": "FAIL"
   },
-  "sec": 0.8
+  "sec": 0.85
  },
  {
   "i": 230,
+  "engine_version": "3.1.0",
   "strength": 0.8576191147915485,
   "faults": [],
   "caught": {},
@@ -783,6 +829,7 @@
  },
  {
   "i": 231,
+  "engine_version": "3.1.0",
   "strength": 1.2169813844493371,
   "faults": [
    {
@@ -809,10 +856,11 @@
    "COL-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL"
   },
-  "sec": 1.3
+  "sec": 0.85
  },
  {
   "i": 232,
+  "engine_version": "3.1.0",
   "strength": 1.0782725611604416,
   "faults": [
    {
@@ -832,10 +880,11 @@
   "found": {
    "COL-X3:8": "FAIL"
   },
-  "sec": 0.82
+  "sec": 0.76
  },
  {
   "i": 233,
+  "engine_version": "3.1.0",
   "strength": 0.8776623709360194,
   "faults": [
    {
@@ -850,14 +899,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 17,
+  "anchors": 18,
   "found": {
    "FER-X3:3": "FAIL"
   },
-  "sec": 1.78
+  "sec": 0.83
  },
  {
   "i": 234,
+  "engine_version": "3.1.0",
   "strength": 0.8708547397799857,
   "faults": [
    {
@@ -896,10 +946,11 @@
    "GA-D12": "FAIL",
    "GA-CB41": "FAIL"
   },
-  "sec": 0.82
+  "sec": 0.77
  },
  {
   "i": 235,
+  "engine_version": "3.1.0",
   "strength": 0.9064880027494799,
   "faults": [],
   "caught": {},
@@ -907,12 +958,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 18,
+  "anchors": 19,
   "found": {},
-  "sec": 0.77
+  "sec": 0.85
  },
  {
   "i": 236,
+  "engine_version": "3.1.0",
   "strength": 0.8714764788178281,
   "faults": [
    {
@@ -938,16 +990,17 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
+  "anchors": 17,
   "found": {
    "FER-X3:2": "FAIL",
    "COL-X3:6": "FAIL",
    "LBL-1CBP01": "FAIL"
   },
-  "sec": 1.25
+  "sec": 0.84
  },
  {
   "i": 237,
+  "engine_version": "3.1.0",
   "strength": 0.9762253428487982,
   "faults": [
    {
@@ -979,17 +1032,18 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 15,
+  "anchors": 16,
   "found": {
    "LBL-PE": "FAIL",
    "FER-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL",
    "LBL-PS11": "FAIL"
   },
-  "sec": 0.83
+  "sec": 0.79
  },
  {
   "i": 238,
+  "engine_version": "3.1.0",
   "strength": 1.141361368405641,
   "faults": [
    {
@@ -1008,18 +1062,21 @@
    "ORD-RAIL-1": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "FER-X3:6"
+  ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
+  "anchors": 17,
   "found": {
    "COL-X3:1": "FAIL",
    "ORD-RAIL-1": "FAIL"
   },
-  "sec": 1.51
+  "sec": 0.82
  },
  {
   "i": 239,
+  "engine_version": "3.1.0",
   "strength": 1.0778262009080726,
   "faults": [
    {
@@ -1048,20 +1105,23 @@
    "COL-X3:4": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 15,
+  "anchors": 17,
   "found": {
    "LBL-CB44": "FAIL",
    "FER-X3:8": "FAIL",
    "GA-1CBP01": "FAIL",
    "COL-X3:4": "FAIL"
   },
-  "sec": 0.83
+  "sec": 0.8
  },
  {
   "i": 240,
+  "engine_version": "3.1.0",
   "strength": 0.8345574498129796,
   "faults": [],
   "caught": {},
@@ -1069,12 +1129,13 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 18,
+  "anchors": 19,
   "found": {},
-  "sec": 1.31
+  "sec": 0.83
  },
  {
   "i": 241,
+  "engine_version": "3.1.0",
   "strength": 1.1638215092376294,
   "faults": [
    {
@@ -1111,6 +1172,7 @@
  },
  {
   "i": 242,
+  "engine_version": "3.1.0",
   "strength": 1.3019205075850335,
   "faults": [
    {
@@ -1132,15 +1194,16 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 18,
   "found": {
    "ORD-RAIL-1": "FAIL",
    "FER-X3:3": "FAIL"
   },
-  "sec": 0.89
+  "sec": 0.74
  },
  {
   "i": 243,
+  "engine_version": "3.1.0",
   "strength": 0.885672338427445,
   "faults": [
    {
@@ -1155,14 +1218,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 17,
+  "anchors": 18,
   "found": {
    "GA-CB44": "FAIL"
   },
-  "sec": 0.84
+  "sec": 0.77
  },
  {
   "i": 244,
+  "engine_version": "3.1.0",
   "strength": 1.3460072739343882,
   "faults": [
    {
@@ -1178,14 +1242,15 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 19,
   "found": {
    "FER-X3:3": "FAIL"
   },
-  "sec": 0.86
+  "sec": 0.82
  },
  {
   "i": 245,
+  "engine_version": "3.1.0",
   "strength": 1.290610859953002,
   "faults": [],
   "caught": {},
@@ -1195,12 +1260,13 @@
   ],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 20,
+  "anchors": 19,
   "found": {},
-  "sec": 0.83
+  "sec": 1.02
  },
  {
   "i": 246,
+  "engine_version": "3.1.0",
   "strength": 0.9619570261582877,
   "faults": [
    {
@@ -1229,20 +1295,23 @@
    "GA-PS12": true
   },
   "false_alarms": [],
-  "reviews": [],
+  "reviews": [
+   "ORD-RAIL-1"
+  ],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 15,
+  "anchors": 17,
   "found": {
    "FER-X3:2": "FAIL",
    "LBL-CB41": "FAIL",
    "FER-X3:5": "FAIL",
    "GA-PS12": "FAIL"
   },
-  "sec": 0.76
+  "sec": 0.94
  },
  {
   "i": 247,
+  "engine_version": "3.1.0",
   "strength": 0.8112331497497266,
   "faults": [
    {
@@ -1274,17 +1343,18 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 16,
+  "anchors": 18,
   "found": {
    "ORD-RAIL-1": "FAIL",
    "FER-X3:3": "FAIL",
    "FER-X3:4": "FAIL",
    "COL-X3:8": "FAIL"
   },
-  "sec": 0.85
+  "sec": 0.86
  },
  {
   "i": 248,
+  "engine_version": "3.1.0",
   "strength": 1.1609116397804482,
   "faults": [
    {
@@ -1311,16 +1381,17 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 0,
-  "anchors": 19,
+  "anchors": 18,
   "found": {
    "ORD-RAIL-1": "FAIL",
    "FER-X3:6": "FAIL",
    "COL-X3:8": "FAIL"
   },
-  "sec": 0.84
+  "sec": 0.9
  },
  {
   "i": 249,
+  "engine_version": "3.1.0",
   "strength": 1.1322578869254887,
   "faults": [
    {
@@ -1335,10 +1406,10 @@
   "reviews": [],
   "n_items": 41,
   "n_skip": 1,
-  "anchors": 16,
+  "anchors": 17,
   "found": {
    "GA-1CBP01": "FAIL"
   },
-  "sec": 1.32
+  "sec": 0.92
  }
 ]

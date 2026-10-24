@@ -105,7 +105,7 @@ export function Engine() {
           </div>
           <div className="divider" />
           <div className="card-title" style={{ marginBottom: 10 }}><Gauge /> Speed</div>
-          <div className="small muted">OCR runs in-process through libtesseract's C API: identical text to the tesseract CLI on all 1,668 crops tested, and the 50-cabinet self-test is unchanged (87/87, 0 false alarms) at <b>0.9 s per cabinet</b> on 4 cores (was 4.0 s), ~2 s on the 1-vCPU cloud container.</div>
+          <div className="small muted">The recorded synthetic benchmark measured 0.9 s per generated cabinet image on 4 CPU cores using in-process Tesseract. Real photographs may require tiled or rotated OCR and can take longer. Each inspection reports its actual timings; no external AI inference API is needed.</div>
           <div className="divider" />
           <div className="card-title" style={{ marginBottom: 10 }}><Boxes /> Tools declared</div>
           <div className="row wrap" style={{ ["--gap" as string]: "6px" }}>

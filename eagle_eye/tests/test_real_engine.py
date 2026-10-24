@@ -61,7 +61,7 @@ def _run(tokens, zoom=None, agent_decisions=None, agent_on=False, strong_alone=F
     ctx = Context(kb, None, photo, tokens, reg, ocr_region=lambda box, rot, sc: (zoom or {}).get("tokens", []),
                   workers=1)
     findings, _ = run_checks(ctx)
-    items = consensus.decide(findings, agent_decisions or {}, agent_on, strong_alone=strong_alone)
+    items = consensus.decide(findings, agent_decisions or {}, agent_on, strong_alone=strong_alone, registration=reg)
     return reg, {f["id"]: f for f in findings}, {r["id"]: r for r in items}
 
 
@@ -92,11 +92,13 @@ def test_swapped_labels_are_named_and_need_two_signals():
     _, _, on_prem = _run(toks, strong_alone=True)
     assert on_prem["ORD-front-PS-1"]["result"] == "FAIL"                  # EAGLE_FAIL_WITHOUT_AGENT, strong evidence
     dec = {"ORD-front-PS-1": {"verdict": "CONFIRMED_FAULT", "confidence": 0.9, "reason": "swapped", "model": "m"}}
-    _, _, agreed = _run(toks, agent_decisions=dec, agent_on=True)
-    assert agreed["ORD-front-PS-1"]["result"] == "FAIL" and "Claude" in agreed["ORD-front-PS-1"]["verified_by"]
+    _, _, agreed = _run(toks, agent_decisions=dec, agent_on=True, strong_alone=True)
+    assert agreed["ORD-front-PS-1"]["result"] == "FAIL"
+    assert "2nd OCR pass" in agreed["ORD-front-PS-1"]["verified_by"]
+    assert "Claude" not in agreed["ORD-front-PS-1"]["verified_by"]
 
 
-def test_missing_part_is_one_root_cause_and_the_agent_can_clear_it():
+def test_missing_part_is_one_root_cause_and_a_model_answer_cannot_clear_it():
     toks = [_tok(t, _at(t)) for t in TAGS if t != "PS13"]
     reg, fs, items = _run(toks)
     assert fs["MISS-PS13"]["status"] == "CANDIDATE_FAULT"
@@ -104,11 +106,10 @@ def test_missing_part_is_one_root_cause_and_the_agent_can_clear_it():
     assert items["MISS-PS13"]["result"] == "REVIEW" and items["MISS-PS13"]["hint"]
     ok = {"MISS-PS13": {"verdict": "CONFIRMED_OK", "confidence": 0.9, "reason": "label PS13 is there", "model": "m"}}
     _, _, cleared = _run(toks, agent_decisions=ok, agent_on=True)
-    assert cleared["MISS-PS13"]["result"] == "PASS" and cleared["LBL-PS13"]["result"] == "PASS"
+    assert cleared["MISS-PS13"]["result"] == "REVIEW" and cleared["LBL-PS13"]["result"] == "SKIP"
     weak = {"MISS-PS13": {"verdict": "CONFIRMED_FAULT", "confidence": 0.6, "reason": "empty rail", "model": "m"}}
     _, fs2, unsure = _run(toks, agent_decisions=weak, agent_on=True)
-    expect = "FAIL" if fs2["MISS-PS13"]["strength"] == "strong" else "REVIEW"
-    assert unsure["MISS-PS13"]["result"] == expect
+    assert unsure["MISS-PS13"]["result"] == "REVIEW"          # absence is never established by confidence alone
 
 
 def test_without_agent_positive_reads_fail_but_absence_never_does():
@@ -155,11 +156,13 @@ def test_ferrules_judge_only_certain_reads():
     assert not [k for k in fs if k.startswith("FER-") and "DS12-4" in k]
 
 
-def test_unplaced_photo_still_verifies_what_it_read():
+def test_unplaced_photo_retains_reads_without_claiming_verification():
     reg, fs, items = _run([_tok("PS11", (1200, 700))])
     assert not reg["localised"] and reg["hint"]
-    assert items["MISS-PS11"]["result"] == "PASS" and items["LBL-PS11"]["result"] == "PASS"
-    assert not any(r["result"] == "FAIL" for r in items.values())
+    assert items["MISS-PS11"]["result"] == "REVIEW" and items["LBL-PS11"]["result"] == "REVIEW"
+    assert items["MISS-PS12"]["result"] == "NOT_IN_VIEW"
+    assert items["LBL-PS12"]["result"] == "NOT_IN_VIEW"
+    assert not any(r["result"] in ("PASS", "FAIL") for r in items.values())
 
 
 def test_labels_too_small_to_read_are_not_judged():
@@ -194,13 +197,13 @@ def test_consensus_table():
                                    "evidence": [], "view": "front"}
     d = lambda v, c=0.9: {"X": {"verdict": v, "confidence": c, "reason": "r", "model": "m"}}
     one = lambda st, strength, dec, on: consensus.decide([f(st, strength)], dec, on, strong_alone=False)[0]["result"]
-    assert one("CANDIDATE_FAULT", "strong", d("CONFIRMED_FAULT"), True) == "FAIL"
-    assert one("CANDIDATE_FAULT", "weak", d("CONFIRMED_FAULT", 0.9), True) == "FAIL"
+    assert one("CANDIDATE_FAULT", "strong", d("CONFIRMED_FAULT"), True) == "REVIEW"
+    assert one("CANDIDATE_FAULT", "weak", d("CONFIRMED_FAULT", 0.9), True) == "REVIEW"
     assert one("CANDIDATE_FAULT", "weak", d("CONFIRMED_FAULT", 0.7), True) == "REVIEW"
-    assert one("CANDIDATE_FAULT", "strong", d("CONFIRMED_OK"), True) == "PASS"
+    assert one("CANDIDATE_FAULT", "strong", d("CONFIRMED_OK"), True) == "REVIEW"
     assert one("CANDIDATE_FAULT", "strong", d("UNCLEAR"), True) == "REVIEW"
     assert one("CANDIDATE_FAULT", "strong", {}, False) == "REVIEW"
-    assert one("UNCERTAIN", None, d("CONFIRMED_OK"), True) == "PASS"
+    assert one("UNCERTAIN", None, d("CONFIRMED_OK"), True) == "REVIEW"
     assert one("UNCERTAIN", None, {}, True) == "REVIEW"
     assert one("OK", None, {}, False) == "PASS"
     assert one("NOT_IN_VIEW", None, {}, False) == "NOT_IN_VIEW"
@@ -214,6 +217,193 @@ def test_merge_photos_disagreement_is_review():
     m = consensus.merge_photos([a, b], _kb())
     assert m["items"][0]["result"] == "REVIEW" and m["items"][0]["note"]
     assert m["coverage"]["total"] == len(TAGS)
+
+
+def test_corrected_and_partial_reads_do_not_verify_the_expected_label():
+    # The decoder can suggest PS13 for P513, but it must preserve the fact that the photo did not read PS13 literally.
+    toks = [_tok(t, _at(t)) for t in TAGS if t != "PS13"]
+    _, fs, items = _run(toks, zoom={"tokens": [_tok("P513", _at("PS13"), conf=0.98)]})
+    assert fs["MISS-PS13"]["status"] == "UNCERTAIN"
+    assert items["MISS-PS13"]["result"] == items["LBL-PS13"]["result"] == "REVIEW"
+    assert items["LBL-PS13"]["reads"][0]["raw"] == "P513"
+
+
+def test_partial_photo_explicitly_reports_unseen_drawing_items():
+    photo = _photo()
+    photo["size"] = [2400, 1200]                     # lower drawing row is beyond the photo frame
+    toks = [_tok(t, _at(t)) for t in ("PS11", "PS12", "PS13")]
+    reg = register(toks, _kb(), photo)
+    assert reg["localised"]
+    ctx = Context(_kb(), None, photo, toks, reg, ocr_region=lambda *a: [], workers=1)
+    items = consensus.decide(run_checks(ctx)[0], registration=reg)
+    by_id = {r["id"]: r for r in items}
+    assert by_id["LBL-PS11"]["result"] == "PASS"
+    assert by_id["LBL-DS11"]["result"] == by_id["MISS-DS11"]["result"] == "NOT_IN_VIEW"
+    cov = consensus.coverage(items, _kb())
+    assert cov["verified"] == 3 and cov["total"] == 6
+    assert not cov["complete"] and not cov["approval_allowed"]
+
+
+def test_order_too_close_to_distinguish_stays_uncertain():
+    toks = [_tok(t, _at(t)) for t in TAGS]
+    reg = register(toks, _kb(), _photo())
+    ctx = Context(_kb(), None, _photo(), toks, reg, ocr_region=lambda *a: [], workers=1)
+    # Fixed, valid registration, but the two observed labels overlap along the order axis.
+    for r in ctx.reads:
+        if r["tag"] in ("PS11", "PS12"):
+            r["center"][0] = 1500 if r["tag"] == "PS11" else 1490
+    row = CHECKS["ORDER"]().run(ctx)[0]
+    assert row["rule"] == "ORDER.ambiguous" and row["status"] == "UNCERTAIN"
+    assert consensus.decide([row], registration=reg)[0]["result"] == "REVIEW"
+
+
+def test_presence_does_not_launder_unreadable_label_into_coverage():
+    _, _, rows = _run([_tok(t, _at(t)) for t in TAGS])
+    rows["LBL-PS11"]["result"] = "REVIEW"
+    cov = consensus.coverage(list(rows.values()), _kb())
+    assert rows["MISS-PS11"]["result"] == "PASS" and cov["verified"] == 5
+    assert not cov["complete"] and not cov["approval_allowed"]
+    # Even all device labels cannot approve a cabinet while an order check is unresolved.
+    rows["LBL-PS11"]["result"] = "PASS"
+    rows["ORD-front-PS-1"]["result"] = "REVIEW"
+    cov = consensus.coverage(list(rows.values()), _kb())
+    assert cov["verified"] == 6 and not cov["approval_allowed"]
+
+
+def test_confidence_and_historical_agent_verdicts_cannot_override_evidence():
+    row = {"id": "LBL-PS11", "check": "LABEL", "target": "PS11", "expected": "PS11", "found": "PS1?",
+           "status": "CANDIDATE_FAULT", "strength": "weak", "conf": 0.55, "view": "front"}
+    decisions = {row["id"]: {"verdict": "CONFIRMED_FAULT", "confidence": 1.0}}
+    result = consensus.decide([row], decisions, agent_on=True)[0]
+    assert result["result"] == "REVIEW" and result["conf"] == 0.55
+    a = {"results": [dict(result, result="FAIL", strength="strong", verified_by=["OCR", "geometry", "Claude"])]}
+    b = {"results": [dict(result, result="PASS", verified_by=["OCR", "geometry"])]}
+    merged = consensus.merge_photos([a, b], _kb())
+    assert merged["items"][0]["result"] == "REVIEW" and not merged["coverage"]["approval_allowed"]
+
+
+def test_read_beyond_anchored_area_does_not_verify_position():
+    toks = [_tok(t, _at(t)) for t in TAGS]
+    reg = register(toks, _kb(), _photo())
+    reg["in_view"]["PS11"].update(anchored=False, off_fit=False)
+    for r in reg["reads"]:
+        if r["tag"] == "PS11":
+            r["dist_px"] = 1000
+    ctx = Context(_kb(), None, _photo(), toks, reg, ocr_region=lambda *a: [], workers=1)
+    findings, _ = run_checks(ctx)
+    rows = {r["id"]: r for r in consensus.decide(findings, registration=reg)}
+    assert rows["MISS-PS11"]["result"] == "PASS"       # literal label is present, but its position is unresolved
+    assert rows["LBL-PS11"]["rule"] == "LABEL.read_not_anchored"
+    assert rows["LBL-PS11"]["result"] == "REVIEW" and rows["LBL-PS11"]["hint"]
+    assert not consensus.coverage(list(rows.values()), _kb())["approval_allowed"]
+
+
+@pytest.mark.parametrize("change", ["other_view", "no_registration", "model_only", "weak_model_fault",
+                                   "model_absence_fault", "unplaced_rule"])
+def test_merge_does_not_restore_historical_unverified_results(change):
+    reg, _, rows = _run([_tok(t, _at(t)) for t in TAGS])
+    report = {"engine_kind": "real", "registration": reg, "results": list(rows.values())}
+    row = rows["LBL-PS11"]
+    if change == "other_view":
+        row["view"] = "left"                       # front is localized; the left wall was never placed
+    elif change == "no_registration":
+        report.pop("registration")
+    elif change == "model_only":
+        row["verified_by"] = ["Claude"]
+    elif change == "weak_model_fault":
+        row.update(result="FAIL", candidate="CANDIDATE_FAULT", strength="weak",
+                   verified_by=["OCR", "geometry", "Claude"])
+    elif change == "model_absence_fault":
+        row = rows["MISS-PS11"]
+        row.update(result="FAIL", candidate="CANDIDATE_FAULT", strength="strong",
+                   verified_by=["OCR", "geometry", "Claude"])
+    else:
+        row["rule"] = "LABEL.read_view_not_placed"
+    original = json.loads(json.dumps(report))
+    merged = consensus.merge_photos([report], _kb())
+    result = next(r for r in merged["items"] if r["id"] == row["id"])
+    assert result["result"] == "REVIEW" and result["guarded"] and not result["verified_by"]
+    assert not merged["coverage"]["complete"] and not merged["coverage"]["approval_allowed"]
+    assert report == original                       # historical audit evidence is immutable
+
+
+def test_merge_accepts_valid_local_evidence_and_old_view_metadata():
+    reg, _, rows = _run([_tok(t, _at(t)) for t in TAGS])
+    report = {"engine_kind": "real", "registration": reg, "results": list(rows.values())}
+    merged = consensus.merge_photos([report], _kb())
+    assert all(r["result"] == "PASS" for r in merged["items"])
+    assert merged["coverage"]["complete"] and merged["coverage"]["approval_allowed"]
+    # Older reports may have the explicit localized view names without the full fit geometry payload.
+    report["registration"] = {"localised": True, "views": ["front"]}
+    merged = consensus.merge_photos([report], _kb())
+    assert merged["coverage"]["approval_allowed"]
+
+
+def test_valid_photo_can_resolve_an_unplaced_observation_from_another_photo():
+    reg, _, rows = _run([_tok(t, _at(t)) for t in TAGS])
+    good = {"engine_kind": "real", "registration": reg, "results": list(rows.values())}
+    old = json.loads(json.dumps(good))
+    for row in old["results"]:
+        if row["id"] in ("MISS-PS11", "LBL-PS11"):
+            row.update(view="left", rule=f"{row['check']}.read_view_not_placed")
+    merged = consensus.merge_photos([old, good], _kb())
+    assert all(r["result"] == "PASS" for r in merged["items"])
+    assert merged["coverage"]["approval_allowed"]
+
+
+@pytest.mark.parametrize("located", [False, True])
+def test_pipeline_is_local_with_hosted_credentials_present(monkeypatch, located):
+    import agent
+    import pipeline
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-that-must-not-be-used")
+    monkeypatch.setenv("EAGLE_AGENT_BACKEND", "anthropic")
+    monkeypatch.setenv("EAGLE_AGENT_ENABLED", "1")
+    monkeypatch.setattr(pipeline.drawing_kb, "build_kb", lambda path: _kb())
+    tokens = [_tok(t, _at(t)) for t in TAGS] if located else [_tok("PS11", _at("PS11"))]
+    monkeypatch.setattr(pipeline.ocr, "read_photo", lambda *a, **kw: tokens)
+    monkeypatch.setattr(agent, "verify", lambda *a, **kw: pytest.fail("hosted verifier was invoked"))
+    [(rep, _)] = pipeline.inspect_real([_photo()], "cabinet.pdf", enabled=["LABEL", "ORDER"])
+    assert not rep["agent"]["enabled"] and rep["agent"]["calls"] == 0
+    assert rep["registration"]["valid"] is located
+    if located:
+        assert rep["counts"]["PASS"] == 13 and rep["coverage"]["approval_allowed"]
+        assert "MISSING" in rep["enabled"]                 # LABEL prerequisite runs automatically
+    else:
+        assert rep["counts"]["PASS"] == rep["counts"]["FAIL"] == 0
+        assert rep["counts"]["NOT_IN_VIEW"] > 0 and not rep["coverage"]["approval_allowed"]
+
+
+@pytest.mark.parametrize("documents", [(True, False), (False, True), (True, True)])
+@pytest.mark.parametrize("enabled", [None, ["LABEL", "FERRULE"]])
+def test_uploaded_unsupported_requirements_block_approval_without_losing_supported_checks(
+        monkeypatch, tmp_path, documents, enabled):
+    import pipeline
+
+    wires = tmp_path / "wires.csv"
+    wires.write_text("from,to,colour\nPS11-1,DS11-2,red\n", encoding="utf-8")
+    checklist = tmp_path / "checklist.csv"
+    checklist.write_text("item,expected\nDoor earth,connected\n", encoding="utf-8")
+    tokens = [_tok(t, _at(t)) for t in TAGS]
+    tokens.append(_tok("PS11-1/DS11-2", (1500, 1400)))
+    monkeypatch.setattr(pipeline.drawing_kb, "build_kb", lambda path: _kb())
+    monkeypatch.setattr(pipeline.ocr, "read_photo", lambda *a, **kw: tokens)
+    [(rep, _)] = pipeline.inspect_real([_photo()], "cabinet.pdf", agent=False, enabled=enabled,
+                                      wires=wires if documents[0] else None,
+                                      checklist=checklist if documents[1] else None)
+    rows = {r["id"]: r for r in rep["results"]}
+    assert rows["LBL-PS11"]["result"] == "PASS"
+    assert rows["FER-PS11-1/DS11-2"]["result"] == "PASS"   # supported drawing-link check still runs
+    assert rep["coverage"]["verified"] == len(TAGS)
+    assert not rep["coverage"]["complete"] and not rep["coverage"]["approval_allowed"]
+    assert rep["coverage"]["unresolved"] == sum(documents)
+    for iid, present in (("DOC-WIRELIST", documents[0]), ("DOC-CHECKLIST", documents[1])):
+        if present:
+            assert rows[iid]["result"] == "REVIEW" and rows[iid]["hint"]
+            assert sum(r["id"] == iid for r in rep["results"]) == 1
+        else:
+            assert iid not in rows
+    assert any(w["code"] == "unverified_document_requirements" for w in rep["warnings"])
 
 
 def test_check_registry():

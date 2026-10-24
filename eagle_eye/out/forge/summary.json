@@ -1,4 +1,9 @@
 {
+ "engine_version": "3.1.0",
+ "confirmed": 87,
+ "referred": 0,
+ "incorrect_pass": 0,
+ "unassessed": 0,
  "cabinets": 50,
  "planted": 87,
  "caught": 87,
@@ -6,8 +11,8 @@
  "correct_items": 1950,
  "false_alarms": 0,
  "false_alarm_rate": 0.0,
- "reviews": 6,
- "review_rate": 0.003076923076923077,
+ "reviews": 18,
+ "review_rate": 0.009230769230769232,
  "per_type": {
   "wrong_label": [
    19,
@@ -40,6 +45,6 @@
  },
  "clean_cabinets_zero_fail": 14,
  "clean_cabinets": 14,
- "sec_per_cabinet": 0.98,
- "cpu_cores": 4
+ "sec_per_cabinet": 0.89,
+ "cpu_cores": 20
 }

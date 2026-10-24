@@ -10,8 +10,9 @@
 import { ENGINE_URL, EngineUnreachable, NeedFiles, b64Blob, compactPdf, postInput, engine, ensureEngine, liveReady, makePreview, preparePhoto, renderMarked, sha256, stream, type StreamResult } from "./cloud";
 import * as store from "./store";
 import type { InputKey, LiveRun } from "./store";
-import type { CheckInfo, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, Evaluation, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 import type { InspectInput } from "./api";
+import { inspectionContext, safeRun, safeRunMeta } from "./inspection";
 
 const BASE = "demo/";
 export const REPO_URL = "https://github.com/THEProgrammingGod69/AEGIS";
@@ -43,6 +44,7 @@ interface Index {
 let IX: Index;
 const live = new Map<string, LiveRun>();
 const blobUrls = new Map<string, Record<string, string>>();
+const safeJsonUrls = new Map<string, string>();
 const MAX_LIVE = 40;
 
 const MIME: Record<string, string> = {
@@ -61,6 +63,9 @@ function unmount(id: string) {
   Object.values(blobUrls.get(id) ?? {}).forEach((u) => URL.revokeObjectURL(u));
   blobUrls.delete(id);
   live.delete(id);
+  const derived = safeJsonUrls.get(id);
+  if (derived) URL.revokeObjectURL(derived);
+  safeJsonUrls.delete(id);
 }
 
 export async function loadStatic() {
@@ -123,7 +128,19 @@ const allReviews = () => {
 function metaOf(id: string): RunMeta | null {
   const m = IX.runs[id]?.meta ?? live.get(id)?.meta;
   if (!m) return null;
-  return { ...m, reviews: allReviews()[id] ?? {}, origin: live.has(id) ? "cloud" : "recorded" };
+  const meta: RunMeta = { ...m, reviews: allReviews()[id] ?? {}, origin: live.has(id) ? "cloud" : "recorded" };
+  const payload = live.get(id)?.payload;
+  return payload ? safeRun({ ...payload, meta }).meta : safeRunMeta(meta);
+}
+
+function safePayload(p: RunPayload) {
+  const safe = safeRun(p);
+  if (safe.meta.historical_guard) {
+    const previous = safeJsonUrls.get(safe.meta.id);
+    if (previous) URL.revokeObjectURL(previous);
+    safeJsonUrls.set(safe.meta.id, URL.createObjectURL(new Blob([JSON.stringify({ schema: "eagle-eye-safe-report/1", ...safe }, null, 2)], { type: "application/json" })));
+  }
+  return safe;
 }
 
 /** Keep the newest MAX_LIVE cloud runs on this device. */
@@ -144,7 +161,7 @@ async function evict() {
  * of the photo (made here from the photo the browser already has, or sent by the engine for photos it generated)
  * and the marked-up preview drawn from the boxes. The full photo is never stored.
  */
-async function keep(r: StreamResult, events: JobEvent[], inputs?: LiveRun["inputs"], photo?: Blob | null): Promise<string> {
+async function keep(r: StreamResult, events: JobEvent[], inputs?: LiveRun["inputs"], photo?: Blob | null, preset?: string): Promise<string> {
   const files: Record<string, Blob> = {};
   for (const [k, v] of Object.entries(r.files)) {
     if (k === "preview") continue;
@@ -155,7 +172,8 @@ async function keep(r: StreamResult, events: JobEvent[], inputs?: LiveRun["input
   else if (photo) files.photo = await makePreview(photo).catch(() => photo);
   if (files.photo && !files.marked) files.marked = await renderMarked(files.photo, r.payload).catch(() => files.photo);
   files.json = new Blob([JSON.stringify(r.report, null, 1)], { type: MIME.json });
-  const run: LiveRun = { id: r.payload.meta.id, meta: { ...r.payload.meta, origin: "cloud" }, payload: r.payload, report: r.report, events, files, inputs, saved: Date.now() };
+  const run: LiveRun = { id: r.payload.meta.id, meta: { ...r.payload.meta, origin: "cloud" }, payload: r.payload, report: r.report, events, files, inputs, preset,
+    engine: r.payload.engine_kind ?? r.payload.meta.engine_kind, saved: Date.now() };
   mount(run);
   await store.put(run);
   return run.id;
@@ -282,7 +300,7 @@ async function parentData(parent: string) {
 }
 
 function recordedFor(i: InspectInput): string[] | null {
-  if (i.photo || i.ga || i.wires || i.checklist || i.preset) return null;
+  if (i.photo || i.ga || i.wires || i.checklist || i.preset || i.engine === "real") return null;
   if (i.checks && IX.enabled.some((c) => !i.checks!.includes(c))) return null;
   const sample = i.sample ?? "01";
   if (i.parent) {
@@ -307,6 +325,12 @@ export const staticApi = {
   checks: async () => IX.checks,
   samples: async (): Promise<Sample[]> => IX.samples,
   inputs: async () => IX.inputs,
+  evaluation: async (): Promise<Evaluation> => {
+    if (!(await ensureEngine())) throw new Error("Connect to the inspection engine to load measured real-versus-synthetic evaluation. Recorded synthetic scores remain available below.");
+    const r = await fetch(`${ENGINE_URL}/api/v2/evaluation`, { cache: "no-store" });
+    if (!r.ok) throw new Error("This engine has not published a real-versus-synthetic evaluation report.");
+    return r.json() as Promise<Evaluation>;
+  },
   /** Real drawing sets the cloud engine holds (mounted EAGLE_EYE_REAL_DATA); none in replay mode. */
   presets: async (): Promise<Preset[]> => {
     if (!(await ensureEngine())) return [];
@@ -320,10 +344,10 @@ export const staticApi = {
   runs: async (): Promise<RunMeta[]> => [...hist()].reverse().map(metaOf).filter((m): m is RunMeta => !!m),
   run: async (id: string): Promise<RunPayload> => {
     const l = live.get(id);
-    if (l) return { ...l.payload, meta: metaOf(id)! };
+    if (l) return safePayload({ ...l.payload, meta: metaOf(id)! });
     if (!IX.runs[id]) throw new Error(`Run ${id} is not on this device (cloud runs are kept in the browser that ran them).`);
     const p: RunPayload = await (await fetch(`${BASE}runs/${id}/payload.json`)).json();
-    return { ...p, meta: metaOf(id)! };
+    return safePayload({ ...p, meta: metaOf(id)! });
   },
   chain: async (id: string): Promise<RunMeta[]> => {
     const root = metaOf(id)?.root ?? id;
@@ -405,12 +429,14 @@ export const staticApi = {
       const photo = i.photo ? await preparePhoto(i.photo) : null;
       const photoSha = photo ? await sha256(photo) : null;
       // a re-check reuses the drawing set of the run it re-checks, unless a new one is given
-      const parentInputs = i.parent ? live.get(i.parent)?.inputs : undefined;
+      const parentRun = i.parent ? live.get(i.parent) : undefined;
+      const parentInputs = parentRun?.inputs;
+      const { preset: selectedPreset, engine: selectedEngine } = inspectionContext(i, parentRun);
       const inputs: LiveRun["inputs"] = {};
       const shas: Partial<Record<InputKey, string>> = {};
       for (const k of ["ga", "wires", "checklist"] as InputKey[]) {
         const f = i[k];
-        const given = f ? { name: f.name, blob: await compactPdf(f as Blob, f.name) } : parentInputs?.[k];
+        const given = f ? { name: f.name, blob: await compactPdf(f as Blob, f.name) } : k === "ga" && selectedPreset ? undefined : parentInputs?.[k];
         if (given) {
           inputs[k] = given;
           shas[k] = await sha256(given.blob);
@@ -423,21 +449,23 @@ export const staticApi = {
           fd.append("photo_sha", photoSha!);
           fd.append("photo_name", i.photo!.name);
           if (need.has("photo")) fd.append("photo", photo, photo.name);
-        } else if (i.preset) {
-          fd.append("preset", i.preset);
+        }
+        if (selectedPreset) {
+          fd.append("preset", selectedPreset);
           if (i.presetPhoto) fd.append("preset_photo", i.presetPhoto);
-        } else fd.append("sample", sample);
+        } else if (!photo) fd.append("sample", sample);
         for (const k of Object.keys(inputs) as InputKey[]) {
           fd.append(`${k}_sha`, shas[k]!);
           fd.append(`${k}_name`, inputs[k]!.name);
           if (need.has(k)) fd.append(k, inputs[k]!.blob, inputs[k]!.name);
         }
         if (i.checks) fd.append("checks", i.checks.join(","));
+        if (selectedEngine) fd.append("engine", selectedEngine);
         if (parentBlob) fd.append("parent", parentBlob, "parent.json");
         await stream("/api/v2/inspect", { method: "POST", body: fd }, {
           onEvent: (ev) => { j.queue = 0; j.events.push(ev); },
           onQueued: (n) => { j.queue = n; },
-          onResult: async (r) => { j.runs.push(await keep(r, j.events.slice(), Object.keys(inputs).length ? inputs : undefined, photo)); },
+          onResult: async (r) => { j.runs.push(await keep(r, j.events.slice(), Object.keys(inputs).length ? inputs : undefined, photo, selectedPreset)); },
         });
       };
       // Each request stays under the host's body cap: inputs the engine asks for travel on their own request
@@ -478,10 +506,14 @@ export const staticUrl = {
   sampleFull: (id: string) => BASE + "samples/" + (IX.samples.find((s) => s.id === id)?.file ?? ""),
   file: (run: string, name: string) => {
     const u = blobUrls.get(run);
+    if (metaOf(run)?.historical_guard) {
+      if (["pdf", "checklist", "rectified", "overlay"].includes(name)) return "";
+      if (name === "marked") name = "photo";
+    }
     if (u) return u[name] ?? (name === "overlay" ? BASE + "img/overlay.png" : "");
     return BASE + (IX.runs[run]?.files[name] ?? "");
   },
-  download: (run: string, name: string) => staticUrl.file(run, name),
+  download: (run: string, name: string) => metaOf(run)?.historical_guard ? name === "json" ? safeJsonUrls.get(run) ?? "" : "" : staticUrl.file(run, name),
   crop: () => "",
   input: (key: string) => BASE + (IX.inputs[key]?.href ?? ""),
   presetPhoto: (id: string, file: string, w = 360) => `${ENGINE_URL}/api/v2/presets/${id}/photos/${encodeURIComponent(file)}?w=${w}`,

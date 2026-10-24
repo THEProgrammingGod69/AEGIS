@@ -40,7 +40,7 @@ def degrade(img, p, seed=0):
 def test_degraded_photo_never_adds_a_false_fail(runs_dir, tmp_path, sid, preset):
     photo = tmp_path / "degraded.jpg"
     photo.write_bytes(degrade(cv2.imread(str(service.sample_path(sid))), preset))
-    meta = service.run_inspection(photo, reports=False)
+    meta = service.run_inspection(photo, reports=False, engine="legacy")
     expected = {i["id"] for i in next(s for s in service.samples() if s["id"] == sid)["issues"] if i["result"] == "FAIL"}
     fails = {i["id"] for i in meta["issues"] if i["result"] == "FAIL"}
     assert fails <= expected, f"false FAIL on a degraded photo: {sorted(fails - expected)}"
@@ -50,5 +50,5 @@ def test_mild_degradation_still_catches_everything(runs_dir, tmp_path):
     mild = dict(rotate=3, keystone=0, bright=0.92, contrast=1, blur=0.6, noise=4, warm=0.2, glare=0.0, q=85)
     photo = tmp_path / "mild.jpg"
     photo.write_bytes(degrade(cv2.imread(str(next(config.SAMPLES.glob("01_*.jpg")))), mild))
-    fails = {i["id"] for i in service.run_inspection(photo, reports=False)["issues"] if i["result"] == "FAIL"}
+    fails = {i["id"] for i in service.run_inspection(photo, reports=False, engine="legacy")["issues"] if i["result"] == "FAIL"}
     assert fails == {"GA-PS12", "ORD-RAIL-1", "LBL-1CBP03", "FER-X3:3"}

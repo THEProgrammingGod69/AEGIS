@@ -56,6 +56,7 @@ const isReal = (it: Item, geo?: Geo) => geo?.real ?? it.verified_by !== undefine
 
 /** Proof crop built in the browser (hosted showcase): same windows as report.py's expected/found/aligned crops. */
 function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expected" | "found" | "aligned"; geo: Geo }) {
+  if (kind !== "expected" && !it.quad.length) return <div className="empty tiny">No reliable photo location for this item</div>;
   const [x, y, w, h] = it.box;
   const m = 15;
   const quad = (f: (v: number, a: "x" | "y") => number): Pt[] => [[f(x, "x"), f(y, "y")], [f(x + w, "x"), f(y, "y")], [f(x + w, "x"), f(y + h, "y")], [f(x, "x"), f(y + h, "y")]];
@@ -88,6 +89,12 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
   const s = statusOf(it);
   const isPass = it.result === "PASS" && !it.recheck;
   const real = isReal(it, geo);
+  if (it.check === "REGISTRATION" || it.id === "REG-DRAWING") return <div className="proof">
+    <div className="row between"><div className="mono proof-id">{it.id}</div><StatusBadge s="REVIEW" /></div>
+    <h3>Check the photograph and drawing</h3>
+    <p className="proof-why">{explain(it)}</p>
+    <div className="callout warn" style={{ margin: 0 }}><Camera /><span className="small">Use the exact cabinet's drawing and revision. Capture the relevant backplate view with readable labels; retaking the photo cannot correct an unrelated drawing.</span></div>
+  </div>;
   return (
     <AnimatePresence mode="wait">
       <motion.div key={it.id} className="proof" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.28 }}>
@@ -164,7 +171,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
           <div className="callout info" style={{ margin: 0 }}>
             <Bot />
             <span className="small">
-              <b>Claude {it.agent.model ? `(${it.agent.model})` : ""}: {it.agent.decision.replace("_", " ").toLowerCase()}</b>
+              <b>Recorded verifier {it.agent.model ? `(${it.agent.model})` : ""}: {it.agent.decision.replace("_", " ").toLowerCase()}</b>
               {" "}· {Math.round(it.agent.confidence * 100)}%{it.agent.cached ? " · cached" : ""} — {it.agent.reason}
             </span>
           </div>

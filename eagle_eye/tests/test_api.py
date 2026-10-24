@@ -51,8 +51,8 @@ def test_bad_inputs_are_rejected_cleanly(runs_dir):
     assert client.post("/api/inspect", data={"sample": "99"}).status_code == 404
     assert client.get("/api/runs/20200101-000000-dead").status_code == 404
     assert client.get("/api/runs/..%2F..%2Fetc").status_code == 404
-    j = wait(client.post("/api/inspect", files={"photo": ("x.jpg", b"not an image", "image/jpeg")}).json()["id"])
-    assert j["status"] == "error" and "photo" in j["error"]
+    response = client.post("/api/inspect", files={"photo": ("x.jpg", b"not an image", "image/jpeg")})
+    assert response.status_code == 400 and "photo" in response.json()["detail"]
 
 
 def test_forge_endpoint(runs_dir):

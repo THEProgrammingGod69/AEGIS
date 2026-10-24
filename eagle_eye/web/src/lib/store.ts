@@ -16,6 +16,9 @@ export interface LiveRun {
   files: Record<string, Blob>;
   /** Custom drawing set uploaded with the run, re-sent when the run is re-checked. */
   inputs?: Partial<Record<InputKey, { name: string; blob: Blob }>>;
+  /** Restore the same preset drawing after the stateless engine's input cache is cleared. */
+  preset?: string;
+  engine?: "legacy" | "real";
   saved: number;
 }
 

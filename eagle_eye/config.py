@@ -23,7 +23,7 @@ DEMO_WIRES = INPUTS / "WireList_EE-DEMO-01.xlsx"
 DEMO_CHECKLIST = INPUTS / "QC_Checklist_EE-DEMO-01.xlsx"
 DEMO_PHOTO = OUT / "demo" / "photo_v1.jpg"
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 
 # One tesseract process per core is the sweet spot; each process is kept single-threaded so that
 # parallel OCR calls do not fight each other for cores (Tesseract's own OpenMP threads oversubscribe).

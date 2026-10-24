@@ -32,7 +32,8 @@ SOFT = {"PASS": "#ECFDF5", "FAIL": "#FFF1F2", "REVIEW": "#FFFBEB", "SKIP": "#F3F
         "CLOSED": "#ECFDF5",
         "OPEN": "#FFF1F2", "REGRESSION": "#FAF5FF", "NEW": "#FFF7ED", "HOLD": "#FFF1F2"}
 CHECK_TITLE = {"GA": "Part present", "MISSING": "Part present", "ORDER": "Rail order", "LABEL": "Device label",
-               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Ferrule text", "COLOUR": "Wire colour"}
+               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Ferrule text", "COLOUR": "Wire colour",
+               "REGISTRATION": "Drawing alignment", "CHECKLIST": "Manual checklist requirements"}
 
 S = dict(
     h1=ParagraphStyle("h1", fontName="EE-Bold", fontSize=15, leading=19, textColor=INK, spaceBefore=4, spaceAfter=8),
@@ -128,7 +129,7 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
     last = "NOT_IN_VIEW" if real else "SKIP"
     keys = ("PASS", "FAIL", "REVIEW", last)
     cells = [[Paragraph(f"<font color='{TONE[x]}'>{k.get(x, 0)}</font>", S["kpi"]) for x in keys],
-             [Paragraph(x, S["kpil"]) for x in ("PASS", "FAIL · FIX BEFORE SHIPPING", "REVIEW · RE-PHOTO ZONE",
+             [Paragraph(x, S["kpil"]) for x in ("PASS", "FAIL · FIX BEFORE SHIPPING", "REVIEW · EVIDENCE UNRESOLVED",
                                                "NOT IN VIEW · NOT JUDGED HERE" if real else "SKIP · ROOT CAUSE ELSEWHERE")]]
     kt = Table(cells, colWidths=[44.5 * mm] * 4)
     kt.setStyle(TableStyle([("BOX", (0, 0), (0, -1), 0.6, LINE), ("BOX", (1, 0), (1, -1), 0.6, LINE),

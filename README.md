@@ -10,15 +10,22 @@ Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1,
 
 > We don't ask AI "what's wrong in this photo?". We check every item the drawing expects, one at a time, at a known spot.
 
+**Inspection safety update (3.1).** Real uploads require their matching GA drawing or real preset. The demo drawing is
+only used in explicit synthetic mode. Failed alignment blocks spatial judgments; unreadable labels remain REVIEW,
+and unseen components remain NOT IN VIEW. Partial coverage cannot approve a cabinet. All AI inference runs locally;
+external AI API calls are disabled in code. See the [setup and validation guide](docs/DEPLOY.md).
+
 | Self-test on 50 unseen cabinets | |
 |---|---|
 | Planted faults caught | **87 / 87** |
 | False alarms (correct items marked FAIL) | **0** of 1,950 |
-| Sent to REVIEW instead of guessing | 6 items (0.3%) |
-| Time per cabinet | **0.9 s** on a 4-core laptop CPU (~2 s on the 1-vCPU cloud engine), no GPU |
+| Correct items sent to REVIEW instead of guessing | 18 / 1,950 (0.92%) |
+| Time per cabinet | **0.89 s** mean in this local CPU run; hosted latency must be measured separately |
 | Degraded photos (tilt, blur, glare, noise, colour cast) | **0** false FAILs on 115 photos; unclear zones go to REVIEW |
 
-These numbers come from Fault Forge's generated cabinets (held-out seeds 200–249). Real photos will be harder; see [honest limits](#honest-limits).
+The 3.1 run above uses Fault Forge's generated cabinets (held-out seeds 200–249), not real cabinet validation.
+The degraded-photo figure is from the earlier stress sweep. The current version's measured results are exposed in **Fault Forge → Real vs synthetic**; unmeasured
+values stay blank. Confirmed defects and referrals to REVIEW are counted separately. See [honest limits](#honest-limits).
 
 ## Grand finale: Emerson's real cabinet (13GE03331)
 
@@ -30,24 +37,24 @@ flowchart LR
   KB["Drawing set → cabinet model<br/>GA views · tags · groups · wiring"] --> OCR["Read every label<br/>PP-OCRv4 multi-pass"]
   OCR --> REG["Place the photo<br/>labels as anchors, RANSAC"]
   REG --> CHK["Checks<br/>MISSING · ORDER · LABEL · UNKNOWN · FERRULE"]
-  CHK --> AG["Claude verifier<br/>second opinion on candidates"]
-  AG --> CON["Consensus<br/>FAIL only when both agree"]
+  CHK --> CON["Local consensus<br/>agreeing OCR + valid alignment"]
+  CON --> COV["Coverage gate<br/>REVIEW / NOT IN VIEW blocks approval"]
 ```
 
-| Measured on the 5 real photos (no API key, no training) | |
+| Historical evaluation on 5 real photos (previous engine; not revalidated for 3.1) | |
 |---|---|
 | Visible labels verified (hand-made ground truth) | **53 / 58** |
 | False FAIL | **0** |
-| Real drawing-vs-cabinet differences flagged | 16 / 23 (extra baseplates 334CBP06-08, TERM1F moved, 335CBP02 missing, ferrules naming CB45/46/49/55) |
-| Planted faults in real photos (label removed / reprinted / swapped) | **5 / 7** caught, 0 false FAIL |
+| Real drawing-vs-cabinet differences referred or confirmed | 16 / 23 (historical metric combined REVIEW and FAIL; this is not confirmed defect recall) |
+| Planted faults in real photos (label removed / reprinted / swapped) | **5 / 7** referred or confirmed; historical metric combined REVIEW and FAIL |
 | Unclear items | REVIEW with a re-photo hint (12 % of judged items, mostly labels hidden by cables) |
 
 * **Only what is visible is judged.** Items outside the photo, too small to read, or beyond the labels the photo could
   anchor are NOT IN VIEW: neither passed nor failed.
 * **FAIL needs agreeing evidence, no API key and no model training.** A wrong or unknown label read identically by two
-  independent OCR passes, or two labels read at each other's drawn spots, FAILs on its own. Absence never does: a label
-  hidden by a cable looks like a missing part, so it is REVIEW with a re-photo hint. The Claude verifier
-  (`ANTHROPIC_API_KEY`) is optional and only adds a second opinion.
+  repeated OCR passes with valid drawing geometry, or two labels read at each other's drawn spots, can FAIL. Absence never does: a label
+  hidden by a cable looks like a missing part, so it is REVIEW with a re-photo hint. External model credentials do not
+  enable hosted inference in this version.
 * **Photos are kept as metadata, not photos.** The browser sends the photo's SHA-256 fingerprint first; the engine reads
   a photo once and keeps only its fingerprint, size, quality, OCR reads, results, a small preview and proof crops.
   Responses are JSON; the browser draws the boxes on its own copy. The same photo again is answered without an upload.
@@ -64,7 +71,7 @@ flowchart LR
 | **Technician work order** | Every FAIL as a numbered fix with location, proof crops, time estimate and sign-off. Print or save as PDF. |
 | **Review station** | Human in the loop: confirm or overturn findings with the proof on screen; every decision audit-logged (who, what, when). |
 | **QC analytics** | First-pass yield, fix closure, inspector agreement, time saved, and a heatmap of where faults cluster on the cabinet. |
-| **Robustness Lab** | Degrade a photo (tilt, keystone, blur, glare, noise, colour cast, JPEG) and send it to the engine: findings move to REVIEW, never to a false FAIL. It found four precision gaps, now closed by evidence rules (see the [engine README](eagle_eye/README.md#precision-under-bad-photos)). |
+| **Robustness Lab** | Degrade a synthetic photo (tilt, keystone, blur, glare, noise, colour cast, JPEG) and inspect it. The recorded sweep had no false FAILs; uncertainty increases REVIEW and does not establish real-photo accuracy (see the [engine README](eagle_eye/README.md#precision-under-bad-photos)). |
 | **Capture assistant** | Camera capture with a framing guide and an instant photo score (sharpness, exposure, glare) before a run is spent on a bad photo. |
 | **Presenter mode + Ctrl K** | The demo script on screen with clicker support, and a command palette to jump anywhere. |
 
@@ -78,7 +85,7 @@ Presenting? Read the [Round 3 run-sheet](docs/ROUND3_RUNSHEET.md).
 
 ## Run it
 
-You need **Python 3.10+** and **Tesseract OCR**.
+You need **Python 3.11–3.12 (3.12 recommended)** and **Tesseract OCR**. The pinned RapidOCR package does not support Python 3.13.
 
 | | Install Tesseract | Start EAGLE EYE |
 |---|---|---|
@@ -92,6 +99,7 @@ The launcher creates a virtual environment, installs the requirements on first r
 ```bash
 cd eagle_eye
 pip install -r requirements.txt
+pip install --no-deps rapidocr-onnxruntime==1.4.4
 python server.py              # web console (recommended)
 streamlit run app.py          # lightweight Streamlit UI, same engine
 python demo.py                # command-line demo: inspect -> fix -> re-photo -> re-check
@@ -148,7 +156,7 @@ eagle_eye/
   kb/              real drawing sets -> cabinet model (views, tags, groups, wiring), cached by SHA-256
   vision/          photo loading, PP-OCRv4 multi-pass reader, closed-vocabulary decoding, registration
   checks/          real-cabinet plug-in checks (MISSING, ORDER, LABEL, UNKNOWN_LABEL, FERRULE, COLOUR)
-  agent/           Claude vision verifier (tool use, cached, replayable)
+  agent/           offline verification fixtures and replay tooling; hosted inference disabled
   consensus.py     candidates + verifier -> PASS / FAIL / REVIEW / NOT_IN_VIEW, multi-photo merge
   pipeline.py      real-cabinet pipeline; forge_real.py / eval_real.py measure it on real photos
   inspector.py     demo-cabinet engine: drawing parser, registration, plug-in checks, consensus
@@ -174,7 +182,7 @@ Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_ey
 ## Honest limits
 
 - Real-cabinet numbers come from 5 photos of one cabinet and its hand-made answer key: a small sample.
-- Without the optional Claude verifier a missing part is never FAIL on its own (REVIEW instead): absence cannot be told
+- A missing part is never FAIL on its own (REVIEW instead): absence cannot be told
   apart from a label hidden by cables in a photo.
 - Reading a full-resolution real photo takes 1-2 minutes on one CPU (the hosted engine has one vCPU); results are cached
   by photo fingerprint, so the same photo again is instant.
@@ -185,5 +193,5 @@ Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_ey
 ## Tools declared
 
 Python, OpenCV, PyMuPDF, PP-OCRv4 (RapidOCR on ONNX Runtime), Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI,
-Anthropic Claude (optional verifier), React, pdf-lib, Streamlit, Vercel. An AI coding assistant helped write the code,
+React, pdf-lib, Streamlit, Vercel. An AI coding assistant helped write the code,
 as the rules ask us to declare.

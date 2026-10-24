@@ -1,7 +1,7 @@
 # EAGLE EYE on-prem / local: the full console + engine in one container on http://localhost:8000.
 #   docker compose up --build
-# "Drawings never leave the plant": leave ANTHROPIC_API_KEY empty (deterministic engine only, uncertain items go to REVIEW),
-# or point ANTHROPIC_BASE_URL at an approved gateway. Real drawing sets and photos are mounted read-only from ./data/emerson.
+# OCR and drawing checks execute locally. No hosted AI API is enabled.
+# Real drawing sets and photos are mounted read-only from ./data/emerson.
 services:
   eagle-eye:
     build:
@@ -15,11 +15,7 @@ services:
       PORT: "8000"
       EAGLE_EYE_CLOUD: "0"
       EAGLE_OCR_WORKERS: ${EAGLE_OCR_WORKERS:-2}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      EAGLE_AGENT_ENABLED: ${EAGLE_AGENT_ENABLED:-1}
-      EAGLE_AGENT_MODEL: ${EAGLE_AGENT_MODEL:-auto}
-      EAGLE_AGENT_FAST_MODEL: ${EAGLE_AGENT_FAST_MODEL:-claude-opus-5-5}
-      EAGLE_AGENT_MAX_CALLS: ${EAGLE_AGENT_MAX_CALLS:-25}
+      EAGLE_AGENT_ENABLED: "0"
     volumes:
       - ./data/emerson:/app/data/emerson:ro
       - eagle-eye-runs:/tmp/eagle_eye

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Bot, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
   GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
   Timer, UserCheck, XCircle,
 } from "lucide-react";
@@ -16,6 +16,7 @@ import { inspectorName, reviewSummary } from "../lib/reviews";
 import { recheckOptions } from "../lib/static";
 import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
+import { approvalBlocker, reviewReason, safeInspection } from "../lib/inspection";
 import { go } from "../lib/router";
 import type { Item, JobView, Pt, Result, Review, RunMeta, RunPayload } from "../lib/types";
 
@@ -23,12 +24,17 @@ const R = 4; // rectified px per mm (matches inspector.R)
 const mmQuad = (b: number[]): Pt[] => [[b[0] * R, b[1] * R], [(b[0] + b[2]) * R, b[1] * R], [(b[0] + b[2]) * R, (b[1] + b[3]) * R], [b[0] * R, (b[1] + b[3]) * R]];
 
 function VerdictBanner({ p }: { p: RunPayload }) {
-  const v = p.meta.verdict;
+  const real = (p.engine_kind ?? p.meta.engine_kind) === "real";
+  const cov = p.coverage ?? p.meta.coverage;
+  const blocker = approvalBlocker(p);
+  const invalid = p.registration.valid === false;
+  const v = p.meta.verdict.label === "PASS" && blocker ? {
+    label: "REVIEW" as const, headline: invalid ? "Inspection blocked · Check the photo and drawing" : "Inspection incomplete · Capture the remaining checks",
+    detail: blocker,
+  } : p.meta.verdict;
   const Icon = v.label === "PASS" ? ShieldCheck : v.label === "REVIEW" ? ShieldQuestion : ShieldAlert;
   const c = v.label === "PASS" ? "var(--pass)" : v.label === "REVIEW" ? "var(--review)" : "var(--fail)";
   const rc = p.meta.recheck;
-  const real = p.engine_kind === "real";
-  const cov = p.coverage;
   const sha = p.meta.photo_meta?.sha256 ?? p.photo_meta?.sha256;
   return (
     <motion.div className="verdict card" style={{ ["--c" as string]: c }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
@@ -37,8 +43,8 @@ function VerdictBanner({ p }: { p: RunPayload }) {
           <Icon />
         </motion.div>
         <div className="grow">
-          <div className="verdict-label mono">{v.label === "HOLD" ? "HOLD · DO NOT SHIP" : v.label === "PASS"
-            ? (real && cov && cov.verified < cov.total ? "EVERYTHING IN VIEW VERIFIED · PHOTOGRAPH THE REST" : "READY TO SHIP") : "NEEDS A RE-PHOTO"}</div>
+          <div className="verdict-label mono">{v.label === "HOLD" ? "HOLD · CONFIRMED DEFECT" : v.label === "PASS"
+            ? (real ? "REQUIRED VISUAL CHECKS VERIFIED" : "SYNTHETIC DEMO · SELECTED CHECKS VERIFIED") : invalid ? "BLOCKED · CHECK INPUTS AND ALIGNMENT" : "INCOMPLETE · REVIEW REQUIRED"}</div>
           <h2 className="verdict-head">{v.headline.split(" · ")[1] ?? v.headline}</h2>
           <p className="verdict-detail">{v.detail}</p>
           <div className="verdict-meta">
@@ -48,7 +54,7 @@ function VerdictBanner({ p }: { p: RunPayload }) {
             {real ? (
               <>
                 <span><Eye size={13} /> {cov ? `${cov.verified}/${cov.total} labelled drawing items verified` : "coverage n/a"} · views {(p.views ?? []).join(", ") || "none"}</span>
-                <span style={{ color: p.agent?.enabled ? "var(--accent)" : undefined }}><Bot size={13} /> {p.agent?.enabled ? `Claude verifier · ${p.agent.calls} calls` : "Claude verifier off"}</span>
+                <span><ShieldCheck size={13} /> Local OCR + drawing geometry{p.agent?.enabled ? ` · historical verifier: ${p.agent.model ?? p.agent.backend ?? "recorded"}` : " · no external AI API"}</span>
               </>
             ) : (
               <>
@@ -76,7 +82,7 @@ function VerdictBanner({ p }: { p: RunPayload }) {
           <>
             <Kpi value={p.meta.counts.PASS} label="Pass" color="var(--pass)" note="verified" />
             <Kpi value={p.meta.counts.FAIL} label="Fail" color="var(--fail)" note="fix before shipping" />
-            <Kpi value={p.meta.counts.REVIEW} label="Review" color="var(--review)" note="re-photo zone" />
+            <Kpi value={p.meta.counts.REVIEW} label="Review" color="var(--review)" note="evidence unresolved" />
             {real ? <Kpi value={p.meta.counts.NOT_IN_VIEW ?? 0} label="Not in view" color="var(--niv)" note="not judged here" />
               : <Kpi value={p.meta.counts.SKIP} label="Skip" color="var(--skip)" note="root cause elsewhere" />}
           </>
@@ -110,7 +116,7 @@ function IssueList({ items, selected, hovered, onSelect, onHover }: {
     return (
       <div className="empty">
         <ShieldCheck style={{ color: "var(--pass)", opacity: 1 }} />
-        <div className="muted">No issues. Every item the drawing expects was verified.</div>
+        <div className="muted">No defect or review findings in this list. Check coverage for items outside the photograph or skipped checks.</div>
       </div>
     );
   return (
@@ -129,6 +135,7 @@ function IssueList({ items, selected, hovered, onSelect, onHover }: {
               </div>
               <div className="issue-found ellipsis">{it.found}</div>
               <div className="tiny faint">{CHECK_TITLE[it.check]} · expected <span className="mono">{it.expected}</span></div>
+              {(it.result === "REVIEW" || it.result === "NOT_IN_VIEW") && <div className="tiny muted" style={{ marginTop: 7 }}>{reviewReason(it)}</div>}
             </div>
           </motion.button>
         );
@@ -186,6 +193,24 @@ function Checklist({ items, selected, onSelect }: { items: Item[]; selected: str
   );
 }
 
+function CoveragePanel({ p, onSelect }: { p: RunPayload; onSelect: (id: string) => void }) {
+  const unseen = p.results.filter((it) => it.result === "NOT_IN_VIEW");
+  const pending = p.results.filter((it) => it.result === "REVIEW");
+  const skipped = p.results.filter((it) => it.result === "SKIP");
+  const cov = p.coverage ?? p.meta.coverage;
+  return <div className="pad">
+    <div className="card-title"><Eye /> Inspection coverage</div>
+    <p className="small muted" style={{ margin: "10px 0 16px" }}>PASS applies to individual visual checks. REVIEW, required items outside the view, and disabled checks prevent whole-cabinet approval.</p>
+    {cov && <div className="small" style={{ marginBottom: 14 }}><b className="mono">{cov.verified}/{cov.total}</b> labelled drawing items verified · <b className="mono">{cov.in_view}</b> in this view. Multiple checklist checks can refer to one item.</div>}
+    <div className="row wrap" style={{ gap: 8, marginBottom: 16 }}><StatusBadge s="REVIEW" label={`${pending.length} REVIEW`} /><StatusBadge s="NOT_IN_VIEW" label={`${unseen.length} NOT IN VIEW`} /><StatusBadge s="SKIP" label={`${skipped.length} SKIPPED`} /></div>
+    {cov?.by_view && Object.entries(cov.by_view).map(([view, c]) => <div key={view} className="row between small muted" style={{ padding: "7px 0" }}><span>{view}</span><span className="mono">{c.verified}/{c.total} verified</span></div>)}
+    {[...unseen, ...pending].map((it) => <button key={it.id} className="rc-row" onClick={() => onSelect(it.id)} style={{ width: "100%", textAlign: "left" }}>
+      <div className="grow"><div className="mono small">{it.id}</div><div className="tiny muted">{reviewReason(it)}</div></div><StatusBadge s={it.result} />
+    </button>)}
+    {!unseen.length && !pending.length && <p className="small muted">No unresolved in-view or coverage findings were returned. Confirm the selected checks and matching drawing before relying on the result.</p>}
+  </div>;
+}
+
 function Registration({ p }: { p: RunPayload }) {
   const r = p.registration;
   const pts = [...r.anchor_points].sort((a, b) => Number(a.inlier !== false) - Number(b.inlier !== false) || b.residual_mm - a.residual_mm);
@@ -196,6 +221,7 @@ function Registration({ p }: { p: RunPayload }) {
         <div><b>{r.inliers}</b><span>RANSAC inliers</span></div>
         <div><b style={{ color: r.outliers.length ? "var(--fail)" : undefined }}>{r.outliers.length}</b><span>off-pattern</span></div>
       </div>
+      {r.valid === false && <div className="callout warn"><ShieldQuestion /><span>{r.invalid_reason || "No reliable drawing alignment. Check the matching drawing and capture readable labels before evaluating components."}</span></div>}
       {p.engine_kind === "real" ? (
         <p className="small muted">
           Every device label read with certainty is an anchor; per GA view a 2-point RANSAC finds the placement of the drawing on the photo
@@ -235,7 +261,7 @@ function TimingCard({ p }: { p: RunPayload }) {
     ...(t.ocr != null ? [{ k: "Read labels (OCR)", v: t.ocr, c: "#f472b6" }] : []),
     { k: "Register photo", v: t.register, c: "#38bdf8" },
     ...Object.entries(t.checks).map(([k, v]) => ({ k: `${k} check`, v, c: "#22d3ee" })),
-    ...(t.agent ? [{ k: "Claude verifier", v: t.agent, c: "#fbbf24" }] : []),
+    ...(t.agent ? [{ k: "Recorded verifier", v: t.agent, c: "#fbbf24" }] : []),
     { k: "Report + PDF", v: p.meta.timing.report ?? 0, c: "#a78bfa" },
   ];
   const total = parts.reduce((a, b) => a + b.v, 0) || 1;
@@ -260,7 +286,7 @@ function TimingCard({ p }: { p: RunPayload }) {
 /** Human in the loop: the inspector confirms or overrides the engine on one item. Kept as an audit trail. */
 function DecisionBar({ it, review, onDecide }: { it: Item; review?: Review; onDecide: (item: string, d: Review["decision"] | "CLEAR", note: string) => void }) {
   const [note, setNote] = useState(review?.note ?? "");
-  if (it.result === "SKIP") return null;
+  if (it.result === "SKIP" || it.check === "REGISTRATION" || it.id === "REG-DRAWING") return null;
   const engine = it.result;
   return (
     <div className={`decision${review ? " done" : ""}`} style={{ ["--c" as string]: review ? STATUS_COLOR[review.decision] : "var(--accent-3)" }}>
@@ -291,9 +317,14 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
   const [photo, setPhoto] = useState<File | null>(null);
   const samples = useAsync(api.samples);
   const live = useCanLive();
-  const real = p.engine_kind === "real";
+  const real = (p.engine_kind ?? p.meta.engine_kind) === "real";
   const suggested = !real && p.meta.photo_name.startsWith("01_") && !p.meta.parent ? "05" : null;
   const recorded = STATIC && !live ? recheckOptions(p.meta.id) : null;
+  if (!real && p.registration.valid === false && p.meta.source === "upload") return <div className="card pad recheck">
+    <div className="card-title"><FileText /> Start again with the matching drawing</div>
+    <p className="small muted" style={{ margin: "12px 0" }}>This photograph was inspected against the synthetic demo drawing without reliable alignment. A re-check would reuse that reference. Select the real cabinet drawing for a new inspection.</p>
+    <button className="btn btn-primary" onClick={() => go("inspect")}><Plus /> New real cabinet inspection</button>
+  </div>;
   return (
     <div className="card pad recheck">
       <div className="card-head">
@@ -309,7 +340,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
             {recorded && !recorded.length && <div style={{ marginTop: 8 }}>No re-check was recorded for this run; open <b>Sample 01</b> to try one.</div>}
           </div>
         ) : (
-          <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop the photo taken after the fix" hint="Same cabinet, any angle" icon={<Camera />} />
+          <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop the photo taken after the fix" hint="Same cabinet and drawing; include the required view" icon={<Camera />} />
         )}
         <div className="stack" style={{ ["--gap" as string]: "8px" }}>
           {real ? <div className="tiny faint">Re-photograph the same side of the cabinet after the fix; the drawing set of this run is reused.</div> : <>
@@ -336,7 +367,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
 
 export function Run({ id }: { id: string }) {
   const toast = useToast();
-  const { data: p, error, setData } = useAsync(() => api.run(id), [id]);
+  const { data: p, error, setData } = useAsync(async () => safeInspection(await api.run(id)), [id]);
   const chain = useAsync(() => api.chain(id), [id]);
   const [mode, setMode] = useState<"photo" | "rect">("photo");
   const [layers, setLayers] = useState({ issues: true, drawing: false, anchors: false });
@@ -345,7 +376,7 @@ export function Run({ id }: { id: string }) {
   const [focusKey, setFocusKey] = useState(0);
   const pick = (id: string) => { setSelected(id); setFocusKey((k) => k + 1); };
   const [hovered, setHovered] = useState<string | null>(null);
-  const [tab, setTab] = useState<"issues" | "checklist" | "registration">("issues");
+  const [tab, setTab] = useState<"issues" | "checklist" | "registration" | "coverage">("issues");
   const [job, setJob] = useState<JobView | null>(null);
   const [jobPhoto, setJobPhoto] = useState<string>("");
 
@@ -356,7 +387,7 @@ export function Run({ id }: { id: string }) {
     setMode("photo");
   }, [id]);
   useEffect(() => {
-    if (p && p.meta.id === id && !selected) setSelected((issues[0] ?? p.results[0]).id);
+    if (p && p.meta.id === id && !selected) setSelected((issues[0] ?? p.results[0])?.id ?? null);
   }, [p, id, issues, selected]);
 
   useEffect(() => {
@@ -371,9 +402,10 @@ export function Run({ id }: { id: string }) {
   }, [issues, selected]);
 
   const startRecheck = async (photo: File | null, sample: string | null) => {
+    if (jobPhoto.startsWith("blob:")) URL.revokeObjectURL(jobPhoto);
     setJobPhoto(photo ? URL.createObjectURL(photo) : url.sample(sample!, 1400));
     try {
-      const j = await api.inspect({ photo, sample, parent: id, checks: p?.meta.enabled });
+      const j = await api.inspect({ photo, sample, parent: id, checks: p?.meta.enabled, engine: p?.engine_kind ?? p?.meta.engine_kind });
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Re-check failed");
@@ -428,10 +460,10 @@ export function Run({ id }: { id: string }) {
           {chain.data && <Chain chain={chain.data} current={id} />}
         </div>
         <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
-          <a className="btn" {...dl(id, "pdf", p.meta.cabinet)}><FileText /> PDF report</a>
-          <a className="btn" {...dl(id, "checklist", p.meta.cabinet)}><FileSpreadsheet /> Filled checklist</a>
+          <a className="btn" {...dl(id, "pdf", p.meta.cabinet, p.meta.historical_guard)}><FileText /> PDF report</a>
+          <a className="btn" {...dl(id, "checklist", p.meta.cabinet, p.meta.historical_guard)}><FileSpreadsheet /> Filled checklist</a>
           <a className="btn btn-icon" {...dl(id, "json", p.meta.cabinet)} title="Report JSON"><FileJson /></a>
-          <a className="btn btn-icon" {...dl(id, "marked", p.meta.cabinet)} title="Marked-up photo"><Download /></a>
+          <a className="btn btn-icon" {...dl(id, "marked", p.meta.cabinet, p.meta.historical_guard)} title={p.meta.historical_guard ? "Rerun inspection to regenerate verified exports" : "Marked-up photo"}><Download /></a>
           <a className="btn" href={`#/work/${id}`} title="Printable fix list for the technician"><ClipboardList /> Work order</a>
           <button className="btn btn-primary" onClick={() => document.getElementById("recheck")?.scrollIntoView({ behavior: "smooth", block: "center" })}><RefreshCcw /> Re-check</button>
           <button className="btn btn-icon" onClick={() => go("inspect")} title="New inspection"><Plus /></button>
@@ -439,6 +471,12 @@ export function Run({ id }: { id: string }) {
       </div>
 
       <VerdictBanner p={p} />
+      {p.meta.historical_guard && <div className="callout warn"><ShieldQuestion /><span><b>Historical exports are blocked.</b> Rerun inspection to regenerate verified PDF, checklist and marked images. The JSON download contains the reassessed safety view; archived originals remain unchanged.</span></div>}
+      <div className="callout info">
+        <FileText />
+        <span><b>{(p.engine_kind ?? p.meta.engine_kind) === "real" ? "Real cabinet inspection" : "Synthetic demo reference"}</b> · photo <span className="mono">{p.meta.photo_name}</span> · drawing <span className="mono">{p.meta.inputs.ga.name}</span> · cabinet <span className="mono">{p.meta.cabinet}</span>.
+          {(p.engine_kind ?? p.meta.engine_kind) !== "real" && " This reference is intended for EE-DEMO-01 generated samples."}</span>
+      </div>
       {(p.meta.warnings ?? []).map((w) => (
         <div key={w.code} className={`callout ${w.code === "weak_registration" ? "warn" : "info"}`}>
           {w.code === "weak_registration" ? <ShieldQuestion /> : <RefreshCcw />}
@@ -451,11 +489,11 @@ export function Run({ id }: { id: string }) {
           <div className="viewer-toolbar">
             <Seg value={mode} onChange={setMode} options={[
               { value: "photo", label: <><ImageIcon /> Photo</>, title: "The photo as taken, with every issue boxed" },
-              ...(p.rectified === false ? [] : [{ value: "rect" as const, label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing" }]),
+              ...(p.rectified === false || p.registration.valid === false ? [] : [{ value: "rect" as const, label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing" }]),
             ]} />
             <div className="row" style={{ ["--gap" as string]: "6px" }}>
               <button className="chip" aria-pressed={layers.issues} onClick={() => setLayers({ ...layers, issues: !layers.issues })}><ScanLine /> Issues</button>
-              <button className="chip" aria-pressed={layers.drawing} onClick={() => setLayers({ ...layers, drawing: !layers.drawing })}><Layers /> Drawing</button>
+              <button className="chip" disabled={p.registration.valid === false} title={p.registration.valid === false ? "Drawing overlay requires valid alignment" : undefined} aria-pressed={layers.drawing} onClick={() => setLayers({ ...layers, drawing: !layers.drawing })}><Layers /> Drawing</button>
               <button className="chip" aria-pressed={layers.anchors} onClick={() => setLayers({ ...layers, anchors: !layers.anchors })}><Crosshair /> Anchors</button>
             </div>
             {rect && (
@@ -500,6 +538,7 @@ export function Run({ id }: { id: string }) {
                 ["issues", `Issues`, issues.length],
                 ["checklist", "Checklist", p.results.length],
                 ["registration", "Registration", p.registration.anchors],
+                ["coverage", "Coverage", (p.meta.counts.NOT_IN_VIEW ?? 0) + p.meta.counts.REVIEW],
               ] as const).map(([k, l, n]) => (
                 <button key={k} className={`tab${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>
                   {l} <span className="mono">{n}</span>
@@ -513,6 +552,7 @@ export function Run({ id }: { id: string }) {
                   {tab === "issues" && <IssueList items={issues} selected={selected} hovered={hovered} onSelect={pick} onHover={setHovered} />}
                   {tab === "checklist" && <Checklist items={p.results} selected={selected} onSelect={pick} />}
                   {tab === "registration" && <Registration p={p} />}
+                  {tab === "coverage" && <CoveragePanel p={p} onSelect={pick} />}
                 </motion.div>
               </AnimatePresence>
             </div>

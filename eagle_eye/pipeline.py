@@ -15,7 +15,7 @@ from pathlib import Path
 import config
 import consensus
 from checks import ORDER as CHECK_ORDER
-from checks import Context, run_checks
+from checks import CHECKS, Context, finding, run_checks
 from inspector import R, InspectionError
 from kb import drawing_kb
 from kb.tags import tag_sort_key
@@ -36,6 +36,10 @@ def real_enabled(enabled):
         for n in LEGACY_TO_REAL.get(e, [e]):
             if n not in out:
                 out.append(n)
+    # Label checks use the presence/zoom facts populated by MISSING. Selecting LABEL alone must not silently turn
+    # every label into NOT_IN_VIEW simply because its prerequisite was omitted in the UI.
+    if "LABEL" in out and "MISSING" not in out:
+        out.insert(0, "MISSING")
     return [c for c in CHECK_ORDER if c in out] + [c for c in out if c not in CHECK_ORDER]
 
 
@@ -48,7 +52,10 @@ def _agent_status(agent):
     except Exception as e:  # noqa: BLE001 - the deterministic engine never depends on the agent
         return {"enabled": False, "backend": None, "reason": f"agent unavailable: {type(e).__name__}: {e}"}
     if agent not in (None, True):
-        st = dict(st, enabled=True, backend=getattr(agent, "name", "custom"), reason="backend supplied by the caller")
+        from agent.backends import is_offline
+        if not is_offline(agent):
+            return {"enabled": False, "backend": None, "reason": "external AI APIs are disabled"}
+        st = dict(st, enabled=True, backend=getattr(agent, "name", "custom"), reason="offline fixture supplied by the caller")
     return st
 
 
@@ -88,7 +95,9 @@ def _registration(reg, ctx):
     primary = reg["fits"][0]["coverage_photo"] if reg["fits"] else []
     return {"anchors": reg["anchors"], "inliers": reg["inliers"], "outliers": sorted(set(outl), key=tag_sort_key),
             "refined": any(f["model"] == "homography" for f in reg["fits"]), "targets": targets,
-            "localised": reg["localised"], "hint": reg["hint"], "views": [f["view"] for f in reg["fits"]],
+            "localised": reg["localised"], "valid": reg["localised"],
+            "invalid_reason": None if reg["localised"] else reg["hint"] or "The photo could not be placed on this drawing",
+            "hint": reg["hint"], "views": [f["view"] for f in reg["fits"]],
             "candidates": reg["candidates"], "fits": fits, "quad": primary, "anchor_points": pts,
             "not_in_view": len(reg["not_in_view"])}
 
@@ -111,17 +120,40 @@ def _warnings(reg, photo, agent_st, items, kb):
     if not agent_st.get("enabled") and any(r["result"] == "REVIEW" and r.get("candidate") == "CANDIDATE_FAULT"
                                            for r in items):
         w.append({"code": "agent_off", "message": "Deterministic mode (no AI verifier): wrong, unknown or swapped labels "
-                  "read with certainty FAIL on their own; anything the photo cannot prove - a label that cannot be read, "
+                  "supported by repeated literal OCR and valid geometry can FAIL on their own; anything the photo cannot prove - a label that cannot be read, "
                   "a weak read - is REVIEW with a re-photo hint."})
+    if any((r.get("rule") or "").endswith(".unsupported_input") for r in items):
+        w.append({"code": "unverified_document_requirements",
+                  "message": "The uploaded wire list or checklist contains requirements that the real-cabinet "
+                             "engine cannot verify automatically. Device-label coverage does not clear those "
+                             "requirements; manual inspection is still required."})
     return w
+
+
+def _document_requirements(ctx, findings):
+    """Explicitly uploaded requirements must remain visible even when their automation is unsupported or disabled.
+
+    Presence/label checks cannot certify wire colours or arbitrary checklist rows. Keep the supported drawing-link
+    ferrule checks intact, and add a separate unresolved document requirement rather than silently dropping the file.
+    """
+    if ctx.wires and not any(f["id"] == "DOC-WIRELIST" for f in findings):
+        findings.extend(CHECKS["COLOUR"]().run(ctx))
+    if ctx.checklist:
+        findings.append(finding("DOC-CHECKLIST", "CHECKLIST", "Uploaded inspection checklist",
+                                "Every uploaded checklist requirement verified",
+                                "Additional checklist requirements need manual verification", "UNCERTAIN",
+                                conf=0.0, rule="CHECKLIST.unsupported_input",
+                                evidence=["The real-cabinet engine checks drawing-derived device labels and observed "
+                                          "connections; it does not execute arbitrary uploaded checklist rows"],
+                                hint="Review each uploaded checklist row and record the manual inspection separately"))
 
 
 def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_event=None, agent=None, run_dir=None,
                  ocr_mode=None, names=None):
     """Inspect one or more photos of a real cabinet against its drawing set -> [(report, ctx)].
 
-    ``photos``: paths, raw bytes or ``load_photo`` dicts. ``agent``: None = from the environment, False = off, or a
-    backend object (tests, replay). ``run_dir``: where the agent transcript goes. ``names``: display names of the photos.
+    ``photos``: paths, raw bytes or ``load_photo`` dicts. The production path uses local OCR and geometry; external AI
+    APIs are disabled. ``agent``: False = off, or an offline fixture (tests/replay). ``run_dir`` stores its transcript.
     """
     t0 = time.perf_counter()
     emit = on_event or (lambda ev: None)
@@ -179,6 +211,7 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
 
         findings, t_checks = run_checks(ctx, checks_on, on_event=lambda ev: emit(dict(ev, engine="real", **multi)),
                                         clock=clock)
+        _document_requirements(ctx, findings)
         t = time.perf_counter()
         cands = [f for f in findings if f["status"] in ("CANDIDATE_FAULT", "UNCERTAIN")]
         stage("agent", "start", candidates=len(cands), enabled=bool(agent_st.get("enabled")),
@@ -203,7 +236,7 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
               summary=agent_out.get("summary"), enabled=agent_on, backend=agent_out.get("backend"),
               model=agent_out.get("model"), **multi)
 
-        items = consensus.decide(findings, agent_out.get("decisions") or {}, agent_on)
+        items = consensus.decide(findings, agent_out.get("decisions") or {}, agent_on, registration=reg)
         c = consensus.counts(items)
         stage("consensus", "done", counts=c, root_cause_skips=c["SKIP"], **multi)
         W, H = photo["size"]

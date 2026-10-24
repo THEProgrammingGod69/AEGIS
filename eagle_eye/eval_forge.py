@@ -21,7 +21,7 @@ def one(i):
     caught = {k: res.get(k) == "FAIL" for k in exp}
     fa = [k for k, v in res.items() if v == "FAIL" and k not in exp]
     rv = [k for k, v in res.items() if v == "REVIEW" and k not in exp]
-    return dict(i=i, strength=strength, faults=faults, caught=caught, false_alarms=fa, reviews=rv,
+    return dict(i=i, engine_version=config.VERSION, strength=strength, faults=faults, caught=caught, false_alarms=fa, reviews=rv,
                 n_items=len(res), n_skip=sum(v == "SKIP" for v in res.values()), anchors=rep["registration"]["anchors"],
                 found={k: res.get(k) for k in exp}, sec=round(sec, 2))
 
@@ -35,7 +35,12 @@ def summarize(out):
             e = by.setdefault(f["type"], [0, 0]); e[1] += 1
             e[0] += r["caught"][expected_items(f)]
     secs = [r["sec"] for r in out if r.get("sec")]
-    return dict(cabinets=len(out), planted=nf, caught=nc, recall=nc / max(nf, 1), correct_items=correct_items,
+    outcomes = [value for row in out for value in row.get("found", {}).values()]
+    version = config.VERSION if out and all(r.get("engine_version") == config.VERSION for r in out) else None
+    return dict(engine_version=version, confirmed=sum(v == "FAIL" for v in outcomes),
+                referred=sum(v == "REVIEW" for v in outcomes), incorrect_pass=sum(v == "PASS" for v in outcomes),
+                unassessed=sum(v not in ("FAIL", "REVIEW", "PASS") for v in outcomes),
+                cabinets=len(out), planted=nf, caught=nc, recall=nc / max(nf, 1), correct_items=correct_items,
                 false_alarms=fa, false_alarm_rate=fa / max(correct_items, 1), reviews=rv, review_rate=rv / max(correct_items, 1),
                 per_type=by, clean_cabinets_zero_fail=sum(1 for r in out if not r["faults"] and not r["false_alarms"]),
                 clean_cabinets=sum(1 for r in out if not r["faults"]),

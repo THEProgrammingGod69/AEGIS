@@ -5,17 +5,13 @@ services:
     runtime: docker
     dockerContext: ./eagle_eye
     dockerfilePath: ./eagle_eye/Dockerfile.engine
-    plan: pro            # 2 vCPU / 4 GB: OCR + agent stays under ~60 s per photo
+    plan: pro            # Benchmark OCR latency on the selected instance before the demo.
     healthCheckPath: /api/v2/health
     envVars:
-      - key: ANTHROPIC_API_KEY
-        sync: false        # set in the Render dashboard, never in git
-      - key: EAGLE_AGENT_MODEL
-        value: auto
-      - key: EAGLE_AGENT_FAST_MODEL
-        value: claude-opus-5-5
+      - key: EAGLE_AGENT_ENABLED
+        value: "0"
       - key: EAGLE_CORS_ORIGINS
-        value: https://eagle-eye-enigma.vercel.app
+        value: https://aegis-eagle-eye.vercel.app
       - key: EAGLE_OCR_WORKERS
         value: "2"
     disk:                  # optional: real drawing set + photos for the "Emerson 13GE03331" preset

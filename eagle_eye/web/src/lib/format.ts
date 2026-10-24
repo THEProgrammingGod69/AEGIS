@@ -33,6 +33,7 @@ export const CHECK_TITLE: Record<string, string> = {
   LABEL: "Device label",
   FERRULE: "Ferrule text",
   COLOUR: "Wire colour",
+  REGISTRATION: "Drawing alignment",
 };
 
 export const COLOUR_NAME: Record<string, string> = {
@@ -88,25 +89,28 @@ export function plural(n: number, w: string, p?: string) {
 /** Short label for a status chip (NOT_IN_VIEW reads better with spaces). */
 export const statusText = (s: string) => (s === "NOT_IN_VIEW" ? "NOT IN VIEW" : s);
 
-/** Explanation of a real-cabinet engine item: its result, the evidence and the second opinion that settled it. */
+/** Explain only evidence actually recorded for this item. */
 function explainReal(it: Item): string {
   const ev = it.evidence.filter((e) => !e.startsWith("Claude:")).join("; ");
-  const agent = it.agent ? ` Claude (${it.agent.model ?? "agent"}) said ${it.agent.decision.replace("CONFIRMED_", "").toLowerCase()} with ${Math.round(it.agent.confidence * 100)}% confidence: ${it.agent.reason}` : "";
+  const agent = it.agent ? ` Recorded verifier (${it.agent.model ?? "model"}): ${it.agent.reason}` : "";
   if (it.result === "NOT_IN_VIEW") return `Not judged: this photo does not show ${it.target} clearly enough (${ev}). It is neither passed nor failed.`;
   if (it.result === "SKIP") return `Not judged on its own: ${it.root_cause ? `the root cause is reported by ${it.root_cause}` : ev}.`;
-  if (it.result === "FAIL") return `Two independent signals agree. OCR and geometry: ${ev}.${agent}`;
-  if (it.result === "REVIEW") return `One signal is not enough for FAIL: ${ev}.${agent || " The Claude verifier is off, so a person decides."}${it.hint ? ` Re-photo: ${it.hint}.` : ""}`;
+  if (it.result === "FAIL") return `The recorded visual evidence supports a defect against the drawing: ${ev}.${agent}`;
+  if (it.result === "REVIEW") return `The available evidence does not establish PASS or FAIL: ${ev}.${agent}${it.hint ? ` Next action: ${it.hint}.` : " Inspect this item or capture clearer evidence."}`;
   return `Verified by ${(it.verified_by ?? []).join(" + ") || "OCR"} against the drawing: ${ev}.${agent}`;
 }
 
 /** Human explanation of why the engine decided what it decided for an item. */
 export function explain(it: Item): string {
   const ev = it.evidence.join("; ");
+  if (it.check === "REGISTRATION" || it.id === "REG-DRAWING") return `Inspection is blocked because the photo cannot be reliably placed on the drawing. ${ev} This is one input or alignment problem, rather than evidence of separate component defects.`;
+  if (it.result === "SKIP") return `Not evaluated on its own${it.root_cause ? `: resolve ${it.root_cause} first` : ": this check was skipped"}. ${ev}`;
+  if (it.result === "NOT_IN_VIEW") return `This required item is not visible enough in this photograph to judge. Capture the relevant cabinet view; it has neither passed nor failed. ${ev}`;
   if (it.verified_by !== undefined || it.check === "MISSING" || it.check === "UNKNOWN_LABEL") return explainReal(it);
   switch (it.check) {
     case "GA":
       if (it.result === "FAIL")
-        return `The drawing places ${it.target} here. The slot looks like empty backplate (${ev}), so two independent signals agree: the part is missing.`;
+        return `The drawing places ${it.target} here. The matched slot has evidence of empty backplate (${ev}), supporting a missing-part finding.`;
       if (it.result === "REVIEW")
         return `The slot is partly occupied and the evidence disagrees, so EAGLE EYE asks for a re-photo of this zone instead of guessing.`;
       return `Slot occupancy matches an installed part (${ev}).`;
@@ -116,11 +120,10 @@ export function explain(it: Item): string {
       if (it.result === "REVIEW") return `At least one slot label on ${it.target} could not be read, so the order is sent to REVIEW.`;
       return `Every slot on ${it.target} holds the device the drawing puts there.`;
     case "LABEL":
-      if (it.result === "SKIP") return `Not checked on its own: the root cause is already reported by ${it.root_cause ?? "another item"}.`;
       if (it.result === "FAIL" && it.found.startsWith("Wrong"))
         return `The label is present and every OCR vote agrees on a string that is not ${it.expected}.`;
       if (it.result === "FAIL") return `No sticker with print was found where the drawing prints ${it.expected}, and OCR read nothing.`;
-      if (it.result === "REVIEW") return `A label is there but the votes do not agree, so this zone needs a sharper photo.`;
+      if (it.result === "REVIEW") return `The expected label was not reliably read. Check drawing alignment, visibility and image detail before deciding whether it is incorrect or missing. ${ev}`;
       return `OCR votes decoded against the drawing's closed vocabulary agree on ${it.expected}.`;
     case "FERRULE":
       if (it.result === "FAIL" && it.found === "No ferrule") return `No white sleeve pixels where the ferrule on ${it.target} should be (${ev}).`;

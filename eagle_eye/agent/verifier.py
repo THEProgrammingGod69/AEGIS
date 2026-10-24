@@ -68,6 +68,8 @@ def verify(findings, ctx, run_dir=None, on_event=None, backend=None):
     reason = "backend supplied by the caller"
     if backend is None:
         backend, reason = backends.get_backend(s)
+    elif not backends.is_offline(backend):
+        backend, reason = None, "external AI APIs and untrusted verifier backends are disabled"
     findings = list(findings.values()) if isinstance(findings, dict) else list(findings or [])
     out = {"enabled": backend is not None, "backend": getattr(backend, "name", None), "model": None,
            "fast_model": None, "decisions": {}, "calls": 0,

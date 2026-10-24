@@ -2,6 +2,7 @@ import { Maximize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { STATUS_HEX } from "../lib/format";
 import { useSize } from "../lib/hooks";
+import { polygonBounds } from "../lib/geometry";
 import type { Pt, Status } from "../lib/types";
 
 export interface ViewerItem {
@@ -61,12 +62,6 @@ function Chip({ x, y, u, color, text, small }: { x: number; y: number; u: number
   );
 }
 
-const bbox = (q: Pt[]) => {
-  const xs = q.map((p) => p[0]);
-  const ys = q.map((p) => p[1]);
-  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
-};
-
 export function PhotoViewer({
   src, size, items = [], layout = [], anchors = [], backplate, layers = { issues: true, drawing: false, anchors: false },
   overlaySrc, overlayOpacity = 0.6, selected, selectedQuad, hovered, onSelect, onHover, scanning, focusKey = 0,
@@ -98,7 +93,8 @@ export function PhotoViewer({
   const focusQuad = selectedQuad ?? items.find((i) => i.id === selected)?.quad ?? null;
   useEffect(() => {
     if (!focusKey || !focusQuad || !fit.s) return;
-    const b = bbox(focusQuad);
+    const b = polygonBounds(focusQuad);
+    if (!b) return;
     const bw = Math.max(b.x1 - b.x0, W * 0.04);
     const bh = Math.max(b.y1 - b.y0, H * 0.03);
     const s = Math.max(fit.s * 1.15, Math.min(fit.s * 5, Math.min(box.w / (bw * 3.6), box.h / (bh * 3.6))));
@@ -187,13 +183,14 @@ export function PhotoViewer({
           <img src={src} width={W} height={H} draggable={false} alt="" onLoad={() => setLoaded(true)} style={{ opacity: loaded ? 1 : 0 }} />
           {overlaySrc && <img className="viewer-overlay" src={overlaySrc} width={W} height={H} draggable={false} alt="" style={{ opacity: overlayOpacity }} />}
           <svg className="viewer-svg" viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-            {backplate && (layers.drawing || layers.anchors) && (
+            {backplate && polygonBounds(backplate) && (layers.drawing || layers.anchors) && (
               <polygon points={backplate.map((p) => p.join(",")).join(" ")} fill="none" stroke="#38bdf8" strokeWidth={1.4} strokeDasharray="8 6" vectorEffect="non-scaling-stroke" opacity={0.75} />
             )}
             {layers.drawing && (
               <g className="layer-drawing">
                 {layout.map((l, i) => {
-                  const b = bbox(l.quad);
+                  const b = polygonBounds(l.quad);
+                  if (!b) return null;
                   return (
                     <g key={l.tag} style={{ animationDelay: `${i * 35}ms` }}>
                       <polygon points={l.quad.map((p) => p.join(",")).join(" ")} fill="rgba(56,189,248,0.05)" stroke="#38bdf8" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
@@ -221,12 +218,13 @@ export function PhotoViewer({
                   </g>
                 );
               })}
-            {selectedQuad && !items.some((i) => i.id === selected) && (
+            {selectedQuad && polygonBounds(selectedQuad) && !items.some((i) => i.id === selected) && (
               <polygon points={selectedQuad.map((p) => p.join(",")).join(" ")} fill="rgba(56,189,248,0.14)" stroke="#7dd3fc" strokeWidth={3} vectorEffect="non-scaling-stroke" className="sel-glow" />
             )}
             {layers.issues &&
               items.map((it) => {
-                const b = bbox(it.quad);
+                const b = polygonBounds(it.quad);
+                if (!b) return null;
                 const c = STATUS_HEX[it.status];
                 const on = it.id === selected || it.id === hovered;
                 const pad = 6 * u;

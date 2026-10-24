@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { fixFor } from "../lib/fixes";
 import { CHECK_TITLE, isIssue, runDate, shortId, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
+import { approvalBlocker } from "../lib/inspection";
 import { finalResult, inspectorName } from "../lib/reviews";
 import { go } from "../lib/router";
 
@@ -46,7 +47,9 @@ export function WorkOrder({ id }: { id: string }) {
   const minutes = steps.reduce((a, s) => a + s.fix.minutes, 0);
   const nDone = steps.filter((s) => done[s.it.id]).length;
   const wo = `WO-${p.meta.cabinet}-${shortId(id)}`;
-  const geo = { photoSize: p.photo_size, sizeMm: p.size_mm };
+  const geo = { photoSize: p.photo_size, sizeMm: p.size_mm, real: (p.engine_kind ?? p.meta.engine_kind) === "real" };
+  const blocker = approvalBlocker(p);
+  const ready = !steps.length && !blocker && p.meta.verdict.label === "PASS";
 
   return (
     <div className="main wo-page">
@@ -70,18 +73,18 @@ export function WorkOrder({ id }: { id: string }) {
             <h1>{wo}</h1>
             <div className="wo-sub">Cabinet <b>{p.meta.cabinet}</b> · {p.meta.label} · inspected {runDate(p.meta.created)} · run {id}</div>
           </div>
-          <div className="wo-stamp" data-v={steps.length ? "hold" : "pass"}>{steps.length ? "HOLD · DO NOT SHIP" : "NO ACTION · READY"}</div>
+          <div className="wo-stamp" data-v={ready ? "pass" : "hold"}>{ready ? "SELECTED CHECKS VERIFIED" : steps.length ? "HOLD · DO NOT SHIP" : "INCOMPLETE · APPROVAL PENDING"}</div>
         </header>
 
         <div className="wo-summary">
           <div><b>{fixes.length}</b><span>fixes</span></div>
-          <div><b>{steps.length - fixes.length}</b><span>zones to re-photo</span></div>
+          <div><b>{steps.length - fixes.length}</b><span>checks to review</span></div>
           <div><b>~{minutes}</b><span>min estimated</span></div>
           <div><b>{p.meta.items}</b><span>items checked against the drawing</span></div>
         </div>
 
         {steps.length === 0 && (
-          <div className="wo-empty">Every item the GA drawing and wire list expect was verified. Nothing to fix.</div>
+          <div className="wo-empty">{ready ? "No open fixes for the verified visual checks in this inspection." : blocker || "No open component fixes are listed. Complete the remaining inspection requirements before approval."}</div>
         )}
 
         <ol className="wo-steps">
@@ -106,10 +109,10 @@ export function WorkOrder({ id }: { id: string }) {
                   {p.meta.reviews?.[it.id] && <span><b>Inspector</b> {p.meta.reviews[it.id].by}: {p.meta.reviews[it.id].note || p.meta.reviews[it.id].decision}</span>}
                 </div>
               </div>
-              <div className="wo-crops">
+              {it.check !== "REGISTRATION" && it.id !== "REG-DRAWING" && <div className="wo-crops">
                 <figure><div className="wo-crop drawing"><ProofCrop run={id} it={it} kind="expected" geo={geo} /></div><figcaption>Drawing</figcaption></figure>
                 <figure><div className="wo-crop"><ProofCrop run={id} it={it} kind="found" geo={geo} /></div><figcaption>Photo</figcaption></figure>
-              </div>
+              </div>}
               <button className="wo-check" onClick={() => setDone({ ...done, [it.id]: !done[it.id] })} aria-pressed={!!done[it.id]} title="Mark as done">
                 {done[it.id] ? <CheckSquare /> : <Square />}
                 <span>Done</span>

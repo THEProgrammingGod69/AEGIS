@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CameraCapture } from "../components/Camera";
 import { DropZone } from "../components/DropZone";
 import { Running } from "../components/Running";
-import { StatusBadge, useToast } from "../components/ui";
+import { Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
 import { pingEngine, useEngine } from "../lib/cloud";
 import { LIVE_ONLY } from "../lib/static";
@@ -25,8 +25,8 @@ function PresetCard({ presets, onRun, disabled }: { presets: Preset[]; onRun: (p
             <div>
               <div className="card-title"><Factory /> {p.title} · real cabinet</div>
               <div className="card-sub">
-                Emerson's drawing set (<span className="mono">{p.ga}</span>) and photos of the built cabinet. The real-cabinet engine reads
-                the drawing, reads every label (PP-OCRv4), places the photo on the drawing and verifies each candidate fault with Claude.
+                Drawing: <span className="mono">{p.ga}</span>{p.cabinet ? ` · cabinet ${p.cabinet}` : ""}.
+                Inspect one of the paired real photographs with local OCR and drawing geometry. Unreadable or unseen items stay unverified.
               </div>
             </div>
           </div>
@@ -92,7 +92,7 @@ function QualityPanel({ q }: { q: PhotoQuality | null }) {
 }
 
 function InputRow({ icon, label, accept, file, onFile, demo, dl, live }: {
-  icon: React.ReactNode; label: string; accept: string; file: File | null; onFile: (f: File | null) => void; demo?: string; dl: string; live: boolean;
+  icon: React.ReactNode; label: string; accept: string; file: File | null; onFile: (f: File | null) => void; demo?: string; dl?: string; live: boolean;
 }) {
   if (!live)
     return (
@@ -101,14 +101,14 @@ function InputRow({ icon, label, accept, file, onFile, demo, dl, live }: {
           <div className="drop-icon">{icon}</div>
           <div className="drop-text"><div className="drop-title">{label}</div><div className="drop-hint mono">{demo}</div></div>
         </div>
-        <a className="btn btn-sm btn-icon btn-ghost" href={dl} title={`Download ${demo}`}><Download /></a>
+        {dl && <a className="btn btn-sm btn-icon btn-ghost" href={dl} title={`Download ${demo}`}><Download /></a>}
       </div>
     );
   return (
     <div className="input-row">
       <DropZone compact accept={accept} file={file} onFile={onFile} title={label} icon={icon}
         hint={demo ? <>Demo: <span className="mono">{demo}</span></> : "Drop or click"} />
-      {!file && (
+      {!file && dl && (
         <a className="btn btn-sm btn-icon btn-ghost" href={dl} title={`Download ${demo}`} onClick={(e) => e.stopPropagation()}>
           <Download />
         </a>
@@ -119,11 +119,16 @@ function InputRow({ icon, label, accept, file, onFile, demo, dl, live }: {
 
 export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; autoSample?: string | null }) {
   const toast = useToast();
+  const live = useCanLive();
+  const eng = useEngine();
   const samples = useAsync(api.samples);
   const checks = useAsync(api.checks);
   const inputs = useAsync(api.inputs);
-  const presets = useAsync(api.presets);
+  const presets = useAsync(api.presets, [live]);
   const [presetTitle, setPresetTitle] = useState<string | null>(null);
+  const [jobPhoto, setJobPhoto] = useState("");
+  const [inputMode, setInputMode] = useState<"real" | "demo">(autoDemo || autoSample ? "demo" : "real");
+  const [presetId, setPresetId] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [sample, setSample] = useState<string>("01");
   const [ga, setGa] = useState<File | null>(null);
@@ -135,30 +140,45 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
   const [cam, setCam] = useState(false);
   const [quality, setQuality] = useState<PhotoQuality | null>(null);
   const started = useRef(false);
-  const live = useCanLive();
-  const eng = useEngine();
+  const selectedPreset = presets.data?.find((p) => p.id === presetId);
 
   const allChecks = checks.data?.map((c) => c.name) ?? ["GA", "ORDER", "LABEL", "FERRULE", "COLOUR"];
   const on = enabled ?? allChecks;
-  const photoUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : url.sample(sample, 1400)), [photo, sample]);
+  const photoUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : inputMode === "demo" ? url.sample(sample, 1400) : ""), [photo, sample, inputMode]);
   useEffect(() => () => { if (photoUrl.startsWith("blob:")) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   const activeSample = samples.data?.find((s) => s.id === sample);
+  const blocked = on.length === 0 || (inputMode === "real" && (!live || !photo || (!ga && !selectedPreset))) || (inputMode === "demo" && !!photo && !live);
+  const inputHint = inputMode === "demo" ? "Synthetic demo · EE-DEMO-01 · generated photos only"
+    : !photo ? "Choose a cabinet photo or inspect a paired real photo below."
+      : !ga && !selectedPreset ? "Matching GA drawing required. Select a preset or upload the cabinet's PDF."
+        : `Photo: ${photo.name} · drawing: ${selectedPreset?.ga ?? ga?.name} · local OCR and geometry`;
   useEffect(() => {
     let alive = true;
     setQuality(null);
+    if (!photoUrl) return;
     analyzePhoto(photo ?? photoUrl).then((q) => alive && setQuality(q)).catch(() => alive && setQuality(null));
     return () => { alive = false; };
   }, [photo, photoUrl]);
 
   const start = async (override?: { sample?: string; preset?: Preset; presetPhoto?: string }) => {
     if (busy) return;
+    const demo = !!override?.sample || (!override?.preset && inputMode === "demo");
+    if (!on.length) { toast("error", "Select at least one inspection check."); return; }
+    if (!override && inputMode === "real" && (!photo || (!ga && !selectedPreset))) {
+      toast("error", !photo ? "Choose a real cabinet photo or one of the paired preset photos." : "Select the matching real cabinet drawing or upload its GA PDF before inspecting.");
+      return;
+    }
+    if (!demo && !live) { toast("error", "Real cabinet inspection needs the local or live inspection engine. Synthetic recorded samples remain available."); return; }
     setBusy(true);
     setJob(null);
+    setJobPhoto(override?.preset ? url.presetPhoto(override.preset.id, override.presetPhoto!, 1400) : override?.sample ? url.sample(override.sample, 1400) : photoUrl);
     setPresetTitle(override?.preset ? `${override.preset.title} · ${override.presetPhoto}` : null);
     try {
       const j = await api.inspect(override?.preset
-        ? { preset: override.preset.id, presetPhoto: override.presetPhoto, checks: enabled ?? undefined }
-        : { photo: override ? null : photo, sample: override?.sample ?? sample, ga, wires, checklist, checks: on });
+        ? { preset: override.preset.id, presetPhoto: override.presetPhoto, checks: enabled ?? undefined, engine: "real" }
+        : demo
+          ? { photo: override ? null : photo, sample: override?.sample ?? sample, checks: on, engine: "legacy" }
+          : { photo, preset: selectedPreset?.id, ga: selectedPreset ? null : ga, wires, checklist, checks: on, engine: "real" });
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Inspection failed");
@@ -177,6 +197,7 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
       started.current = true;
       window.history.replaceState(null, "", "#/inspect");
       setSample(want);
+      setInputMode("demo");
       start({ sample: want });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,7 +214,7 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
   if (busy) {
     return (
       <div className="main">
-        <Running job={job} photo={photoUrl} enabled={on} title={presetTitle ?? (photo ? photo.name : activeSample ? `Sample ${activeSample.id} · ${activeSample.title}` : "Emerson's example")} />
+        <Running job={job} photo={jobPhoto} enabled={on} title={presetTitle ?? (photo ? photo.name : activeSample ? `Sample ${activeSample.id} · ${activeSample.title}` : "Cabinet inspection")} />
       </div>
     );
   }
@@ -204,18 +225,28 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
         <div>
           <span className="eyebrow">Inspect</span>
           <h1>Photo in. Filled checklist with proof out.</h1>
-          <p>Drop a cabinet photo or pick a sample. Leave the engineering inputs empty to use the demo drawing set (GA drawing, wire list, QC checklist for cabinet EE-DEMO-01).
-            Drop a real drawing set (vector PDF) and the real-cabinet engine takes over automatically.</p>
+          <p>Inspect a real cabinet against its matching drawing using local OCR and geometry. Generated samples have their own explicit demo mode.</p>
         </div>
-        <button className="btn btn-primary btn-xl" onClick={() => start()}>
+        <button className="btn btn-primary btn-xl" disabled={blocked} onClick={() => start()}>
           <Play /> Inspect <kbd style={{ marginLeft: 4, background: "rgba(4,18,28,.15)", color: "inherit", borderColor: "rgba(4,18,28,.25)" }}>Ctrl ↵</kbd>
         </button>
+      </div>
+
+      <div className="card pad" style={{ marginBottom: 18 }}>
+        <div className="row between wrap" style={{ gap: 14 }}>
+          <div><div className="card-title">Inspection mode</div><div className="card-sub">The selected mode determines which drawing is used.</div></div>
+          <Seg value={inputMode} onChange={(v) => { setInputMode(v); setPhoto(null); setEnabled(null); }} options={[
+            { value: "real", label: <><Factory size={15} /> Real cabinet</>, title: "Requires the actual cabinet's matching GA drawing" },
+            { value: "demo", label: <><Sparkles size={15} /> Synthetic demo</>, title: "Generated EE-DEMO-01 examples with known faults" },
+          ]} />
+        </div>
+        <div className="small muted" style={{ marginTop: 12 }} aria-live="polite">{inputHint}</div>
       </div>
 
       {STATIC && live && (
         <div className="callout ok">
           <Zap />
-          <span><b>Live cloud engine.</b> Upload your own photo, drawing set or check selection: the real Python engine inspects it in a few seconds. Results stay in this browser.</span>
+          <span><b>Live inspection engine.</b> OCR and drawing checks run on your configured backend without a third-party AI API. Processing time depends on image detail and available CPU. Results stay in this browser.</span>
         </div>
       )}
       {STATIC && !live && (
@@ -231,11 +262,10 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
 
       <div className="callout info">
         <Fingerprint />
-        <span><b>Photos are kept as metadata.</b> The engine reads a photo once and keeps its SHA-256 fingerprint, size and results, never the photo.
-          The console sends the fingerprint first, so a photo the engine already knows is not uploaded again.</span>
+        <span><b>Inspection provenance.</b> Results record the photo fingerprint, drawing and check selection. {STATIC ? "This browser retains a small preview and inspection metadata; full uploads are processed temporarily by the engine." : "The local engine retains reports and working images in its configured run directory."}</span>
       </div>
 
-      <PresetCard presets={presets.data ?? []} disabled={!live} onRun={(p, f) => start({ preset: p, presetPhoto: f })} />
+      {inputMode === "real" && <PresetCard presets={presets.data ?? []} disabled={!live || !on.length} onRun={(p, f) => start({ preset: p, presetPhoto: f })} />}
 
       <div className="setup">
         <div className="stack" style={{ ["--gap" as string]: "18px" }}>
@@ -243,21 +273,21 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
             <div className="card-head">
               <div>
                 <div className="card-title"><Camera /> Cabinet photo</div>
-                <div className="card-sub">HD photo of the whole backplate, JPG or PNG. Phone photos are auto-rotated and resized.</div>
+                <div className="card-sub">{inputMode === "real" ? "Photograph the whole relevant cabinet view, then add close-ups for small labels. JPG or PNG; phone orientation is corrected." : "Generated EE-DEMO-01 photos only. Real phone photos require Real cabinet mode and their own drawing."}</div>
               </div>
             </div>
             <div className="photo-pick">
               <div className="photo-preview">
-                <img src={photoUrl} alt="Selected cabinet photo" />
-                <span className="photo-preview-tag">{photo ? "Your upload" : `Sample ${sample}`}</span>
+                {photoUrl ? <img src={photoUrl} alt="Selected cabinet photo" /> : <div className="empty"><Camera /><span>Choose a real cabinet photo</span></div>}
+                <span className="photo-preview-tag">{photo ? "Your upload" : inputMode === "demo" ? `Synthetic sample ${sample}` : "No photo selected"}</span>
               </div>
               <div className="stack" style={{ ["--gap" as string]: "12px" }}>
-                {live && <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop your own cabinet photo" hint="…or pick one of the samples below" icon={<ImageIcon />} />}
+                {live && <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title={inputMode === "real" ? "Drop your real cabinet photo" : "Upload a generated demo photo"} hint={inputMode === "real" ? "Select the matching drawing on the right" : "This will use the EE-DEMO-01 demo drawing"} icon={<ImageIcon />} />}
                 {live && (
                   <button className="btn btn-block" onClick={() => setCam(true)}><Aperture /> Capture with camera</button>
                 )}
-                <QualityPanel q={quality} />
-                {activeSample && !photo && (
+                {photoUrl && <QualityPanel q={quality} />}
+                {inputMode === "demo" && activeSample && !photo && (
                   <div className="card flat pad sample-expect">
                     <div className="tiny faint" style={{ marginBottom: 6 }}>Planted faults (answer key)</div>
                     {activeSample.fault_text.length ? (
@@ -271,11 +301,11 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
             </div>
           </motion.div>
 
-          <motion.div className="card pad" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+          {inputMode === "demo" && <motion.div className="card pad" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
             <div className="card-head">
               <div>
-                <div className="card-title"><Sparkles /> Sample photos</div>
-                <div className="card-sub">Generated by Fault Forge to copy Emerson's example layout. Each has a known answer key.</div>
+                <div className="card-title"><Sparkles /> Synthetic sample photos</div>
+                <div className="card-sub">Generated by Fault Forge for EE-DEMO-01. Each has a known answer key; these results do not establish real-cabinet accuracy.</div>
               </div>
             </div>
             <div className="samples">
@@ -283,7 +313,7 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
                 <SampleCard key={s.id} s={s} active={!photo && s.id === sample} onClick={() => { setPhoto(null); setSample(s.id); }} />
               )) ?? Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 230 }} />)}
             </div>
-          </motion.div>
+          </motion.div>}
         </div>
 
         <div className="stack" style={{ ["--gap" as string]: "18px" }}>
@@ -291,12 +321,21 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
             <div className="card-head">
               <div>
                 <div className="card-title"><FileText /> Engineering inputs</div>
-                <div className="card-sub">The drawing is the ground truth: it defines every item to check.</div>
+                <div className="card-sub">{inputMode === "real" ? "Use the GA drawing for this exact cabinet and revision. A block diagram alone may not define physical positions." : "Demo inputs apply only to the generated EE-DEMO-01 cabinet."}</div>
               </div>
             </div>
-            {ga ? (
+            {inputMode === "real" && <>
+              <label className="small muted" htmlFor="drawing-source">Drawing source</label>
+              <select id="drawing-source" className="input" style={{ marginTop: 8, marginBottom: 12, width: "100%" }} value={presetId} onChange={(e) => { setPresetId(e.target.value); if (e.target.value) setGa(null); }} disabled={!live}>
+                <option value="">Upload this cabinet's GA PDF</option>
+                {(presets.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.title} · {p.ga}</option>)}
+              </select>
+              {selectedPreset && <div className="card flat pad small muted"><b>Selected real drawing:</b> <span className="mono">{selectedPreset.ga}</span>{selectedPreset.cabinet ? ` · cabinet ${selectedPreset.cabinet}` : ""}. Use this only for photographs of that cabinet.</div>}
+              {!selectedPreset && <InputRow live={live} icon={<FileText />} label="Matching GA drawing (vector PDF) · required" accept=".pdf" file={ga} onFile={setGa} />}
+            </>}
+            {inputMode === "real" && ga ? (
               <div className="card flat pad small muted">Custom drawing <span className="mono">{ga.name}</span>: its device tags, boxes, rails and terminals are parsed when you press Inspect.</div>
-            ) : (
+            ) : inputMode === "demo" ? (
               <div className="ga-preview">
                 <img src={url.gaPreview()} alt="GA drawing preview" />
                 <div className="ga-preview-cap">
@@ -304,11 +343,16 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
                   <span className="tiny faint">12 devices · 8 terminals · 1 rail</span>
                 </div>
               </div>
-            )}
+            ) : null}
             <div className="stack" style={{ ["--gap" as string]: "8px", marginTop: 14 }}>
-              <InputRow live={live} icon={<FileText />} label="GA drawing (vector PDF)" accept=".pdf" file={ga} onFile={setGa} demo={inputs.data?.ga?.name} dl={url.input("ga")} />
-              <InputRow live={live} icon={<FileSpreadsheet />} label="Wire & label list (Excel)" accept=".xlsx" file={wires} onFile={setWires} demo={inputs.data?.wires?.name} dl={url.input("wires")} />
-              <InputRow live={live} icon={<ListChecks />} label="QC checklist (Excel)" accept=".xlsx" file={checklist} onFile={setChecklist} demo={inputs.data?.checklist?.name} dl={url.input("checklist")} />
+              {inputMode === "demo" ? <>
+                <InputRow live={false} icon={<FileText />} label="Demo GA drawing" accept=".pdf" file={null} onFile={setGa} demo={inputs.data?.ga?.name} dl={url.input("ga")} />
+                <InputRow live={false} icon={<FileSpreadsheet />} label="Demo wire & label list" accept=".xlsx" file={null} onFile={setWires} demo={inputs.data?.wires?.name} dl={url.input("wires")} />
+                <InputRow live={false} icon={<ListChecks />} label="Demo QC checklist" accept=".xlsx" file={null} onFile={setChecklist} demo={inputs.data?.checklist?.name} dl={url.input("checklist")} />
+              </> : <>
+                <InputRow live={live} icon={<FileSpreadsheet />} label="Matching wire & label list (optional Excel)" accept=".xlsx" file={wires} onFile={setWires} />
+                <InputRow live={live} icon={<ListChecks />} label="Matching QC checklist (optional Excel)" accept=".xlsx" file={checklist} onFile={setChecklist} />
+              </>}
             </div>
             <div className="tiny faint" style={{ marginTop: 12 }}>
               A photo of another cabinet only works with that cabinet's own GA drawing and wire list.
@@ -318,8 +362,8 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
           <motion.div className="card pad" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
             <div className="card-head">
               <div>
-                <div className="card-title"><Puzzle /> Plug-in checks</div>
-                <div className="card-sub">Each check is one class with <code>@check("NAME")</code>. Toggle to see the root-cause logic adapt.</div>
+                <div className="card-title"><Puzzle /> Inspection checks</div>
+                <div className="card-sub">Choose which checks to run. A limited check selection does not approve the whole cabinet.</div>
               </div>
             </div>
             <div className="checks">
@@ -340,8 +384,9 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
             </div>
           </motion.div>
 
-          <button className="btn btn-primary btn-xl btn-block" onClick={() => start()} disabled={on.length === 0}>
-            <Play /> Inspect {photo ? photo.name : `sample ${sample}`}
+          <div className="small muted" aria-live="polite">{!on.length ? "Select at least one inspection check." : inputHint}</div>
+          <button className="btn btn-primary btn-xl btn-block" onClick={() => start()} disabled={blocked}>
+            <Play /> {inputMode === "real" ? "Inspect real cabinet" : `Inspect synthetic ${photo ? "upload" : `sample ${sample}`}`}
           </button>
         </div>
       </div>
