@@ -19,8 +19,12 @@ its ONNX sessions disable the memory arena (2x slower detection on large inputs)
 with explicit detector input sizes, single-threaded sessions (one engine per worker thread) and native-resolution
 recognition crops. Tesseract is the fallback only when RapidOCR / ONNX Runtime cannot be imported.
 
+A *small print* read (read_small_print) runs the tile passes once more at SMALL_UPSCALE; the pipeline uses it only
+when the first read places too few labels to locate the photo (labels a few pixels high: a far shot of a whole cabinet).
+
 Env: EAGLE_OCR_MODE (FULL | FAST), EAGLE_OCR_WORKERS (default: CPU count), EAGLE_OCR_TILE (900),
-EAGLE_OCR_UPSCALE (2.0), EAGLE_OCR_FULL_SIDE (2048), EAGLE_OCR_CACHE (1; 0 disables the cache), EAGLE_OCR_GATE (0; 1
+EAGLE_OCR_UPSCALE (2.0), EAGLE_OCR_SMALL_UPSCALE (4.0), EAGLE_OCR_FULL_SIDE (2048), EAGLE_OCR_CACHE (1; 0 disables
+the cache), EAGLE_OCR_GATE (0; 1
 skips tiles where the full pass sees no text - about 3x faster, but on photos whose labels are only a few pixels high at
 the full pass's scale, e.g. a whole cabinet or a rear view, it skipped almost every tile and lost every label).
 """
@@ -55,6 +59,7 @@ MODE = _env("EAGLE_OCR_MODE", "FULL", str).upper()
 WORKERS = max(1, _env("EAGLE_OCR_WORKERS", os.cpu_count() or 1, int))
 TILE = max(256, _env("EAGLE_OCR_TILE", 900, int))
 UPSCALE = max(1.0, _env("EAGLE_OCR_UPSCALE", 2.0, float))
+SMALL_UPSCALE = max(1.0, _env("EAGLE_OCR_SMALL_UPSCALE", 4.0, float))
 FULL_SIDE = max(640, _env("EAGLE_OCR_FULL_SIDE", 2048, int))
 CACHE = _env("EAGLE_OCR_CACHE", "1", str) not in ("0", "false", "off")
 GATE = _env("EAGLE_OCR_GATE", "0", str) not in ("0", "false", "off")
@@ -136,6 +141,13 @@ class _Rapid:
                 quads.append(q)
                 keep.append(float(s))
         return np.array(quads, np.float32).reshape(-1, 4, 2), keep, pred[0, 0, :h, :w]
+
+    def char_probs(self, crop):
+        """The recognizer's per-step character probabilities (T, C) for one horizontal-text crop (BGR)."""
+        _c, img_h, img_w = self.rec.rec_image_shape[:3]
+        h, w = crop.shape[:2]
+        norm = self.rec.resize_norm_img(crop, max(img_w / img_h, w / max(h, 1)))[np.newaxis].astype(np.float32)
+        return self.rec.session(norm)[0][0]
 
     def recognize(self, crops, use_cls):
         """[(text, conf, flipped)] for horizontal-text crops; ``use_cls`` lets the classifier turn crops by 180 deg."""
@@ -434,6 +446,49 @@ def _rec_job(bgr, items):
     return out
 
 
+# ------------------------------------------------------------------ scoring a text against the recognizer
+def ctc_logprob(probs, idx):
+    """log P(label | crop) under CTC: the recognizer's per-step probabilities ``probs`` (T, C; column 0 = blank)
+    summed over every alignment of the label ``idx`` (character indices), by the forward algorithm."""
+    lp = np.log(np.maximum(np.asarray(probs, np.float64), 1e-12))
+    ext = np.array([0] + [v for i in idx for v in (int(i), 0)])
+    S = len(ext)
+    skip = np.zeros(S, bool)
+    skip[2:] = (ext[2:] != 0) & (ext[2:] != ext[:-2])
+    alpha = np.full(S, -np.inf)
+    alpha[0] = lp[0, 0]
+    if S > 1:
+        alpha[1] = lp[0, ext[1]]
+    for t in range(1, lp.shape[0]):
+        a = alpha.copy()
+        a[1:] = np.logaddexp(a[1:], alpha[:-1])
+        a[2:] = np.where(skip[2:], np.logaddexp(a[2:], alpha[:-2]), a[2:])
+        alpha = a + lp[t, ext]
+    return float(np.logaddexp(alpha[-1], alpha[-2])) if S > 1 else float(alpha[-1])
+
+
+def score_texts(photo, quad, texts):
+    """How likely the recognizer finds each of ``texts`` in the text box ``quad`` (reading order, photo px), from its
+    own per-step character probabilities: ``{"best": (text, log p), "scores": {text: log p}}`` (log p of the whole
+    string over every CTC alignment), or None without PP-OCR or for a character the recognizer does not know."""
+    eng = _engine()
+    if not isinstance(eng, _Rapid):
+        return None
+    crop, _q = _crop(photo["rgb"], quad)
+    probs = eng.char_probs(cv2.cvtColor(np.ascontiguousarray(crop), cv2.COLOR_RGB2BGR))
+    chars = eng.rec.postprocess_op.character
+    index = {c: i for i, c in enumerate(chars)}
+    path = probs.argmax(1)
+    best_idx = [int(k) for j, k in enumerate(path) if k != 0 and (j == 0 or k != path[j - 1])]
+    best = "".join(chars[k] for k in best_idx)
+    scores = {}
+    for t in texts:
+        if any(ch not in index for ch in t):
+            return None
+        scores[t] = ctc_logprob(probs, [index[ch] for ch in t])
+    return {"best": (best, ctc_logprob(probs, best_idx) if best_idx else float("-inf")), "scores": scores}
+
+
 # ------------------------------------------------------------------ merging
 def _read(pid, quad, text, conf):
     q = np.asarray(quad, np.float64).reshape(4, 2)
@@ -511,7 +566,7 @@ def _dedupe_pass(results):
     return _dedupe_boxes(found, thr=0.6)
 
 
-def _run(photo, mode, workers, info):
+def _run(photo, mode, workers, info, upscale=UPSCALE, full_pass=True, gate=None):
     bgr = cv2.cvtColor(photo["rgb"], cv2.COLOR_RGB2BGR)
     h, w = bgr.shape[:2]
     pool = _pool(workers)
@@ -520,12 +575,14 @@ def _run(photo, mode, workers, info):
     stats = {"det_jobs": {}, "det_skipped": {}, "rec_boxes": {}}
 
     # 1. full pass: whole photo at FULL_SIDE, detector blocks in parallel; its probability map gates the tiles
-    fscale = min(1.0, FULL_SIDE / max(h, w))
-    full_regions = _split_region([0, 0, w, h], DET_BLOCK / fscale, DET_BLOCK_OVERLAP / fscale)
-    jobs = {"full": [pool.submit(_det_job, bgr, "full", 0, r, fscale, None, True) for r in full_regions]}
-    full = [f.result() for f in jobs["full"]]
-    pmap = _stitch([r.get("pmap") for r in full], full_regions, fscale, h, w)
-    gate = _likelihood_gate(pmap, fscale) if GATE else None
+    jobs, full = {}, []
+    if full_pass:
+        fscale = min(1.0, FULL_SIDE / max(h, w))
+        full_regions = _split_region([0, 0, w, h], DET_BLOCK / fscale, DET_BLOCK_OVERLAP / fscale)
+        jobs["full"] = [pool.submit(_det_job, bgr, "full", 0, r, fscale, None, True) for r in full_regions]
+        full = [f.result() for f in jobs["full"]]
+        pmap = _stitch([r.get("pmap") for r in full], full_regions, fscale, h, w)
+        gate = _likelihood_gate(pmap, fscale) if GATE else None
     stats["t_full_det"] = round(time.perf_counter() - t0, 2)
 
     # 2. tile passes: TILE windows upscaled, split into detector blocks; the rotated pass serves 90 and 270 deg
@@ -533,8 +590,8 @@ def _run(photo, mode, workers, info):
         if pid == "tile270":
             continue
         rot = 90 if pid == "tile90" else 0
-        regs = [b for t in tiles(w, h) for b in _split_region(t, DET_BLOCK / UPSCALE, DET_BLOCK_OVERLAP / UPSCALE)]
-        jobs[pid] = [pool.submit(_det_job, bgr, pid, rot, r, UPSCALE, gate) for r in regs]
+        regs = [b for t in tiles(w, h) for b in _split_region(t, DET_BLOCK / upscale, DET_BLOCK_OVERLAP / upscale)]
+        jobs[pid] = [pool.submit(_det_job, bgr, pid, rot, r, upscale, gate) for r in regs]
 
     # 3. recognition per pass as soon as its detections are in (boxes found twice in one pass are read once)
     raw, rec_futs = [], []
@@ -588,11 +645,32 @@ def _aspect(q):
     return max(w, h) / max(1.0, min(w, h))
 
 
-def _cache_path(photo, mode):
+def _cache_path(photo, mode, extra=None):
     key = json.dumps({"v": CACHE_VERSION, "sha": photo["sha"], "mode": mode, "params": PARAMS,
-                      "ignore": photo.get("ignore"), "engine": engine_info().get("version"), "backend": _BACKEND},
-                     sort_keys=True)
+                      "ignore": photo.get("ignore"), "engine": engine_info().get("version"), "backend": _BACKEND,
+                      **({"extra": extra} if extra else {})}, sort_keys=True)
     return CACHE_DIR / f"{photo['sha']}_{mode}_{hashlib.sha256(key.encode()).hexdigest()[:12]}.json"
+
+
+def _cached(path, compute, info):
+    if path is not None and path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            info.update(data.get("stats", {}), cached=True)
+            return data["tokens"]
+        except (ValueError, KeyError, OSError):
+            pass
+    tokens = compute()
+    info.update(cached=False)
+    if path is not None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+            tmp.write_text(json.dumps({"stats": info, "tokens": tokens}), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            pass
+    return tokens
 
 
 def read_photo(photo, mode=None, workers=None, info=None):
@@ -607,24 +685,36 @@ def read_photo(photo, mode=None, workers=None, info=None):
     mode = (mode or MODE).upper()
     workers = max(1, int(workers or WORKERS))
     info = {} if info is None else info
-    path = _cache_path(photo, mode) if CACHE else None
-    if path is not None and path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            info.update(data.get("stats", {}), cached=True)
-            return data["tokens"]
-        except (ValueError, KeyError, OSError):
-            pass
-    tokens = _run(photo, mode, workers, info)
-    info.update(cached=False, mode=mode, workers=workers)
-    if path is not None:
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
-            tmp.write_text(json.dumps({"stats": info, "tokens": tokens}), encoding="utf-8")
-            os.replace(tmp, path)
-        except OSError:
-            pass
+    info.update(mode=mode, workers=workers)
+    return _cached(_cache_path(photo, mode) if CACHE else None, lambda: _run(photo, mode, workers, info), info)
+
+
+def read_small_print(photo, near=(), mode=None, workers=None, info=None):
+    """The tile passes once more at SMALL_UPSCALE (no full pass), cached like read_photo: for photos whose labels are
+    too small for the regular passes to place the photo on the drawing. Only tiles holding some text the regular
+    passes saw (``near``: their token boxes) are read again, so a photo without any text costs nothing. Tokens as
+    read_photo."""
+    if not isinstance(photo, dict):
+        photo = load_photo(photo)
+    boxes = [[float(v) for v in b] for b in near]
+    if not boxes:
+        return []
+    mode = (mode or MODE).upper()
+    workers = max(1, int(workers or WORKERS))
+    info = {} if info is None else info
+    info.update(mode=mode, workers=workers, small_print=SMALL_UPSCALE)
+    pad = 0.05 * TILE
+
+    def gate(region):
+        x0, y0, x1, y1 = region
+        return any(b[0] < x1 + pad and b[2] > x0 - pad and b[1] < y1 + pad and b[3] > y0 - pad for b in boxes)
+
+    sig = hashlib.sha256(json.dumps([[round(v) for v in b] for b in boxes]).encode()).hexdigest()[:12]
+    path = _cache_path(photo, mode, {"small_print": SMALL_UPSCALE, "near": sig}) if CACHE else None
+    tokens = _cached(path, lambda: _run(photo, mode, workers, info, upscale=SMALL_UPSCALE, full_pass=False,
+                                        gate=gate), info)
+    for t in tokens:                                # a pass of its own: agreeing with a regular read adds a pass
+        t["support"] = [f"small_{p}" for p in t.get("support") or [t.get("pass", "tile")]]
     return tokens
 
 

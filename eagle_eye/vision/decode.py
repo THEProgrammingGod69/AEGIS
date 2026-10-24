@@ -284,6 +284,8 @@ def classify_tokens(tokens, vocab):
         box = [float(v) for v in t["box"]]
         base = {"i": i, "raw": t.get("text", ""), "box": box, "center": _centre(box), "conf": float(t.get("conf", 0)),
                 "passes": int(t.get("passes", 1)), "rot": int(t.get("rot", 0))}
+        if t.get("constrained"):          # a look-alike read the recognizer confirmed (vision/guided.py)
+            base["constrained"] = t["constrained"]
         r = decode(t, vocab)
         if r["tag"] and r["method"] == "exact":
             out["reads"].append(dict(base, tag=r["tag"], method="exact", norm=r["norm"],

@@ -26,13 +26,21 @@ def _vocab(ctx):
 
 def _rd(r):
     """Compact read record for a finding."""
-    return {"raw": r.get("raw"), "tag": r.get("tag") or r.get("tag_like"), "conf": round(float(r.get("conf", 0)), 3),
-            "passes": r.get("passes", 1), "box": [round(v, 1) for v in r["box"]], "method": r.get("method")}
+    out = {"raw": r.get("raw"), "tag": r.get("tag") or r.get("tag_like"), "conf": round(float(r.get("conf", 0)), 3),
+           "passes": r.get("passes", 1), "box": [round(v, 1) for v in r["box"]], "method": r.get("method")}
+    if r.get("constrained"):
+        out["printed"] = r["constrained"]["read"]
+    return out
 
 
 def _read_text(r):
-    return f"read '{r.get('raw')}' x{r.get('passes', 1)} pass{'es' if r.get('passes', 1) != 1 else ''} " \
-           f"(conf {float(r.get('conf', 0)):.2f})"
+    n = r.get("passes", 1)
+    c = r.get("constrained")
+    if c:                                  # a look-alike read confirmed by the recognizer (vision/guided.py)
+        rival = f", {c['rival_margin']}x likelier than {c['rival']}" if c.get("rival") and c.get("rival_margin") else ""
+        return (f"read '{c['read']}' x{n} magnification{'s' if n != 1 else ''}: look-alike characters at this size; "
+                f"the recognizer rates '{r.get('raw')}' {c['ratio']:.0%} as likely as its own reading{rival}")
+    return f"read '{r.get('raw')}' x{n} pass{'es' if n != 1 else ''} (conf {float(r.get('conf', 0)):.2f})"
 
 
 def _drawing_ref(ctx, tag):
@@ -313,11 +321,15 @@ class OrderCheck:
                                    "NOT_IN_VIEW", view=g["view"], rule="ORDER.partial_view"))
                 continue
             placed = {}
+            tol = _tol(ctx, g["view"])
             for t in members:
                 rs = [r for r in ctx.reads_of(t) if r.get("dist_px") is not None] + zoom.get(t, [])
                 if rs:
                     pred = ctx.in_view[t]["predicted"]
-                    placed[t] = min(rs, key=lambda r: dist(r["center"], pred))
+                    # a certain read at the label's own spot places it, before a nearer partial read of the same
+                    # label; a label read away from its spot (a swap) is still placed where it was read
+                    sure = [r for r in rs if _verified_read(r) and r.get("dist_px") is not None and r["dist_px"] <= NEAR * tol]
+                    placed[t] = min(sure, key=lambda r: r["dist_px"]) if sure else min(rs, key=lambda r: dist(r["center"], pred))
             if len(placed) < 2:
                 out.append(finding(fid, "ORDER", g["id"], required_seq, "Too few complete labels could be read",
                                    "UNCERTAIN", view=g["view"], rule="ORDER.unreadable",

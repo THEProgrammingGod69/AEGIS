@@ -1,7 +1,7 @@
 {
  "schema": "eagle-eye-calibration/1",
- "created": "2026-10-24T18:44:54+00:00",
- "engine_version": "3.1.0",
+ "created": "2026-10-24T20:23:34+00:00",
+ "engine_version": "3.3.0",
  "method": "histogram binning of the raw item score per engine and verdict with Laplace's rule (right + 1) / (items + 2), monotonic (pool-adjacent-violators); fitted on even-numbered images, scored on odd ones, then refitted on all",
  "engines": {
   "demo": {
@@ -235,39 +235,39 @@
     "text"
    ],
    "counts": {
-    "PASS": 1013,
+    "PASS": 1037,
     "FAIL": 6,
-    "REVIEW": 45
+    "REVIEW": 21
    },
    "maps": {
     "PASS": [
      {
       "lo": 0.8,
       "hi": 0.9,
-      "n": 10,
-      "k": 8,
-      "p": 0.75
+      "n": 12,
+      "k": 10,
+      "p": 0.7857
      },
      {
       "lo": 0.9,
       "hi": 0.95,
-      "n": 72,
-      "k": 70,
-      "p": 0.9595
+      "n": 75,
+      "k": 73,
+      "p": 0.961
      },
      {
       "lo": 0.95,
       "hi": 0.99,
-      "n": 245,
-      "k": 245,
-      "p": 0.996
+      "n": 258,
+      "k": 258,
+      "p": 0.9962
      },
      {
       "lo": 0.99,
       "hi": 1.0,
-      "n": 686,
-      "k": 686,
-      "p": 0.9985
+      "n": 692,
+      "k": 692,
+      "p": 0.9986
      }
     ],
     "FAIL": [
@@ -285,57 +285,57 @@
       "hi": 0.6,
       "n": 2,
       "k": 2,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.6,
       "hi": 0.7,
       "n": 2,
       "k": 2,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.7,
       "hi": 0.8,
-      "n": 6,
+      "n": 5,
       "k": 2,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.8,
       "hi": 0.9,
-      "n": 6,
+      "n": 5,
       "k": 0,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.9,
       "hi": 0.95,
-      "n": 15,
+      "n": 3,
       "k": 0,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.95,
       "hi": 0.99,
-      "n": 9,
+      "n": 2,
       "k": 0,
-      "p": 0.2203
+      "p": 0.3714
      },
      {
       "lo": 0.99,
       "hi": 1.0,
-      "n": 5,
+      "n": 2,
       "k": 0,
-      "p": 0.2203
+      "p": 0.3714
      }
     ]
    },
    "heldout": {
-    "items": 502,
-    "accuracy": 0.992,
-    "ece_raw": 0.0189,
-    "ece_cal": 0.007,
+    "items": 507,
+    "accuracy": 0.9921,
+    "ece_raw": 0.0192,
+    "ece_cal": 0.0053,
     "raw": [
      {
       "lo": 0.8,
@@ -347,15 +347,15 @@
      {
       "lo": 0.9,
       "hi": 0.95,
-      "n": 52,
-      "stated": 0.9165,
-      "observed": 0.9615
+      "n": 53,
+      "stated": 0.917,
+      "observed": 0.9623
      },
      {
       "lo": 0.95,
       "hi": 0.99,
-      "n": 161,
-      "stated": 0.9724,
+      "n": 165,
+      "stated": 0.9722,
       "observed": 1.0
      },
      {
@@ -368,25 +368,18 @@
     ],
     "cal": [
      {
-      "lo": 0.7,
-      "hi": 0.8,
-      "n": 8,
-      "stated": 0.75,
-      "observed": 0.75
-     },
-     {
       "lo": 0.8,
       "hi": 0.9,
-      "n": 3,
-      "stated": 0.8,
-      "observed": 1.0
+      "n": 11,
+      "stated": 0.8242,
+      "observed": 0.8182
      },
      {
       "lo": 0.95,
       "hi": 0.99,
-      "n": 213,
-      "stated": 0.9801,
-      "observed": 0.9906
+      "n": 218,
+      "stated": 0.9819,
+      "observed": 0.9908
      },
      {
       "lo": 0.99,
@@ -398,8 +391,8 @@
     ]
    },
    "review": {
-    "n": 45,
-    "fault_rate": 0.1333
+    "n": 21,
+    "fault_rate": 0.2857
    }
   }
  }

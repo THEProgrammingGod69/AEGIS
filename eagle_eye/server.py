@@ -469,6 +469,34 @@ def start_forge(req: ForgeRequest):
     return JOBS.submit("forge", work, label=f"Fault Forge × {req.count}", count=req.count)
 
 
+@app.get("/api/showcase")
+def showcase_info():
+    """How many showcase cases this engine can build (real-cabinet ones need data/emerson_render on this machine)."""
+    import showcase
+    return dict(demo=len(showcase.demo_cases()), real=len(showcase.real_cases()))
+
+
+@app.post("/api/showcase")
+def start_showcase():
+    """Add the showcase cases (showcase.py) to the run store: clean cabinets and planted anomalies, each with its
+    story; every case checks its own outcome and the job reports any case that did not behave as expected."""
+    import showcase
+
+    def work(emit, job):
+        rows = []
+
+        def on_case(row):
+            rows.append(row)
+            with JOBS.lock:
+                job["runs"] = [r["run"] for r in rows]
+                job["showcase"] = [{k: r[k] for k in ("case", "run", "label", "ok", "problems")} for r in rows]
+
+        showcase.build(on_event=emit, on_case=on_case)
+        return [service.get_meta(r["run"]) for r in rows]
+
+    return JOBS.submit("showcase", work, label="Showcase cases")
+
+
 @app.get("/api/jobs/{jid}")
 def job(jid: str, since: int = 0):
     v = JOBS.view(jid, since)

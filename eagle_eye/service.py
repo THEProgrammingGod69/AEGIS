@@ -457,19 +457,20 @@ def has_result(photo_sha, ga=None, wires=None, checklist=None, enabled=None, eng
 # ------------------------------------------------------------------ the pipeline
 def run_inspection(photo, ga=None, wires=None, checklist=None, enabled=None, parent=None, label=None,
                    source="upload", photo_name=None, input_names=None, forge=None, on_event=None,
-                   parent_data=None, reports=True, engine="auto", photo_sha=None):
+                   parent_data=None, reports=True, engine="auto", photo_sha=None, showcase=None):
     """Inspect one photo end to end and store the run (metadata only). Returns the run's meta dict.
 
     ``parent`` re-checks a stored run; ``parent_data=(meta, report)`` re-checks a run held by the caller
     (the stateless cloud API, where the browser keeps the history). ``reports=False`` skips the Excel and
     PDF so a caller can return results first and call ``build_reports`` afterwards. ``engine`` = auto | legacy | real.
-    ``photo=None`` with ``photo_sha`` answers from the result cache or raises NeedPhoto.
+    ``photo=None`` with ``photo_sha`` answers from the result cache or raises NeedPhoto. ``showcase`` (a case of
+    showcase.py: title, story, what was planted) is kept with the run for the History page.
     """
     emit = on_event or (lambda ev: None)
     rid = new_id(); d = config.RUNS / rid; d.mkdir(parents=True)
     try:
         return _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, photo_name,
-                    input_names, forge, emit, parent_data, reports, engine, photo_sha)
+                    input_names, forge, emit, parent_data, reports, engine, photo_sha, showcase)
     except Exception:
         shutil.rmtree(d, ignore_errors=True)
         raise
@@ -525,7 +526,7 @@ def _install(src, d):
 
 
 def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, photo_name, input_names, forge, emit,
-         parent_data=None, reports=True, engine="auto", photo_sha=None):
+         parent_data=None, reports=True, engine="auto", photo_sha=None, showcase=None):
     prev_meta = prev_rep = None
     if parent_data:
         prev_meta, prev_rep = parent_data
@@ -631,6 +632,8 @@ def _run(rid, d, photo, ga, wires, checklist, enabled, parent, label, source, ph
     if forge:
         forge["score"] = score_forge(rep, forge["faults"])
         meta["forge"] = forge
+    if showcase:
+        meta["showcase"] = showcase
     write_json(d / FILES["json"], rep)
     if reports:
         _reports(rid, rep, meta)

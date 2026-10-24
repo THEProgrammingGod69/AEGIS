@@ -23,7 +23,7 @@ DEMO_WIRES = INPUTS / "WireList_EE-DEMO-01.xlsx"
 DEMO_CHECKLIST = INPUTS / "QC_Checklist_EE-DEMO-01.xlsx"
 DEMO_PHOTO = OUT / "demo" / "photo_v1.jpg"
 
-VERSION = "3.2.0"
+VERSION = "3.3.0"
 
 # Wire-colour profile for drawing sets without their own colour legend (wire_profiles.json id, e.g. "iec-60204-1"). A
 # project setting, never a default: unset, only the universal green-and-yellow rule is checked on such cabinets.

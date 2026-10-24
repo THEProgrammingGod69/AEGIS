@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Compass, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
-  GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
+  GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanEye, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
   Timer, UserCheck, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -231,6 +231,18 @@ function Registration({ p }: { p: RunPayload }) {
         <div><b style={{ color: r.outliers.length ? "var(--fail)" : undefined }}>{r.outliers.length}</b><span>off-pattern</span></div>
       </div>
       {r.valid === false && <div className="callout warn"><ShieldQuestion /><span>{r.invalid_reason || "No reliable drawing alignment. Check the matching drawing and capture readable labels before evaluating components."}</span></div>}
+      {r.guided && (r.guided.targets > 0 || r.guided.small_print) && (
+        <div className="callout info guided-note">
+          <ScanEye />
+          <span>
+            <b>Small labels re-read where the drawing places them:</b> {r.guided.found} of {r.guided.targets} labels the first read could not verify were read
+            exactly at their spot, magnified (letters ~34 px){r.guided.constrained ? `; ${r.guided.constrained} look-alike read${r.guided.constrained > 1 ? "s" : ""} confirmed by the recognizer's own character probabilities` : ""}.
+            {r.guided.small_print && " The photo was first read once more with the tiles magnified, because too few labels could be read to place it."}
+            {r.guided.inliers_after > r.guided.inliers_before && ` Anchors placed on the drawing: ${r.guided.inliers_before} → ${r.guided.inliers_after}.`}
+            {" "}Anything still unreadable stays REVIEW or NOT IN VIEW; nothing is guessed.
+          </span>
+        </div>
+      )}
       {p.engine_kind === "real" ? (
         <p className="small muted">
           Every device label read with certainty is an anchor; per GA view a 2-point RANSAC finds the placement of the drawing on the photo

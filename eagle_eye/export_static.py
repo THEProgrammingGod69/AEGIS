@@ -4,7 +4,9 @@
 
 Every inspection in the bundle is a genuine run of this engine: the five sample photos, re-checks between them,
 and a pool of Fault Forge cabinets. The hosted page replays them (pipeline timings included); inspecting a new
-photo still needs the live engine (python server.py).
+photo still needs the live engine (python server.py). The demo-cabinet showcase cases of showcase.py are these
+recorded runs, labelled with their story, and lead the hosted History (the real-cabinet cases are never published:
+Emerson's drawing set is for the hackathon only).
 """
 import hashlib
 import json
@@ -18,6 +20,7 @@ from PIL import Image
 
 import config
 import service
+import showcase
 from inspector import CHECKS, ORDER, tesseract_info
 
 OUT = config.BASE / "web" / "static-public" / "demo"
@@ -76,6 +79,21 @@ def main():
         m = record("forge", lambda e, seed=seed: service.run_forge(seed=seed, strength=1.45, on_event=e))
         forge.append(m["id"])
         review.append(m["id"])
+    hidden = record("forge", lambda e: service.run_forge(k=3, seed=4242, strength=1.0, on_event=e))["id"]
+    forge.append(hidden)
+
+    # the demo-cabinet showcase cases (showcase.py) are recorded runs above: label them with their story
+    cases = {c["case"]: c for c, _spec in showcase.demo_cases()}
+    marks = {base["02"]: "demo-clean", base["01"]: "demo-four-faults", base["03"]: "demo-ferrule-colour",
+             base["04"]: "demo-label-breaker", v2: "demo-recheck", review[0]: "demo-bad-photo",
+             hidden: "demo-hidden-faults"}
+    for rid, key in marks.items():
+        c = dict(cases[key])
+        forged = [p["text"] for p in ((runs[rid].get("forge") or {}).get("score") or {}).get("planted") or []]
+        c["planted"] = forged or c["planted"]                  # a Fault Forge case lists its answer key
+        runs[rid] = dict(runs[rid], label=showcase.LABEL.format(n=c["n"], title=c["title"]), showcase=c)
+        service.write_json(config.RUNS / rid / "meta.json", runs[rid])
+    showcase_runs = sorted(marks, key=lambda rid: cases[marks[rid]]["n"])
 
     # files: photos/rectified de-duplicated by content, marked/pdf/xlsx/json per run
     files = {}
@@ -126,7 +144,7 @@ def main():
         ga=dict(src="img/ga.jpg", w=gw, h=gh, **scale),
         runs={rid: dict(meta=runs[rid], files=files[rid], events=events[rid]) for rid in runs},
         base=base, recheck=recheck, forge=forge,
-        history=[review[0], base["03"], base["04"], forge[3], review[2], forge[7], base["01"], v2, v3["id"]],
+        history=showcase_runs + [r for r in (forge[3], review[2], forge[7], v3["id"]) if r not in showcase_runs],
         enabled=list(ORDER),
     )
     (OUT / "index.json").write_text(json.dumps(index, separators=(",", ":"), default=str), encoding="utf-8")

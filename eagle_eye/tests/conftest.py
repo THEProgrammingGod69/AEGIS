@@ -18,3 +18,11 @@ def runs_dir(tmp_path, monkeypatch):
     for name in ("RESULTS", "INPUTS", "WORK"):
         monkeypatch.setattr(service, name, tmp_path / "cache" / name.lower())
     return d
+
+
+@pytest.fixture(autouse=True)
+def _no_small_print(monkeypatch):
+    """Unit tests feed synthetic tokens on blank synthetic photos; the small-print OCR pass (vision.ocr) would scan
+    those blank tiles magnified for nothing. Tests of the guided reading pass their own reader."""
+    from vision import ocr
+    monkeypatch.setattr(ocr, "read_small_print", lambda *a, **kw: [])

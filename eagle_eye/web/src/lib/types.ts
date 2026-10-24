@@ -133,10 +133,23 @@ export interface Timing {
   agent?: number;
 }
 
+export interface ShowcaseCase {
+  case: string;
+  n: number;
+  title: string;
+  story: string;
+  look: string;
+  planted: string[];
+  kind: "demo" | "real";
+  source: string;
+}
+
 export interface RunMeta {
   id: string;
   created: string;
   label: string;
+  /** a showcase case (showcase.py): what was planted and what to look at */
+  showcase?: ShowcaseCase;
   source: "upload" | "sample" | "forge" | "preset";
   photo_name: string;
   photo: string;
@@ -221,6 +234,9 @@ export interface RunPayload {
     views?: string[];
     /** viewing angle of the camera measured from the fitted perspective (real cabinet) */
     angle?: ViewAngle | null;
+    /** drawing-guided re-reads of small labels (vision/guided.py) */
+    guided?: { targets: number; found: number; windows: number; rounds: number; small_print: boolean; constrained?: number;
+      inliers_before: number; inliers_after: number; seconds: number } | null;
   };
   photo_size: [number, number];
   size_mm: [number, number];
@@ -284,7 +300,9 @@ export interface JobEvent {
 
 export interface JobView {
   id: string;
-  kind: "inspect" | "recheck" | "forge";
+  kind: "inspect" | "recheck" | "forge" | "showcase";
+  /** showcase job: each case as it finished, and whether it behaved as expected */
+  showcase?: { case: string; run: string; label: string; ok: boolean; problems: string[] }[];
   status: "queued" | "running" | "done" | "error";
   events: JobEvent[];
   n_events: number;

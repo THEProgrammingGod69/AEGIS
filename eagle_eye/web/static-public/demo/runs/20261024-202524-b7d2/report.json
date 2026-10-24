@@ -1,0 +1,1837 @@
+{
+ "photo": "preview.jpg",
+ "results": [
+  {
+   "id": "GA-PS11",
+   "check": "GA",
+   "target": "PS11",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    40.0,
+    95.0,
+    125.0
+   ],
+   "conf": 0.92,
+   "evidence": [
+    "slot occupancy 92%",
+    "label seen: True"
+   ],
+   "occupancy": 0.923,
+   "confidence": 0.9983
+  },
+  {
+   "id": "GA-PS12",
+   "check": "GA",
+   "target": "PS12",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    140.0,
+    40.0,
+    95.0,
+    125.0
+   ],
+   "conf": 0.92,
+   "evidence": [
+    "slot occupancy 92%",
+    "label seen: True"
+   ],
+   "occupancy": 0.922,
+   "confidence": 0.9983
+  },
+  {
+   "id": "GA-D12",
+   "check": "GA",
+   "target": "D12",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    250.0,
+    40.0,
+    70.0,
+    125.0
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 0.998,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-CB41",
+   "check": "GA",
+   "target": "CB41",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    340.0,
+    55.0,
+    30.0,
+    95.0
+   ],
+   "conf": 0.99,
+   "evidence": [
+    "slot occupancy 99%",
+    "label seen: True"
+   ],
+   "occupancy": 0.986,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-CB42",
+   "check": "GA",
+   "target": "CB42",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    374.0,
+    55.0,
+    30.0,
+    95.0
+   ],
+   "conf": 0.99,
+   "evidence": [
+    "slot occupancy 99%",
+    "label seen: True"
+   ],
+   "occupancy": 0.988,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-CB43",
+   "check": "GA",
+   "target": "CB43",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    408.0,
+    55.0,
+    30.0,
+    95.0
+   ],
+   "conf": 0.99,
+   "evidence": [
+    "slot occupancy 99%",
+    "label seen: True"
+   ],
+   "occupancy": 0.987,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-CB44",
+   "check": "GA",
+   "target": "CB44",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    442.0,
+    55.0,
+    30.0,
+    95.0
+   ],
+   "conf": 0.98,
+   "evidence": [
+    "slot occupancy 98%",
+    "label seen: True"
+   ],
+   "occupancy": 0.984,
+   "confidence": 0.9983
+  },
+  {
+   "id": "GA-1CBP01",
+   "check": "GA",
+   "target": "1CBP01",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    250.0,
+    270.0,
+    92.0
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 0.999,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-1CBP02",
+   "check": "GA",
+   "target": "1CBP02",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    362.0,
+    270.0,
+    92.0
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 0.999,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-1CBP03",
+   "check": "GA",
+   "target": "1CBP03",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    474.0,
+    270.0,
+    92.0
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 0.999,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-1CBP04",
+   "check": "GA",
+   "target": "1CBP04",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    586.0,
+    270.0,
+    92.0
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 0.999,
+   "confidence": 0.9995
+  },
+  {
+   "id": "GA-PE",
+   "check": "GA",
+   "target": "PE",
+   "expected": "Installed",
+   "found": "Present",
+   "result": "PASS",
+   "box": [
+    30.0,
+    735.0,
+    540.0,
+    30.0
+   ],
+   "conf": 1,
+   "evidence": [
+    "slot occupancy 100%",
+    "label seen: True"
+   ],
+   "occupancy": 1.0,
+   "confidence": 0.9995
+  },
+  {
+   "id": "ORD-RAIL-1",
+   "check": "ORDER",
+   "target": "RAIL-1",
+   "expected": "CB41-CB42-CB43-CB44",
+   "found": "CB41-CB42-CB43-(other)",
+   "result": "REVIEW",
+   "box": [
+    442.0,
+    55.0,
+    30.0,
+    95.0
+   ],
+   "conf": 0.5,
+   "evidence": [
+    "rail order requires a readable identity in every occupied slot"
+   ],
+   "slots": [
+    {
+     "slot": 1,
+     "expected": "CB41",
+     "read": "CB41",
+     "box": [
+      340.0,
+      55.0,
+      30.0,
+      95.0
+     ]
+    },
+    {
+     "slot": 2,
+     "expected": "CB42",
+     "read": "CB42",
+     "box": [
+      374.0,
+      55.0,
+      30.0,
+      95.0
+     ]
+    },
+    {
+     "slot": 3,
+     "expected": "CB43",
+     "read": "CB43",
+     "box": [
+      408.0,
+      55.0,
+      30.0,
+      95.0
+     ]
+    },
+    {
+     "slot": 4,
+     "expected": "CB44",
+     "read": "(other)",
+     "box": [
+      442.0,
+      55.0,
+      30.0,
+      95.0
+     ]
+    }
+   ],
+   "marker": 1,
+   "confidence": 0.08
+  },
+  {
+   "id": "LBL-PS11",
+   "check": "LABEL",
+   "target": "PS11",
+   "expected": "PS11",
+   "found": "PS11",
+   "result": "PASS",
+   "box": [
+    37.0,
+    42.6,
+    31.2,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['PS11', 'PS11', 'PS11', 'PS11']"
+   ],
+   "votes": [
+    "PS11",
+    "PS11",
+    "PS11",
+    "PS11"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-PS12",
+   "check": "LABEL",
+   "target": "PS12",
+   "expected": "PS12",
+   "found": "PS12",
+   "result": "PASS",
+   "box": [
+    147.0,
+    42.6,
+    31.2,
+    20.3
+   ],
+   "conf": 0.88,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['PS2', 'PS12', 'PS12', 'PS12']"
+   ],
+   "votes": [
+    "PS2",
+    "PS12",
+    "PS12",
+    "PS12"
+   ],
+   "confidence": 0.9983
+  },
+  {
+   "id": "LBL-D12",
+   "check": "LABEL",
+   "target": "D12",
+   "expected": "D12",
+   "found": "D12",
+   "result": "PASS",
+   "box": [
+    257.0,
+    42.6,
+    24.4,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['D12', 'D12', 'D12', 'D12']"
+   ],
+   "votes": [
+    "D12",
+    "D12",
+    "D12",
+    "D12"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-CB41",
+   "check": "LABEL",
+   "target": "CB41",
+   "expected": "CB41",
+   "found": "CB41",
+   "result": "PASS",
+   "box": [
+    340.0,
+    55.4,
+    28.1,
+    18.0
+   ],
+   "conf": 0.95,
+   "evidence": [
+    "read on rail"
+   ],
+   "confidence": 0.9983
+  },
+  {
+   "id": "LBL-CB42",
+   "check": "LABEL",
+   "target": "CB42",
+   "expected": "CB42",
+   "found": "CB42",
+   "result": "PASS",
+   "box": [
+    374.0,
+    55.4,
+    28.1,
+    18.0
+   ],
+   "conf": 0.95,
+   "evidence": [
+    "read on rail"
+   ],
+   "confidence": 0.9983
+  },
+  {
+   "id": "LBL-CB43",
+   "check": "LABEL",
+   "target": "CB43",
+   "expected": "CB43",
+   "found": "CB43",
+   "result": "PASS",
+   "box": [
+    408.0,
+    55.4,
+    28.1,
+    18.0
+   ],
+   "conf": 0.95,
+   "evidence": [
+    "read on rail"
+   ],
+   "confidence": 0.9983
+  },
+  {
+   "id": "LBL-CB44",
+   "check": "LABEL",
+   "target": "CB44",
+   "expected": "CB44",
+   "found": "Wrong label: reads 'CB47'",
+   "result": "FAIL",
+   "box": [
+    442.0,
+    55.4,
+    28.1,
+    18.0
+   ],
+   "conf": 0.8,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['CB47', 'CB47', 'CB47', 'CB47']"
+   ],
+   "votes": [
+    "CB47",
+    "CB47",
+    "CB47",
+    "CB47"
+   ],
+   "marker": 2,
+   "confidence": 0.961
+  },
+  {
+   "id": "LBL-1CBP01",
+   "check": "LABEL",
+   "target": "1CBP01",
+   "expected": "1CBP01",
+   "found": "1CBP01",
+   "result": "PASS",
+   "box": [
+    37.0,
+    252.6,
+    46.0,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['1CBPO1', '1CBPO1', '1CBPO1', '1CBPO1']"
+   ],
+   "votes": [
+    "1CBPO1",
+    "1CBPO1",
+    "1CBPO1",
+    "1CBPO1"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-1CBP02",
+   "check": "LABEL",
+   "target": "1CBP02",
+   "expected": "1CBP02",
+   "found": "1CBP02",
+   "result": "PASS",
+   "box": [
+    37.0,
+    364.6,
+    46.0,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['1CBP02', '1CBP02', '1CBP02', '1CBPO2']"
+   ],
+   "votes": [
+    "1CBP02",
+    "1CBP02",
+    "1CBP02",
+    "1CBPO2"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-1CBP03",
+   "check": "LABEL",
+   "target": "1CBP03",
+   "expected": "1CBP03",
+   "found": "1CBP03",
+   "result": "PASS",
+   "box": [
+    37.0,
+    476.6,
+    46.0,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['1CBP03', '1CBP03', '1CBP03', '1CBP03']"
+   ],
+   "votes": [
+    "1CBP03",
+    "1CBP03",
+    "1CBP03",
+    "1CBP03"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-1CBP04",
+   "check": "LABEL",
+   "target": "1CBP04",
+   "expected": "1CBP04",
+   "found": "1CBP04",
+   "result": "PASS",
+   "box": [
+    37.0,
+    588.6,
+    46.0,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['1CBP04', '1CBP04', '1CBP04', '1CBP04']"
+   ],
+   "votes": [
+    "1CBP04",
+    "1CBP04",
+    "1CBP04",
+    "1CBP04"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "LBL-PE",
+   "check": "LABEL",
+   "target": "PE",
+   "expected": "PE",
+   "found": "PE",
+   "result": "PASS",
+   "box": [
+    35.0,
+    739.6,
+    18.8,
+    20.3
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "label sticker+print found: True",
+    "OCR votes ['PE', 'PE', 'PE', 'PE']"
+   ],
+   "votes": [
+    "PE",
+    "PE",
+    "PE",
+    "PE"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:1",
+   "check": "FERRULE",
+   "target": "X3:1",
+   "expected": "X3-1/CB41-2",
+   "found": "X3-1/CB41-2",
+   "result": "PASS",
+   "box": [
+    454.0,
+    267.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-1/CB41-2', 'X3-1/CB41-2', 'X3-1/CB41-2', 'X3-1/CB41-2']"
+   ],
+   "votes": [
+    "X3-1/CB41-2",
+    "X3-1/CB41-2",
+    "X3-1/CB41-2",
+    "X3-1/CB41-2"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:2",
+   "check": "FERRULE",
+   "target": "X3:2",
+   "expected": "X3-2/CB42-2",
+   "found": "X3-2/CB42-2",
+   "result": "PASS",
+   "box": [
+    454.0,
+    321.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-2/CB42-2', 'X3-2/CB42-2', 'X3-2/CB42-2', 'X3-2/CB42-2']"
+   ],
+   "votes": [
+    "X3-2/CB42-2",
+    "X3-2/CB42-2",
+    "X3-2/CB42-2",
+    "X3-2/CB42-2"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:3",
+   "check": "FERRULE",
+   "target": "X3:3",
+   "expected": "X3-3/CB43-2",
+   "found": "X3-3/CB43-2",
+   "result": "PASS",
+   "box": [
+    454.0,
+    375.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-3/CB43-2', 'X3-3/CB43-2', 'X3-3/CB43-2', 'X3-3/CB43-2']"
+   ],
+   "votes": [
+    "X3-3/CB43-2",
+    "X3-3/CB43-2",
+    "X3-3/CB43-2",
+    "X3-3/CB43-2"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:4",
+   "check": "FERRULE",
+   "target": "X3:4",
+   "expected": "X3-4/CB44-2",
+   "found": "X3-4/CB44-2",
+   "result": "PASS",
+   "box": [
+    454.0,
+    429.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-4/CB44-2', 'X3-4/CB44-2', 'X3-4/CB44-2', 'X3-4/CB44-2']"
+   ],
+   "votes": [
+    "X3-4/CB44-2",
+    "X3-4/CB44-2",
+    "X3-4/CB44-2",
+    "X3-4/CB44-2"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:5",
+   "check": "FERRULE",
+   "target": "X3:5",
+   "expected": "X3-5/PS11+",
+   "found": "X3-5/PS11+",
+   "result": "PASS",
+   "box": [
+    454.0,
+    483.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-5/PS11+', 'X3-5/PS11+', 'X3-5/PS11+', 'X3-5/PS11+']"
+   ],
+   "votes": [
+    "X3-5/PS11+",
+    "X3-5/PS11+",
+    "X3-5/PS11+",
+    "X3-5/PS11+"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:6",
+   "check": "FERRULE",
+   "target": "X3:6",
+   "expected": "X3-6/PS11-",
+   "found": "X3-6/PS11-",
+   "result": "PASS",
+   "box": [
+    454.0,
+    537.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-6/PS11-', 'X3-6/PS11-', 'X3-6/PS11-', 'X3-6/PS11-']"
+   ],
+   "votes": [
+    "X3-6/PS11-",
+    "X3-6/PS11-",
+    "X3-6/PS11-",
+    "X3-6/PS11-"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:7",
+   "check": "FERRULE",
+   "target": "X3:7",
+   "expected": "X3-7/D12-L",
+   "found": "X3-7/D12-L",
+   "result": "PASS",
+   "box": [
+    454.0,
+    591.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-7/D12-L', 'X3-7/D12-L', 'X3-7/D12-L', 'X3-7/D12-L']"
+   ],
+   "votes": [
+    "X3-7/D12-L",
+    "X3-7/D12-L",
+    "X3-7/D12-L",
+    "X3-7/D12-L"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "FER-X3:8",
+   "check": "FERRULE",
+   "target": "X3:8",
+   "expected": "X3-8/PE-1",
+   "found": "X3-8/PE-1",
+   "result": "PASS",
+   "box": [
+    454.0,
+    645.0,
+    66,
+    16
+   ],
+   "conf": 1.0,
+   "evidence": [
+    "OCR votes ['X3-8/PE-1', 'X3-8/PE-1', 'X3-8/PE-1', 'X3-8/PE-1']"
+   ],
+   "votes": [
+    "X3-8/PE-1",
+    "X3-8/PE-1",
+    "X3-8/PE-1",
+    "X3-8/PE-1"
+   ],
+   "confidence": 0.9995
+  },
+  {
+   "id": "COL-X3:1",
+   "check": "COLOUR",
+   "target": "X3:1",
+   "expected": "BN",
+   "found": "BN",
+   "result": "PASS",
+   "box": [
+    528.0,
+    268.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#6b411d",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:2",
+   "check": "COLOUR",
+   "target": "X3:2",
+   "expected": "BN",
+   "found": "BN",
+   "result": "PASS",
+   "box": [
+    528.0,
+    322.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#6a411d",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:3",
+   "check": "COLOUR",
+   "target": "X3:3",
+   "expected": "BN",
+   "found": "RD",
+   "result": "FAIL",
+   "box": [
+    528.0,
+    376.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#b01c1c",
+   "marker": 3,
+   "confidence": 0.961
+  },
+  {
+   "id": "COL-X3:4",
+   "check": "COLOUR",
+   "target": "X3:4",
+   "expected": "BN",
+   "found": "BN",
+   "result": "PASS",
+   "box": [
+    528.0,
+    430.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#6a411d",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:5",
+   "check": "COLOUR",
+   "target": "X3:5",
+   "expected": "RD",
+   "found": "RD",
+   "result": "PASS",
+   "box": [
+    528.0,
+    484.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#af201b",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:6",
+   "check": "COLOUR",
+   "target": "X3:6",
+   "expected": "BK",
+   "found": "BK",
+   "result": "PASS",
+   "box": [
+    528.0,
+    538.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 2% yellow 0%"
+   ],
+   "swatch": "#161817",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:7",
+   "check": "COLOUR",
+   "target": "X3:7",
+   "expected": "BU",
+   "found": "BU",
+   "result": "PASS",
+   "box": [
+    528.0,
+    592.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 0% yellow 0%"
+   ],
+   "swatch": "#1a4bad",
+   "confidence": 0.9983
+  },
+  {
+   "id": "COL-X3:8",
+   "check": "COLOUR",
+   "target": "X3:8",
+   "expected": "GNYE",
+   "found": "GNYE",
+   "result": "PASS",
+   "box": [
+    528.0,
+    646.0,
+    50,
+    14
+   ],
+   "conf": 0.85,
+   "evidence": [
+    "green 54% yellow 37%"
+   ],
+   "swatch": "#5daa29",
+   "confidence": 0.9983
+  }
+ ],
+ "registration": {
+  "quad": [
+   [
+    64.0,
+    101.0
+   ],
+   [
+    2080.0,
+    188.0
+   ],
+   [
+    2098.0,
+    2726.0
+   ],
+   [
+    85.0,
+    2771.0
+   ]
+  ],
+  "anchors": 18,
+  "inliers": 18,
+  "outliers": [],
+  "refined": true,
+  "targets": 20,
+  "anchor_points": [
+   {
+    "tag": "PS11",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     250.6,
+     285.7
+    ],
+    "expected_px": [
+     248.4,
+     285.5
+    ],
+    "found_mm": [
+     53.2,
+     52.8
+    ],
+    "expected_mm": [
+     52.6,
+     52.8
+    ],
+    "residual_mm": 0.62
+   },
+   {
+    "tag": "PS12",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     632.2,
+     299.6
+    ],
+    "expected_px": [
+     630.5,
+     300.3
+    ],
+    "found_mm": [
+     163.1,
+     52.5
+    ],
+    "expected_mm": [
+     162.6,
+     52.8
+    ],
+    "residual_mm": 0.55
+   },
+   {
+    "tag": "D12",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     997.0,
+     313.8
+    ],
+    "expected_px": [
+     993.9,
+     314.4
+    ],
+    "found_mm": [
+     270.1,
+     52.5
+    ],
+    "expected_mm": [
+     269.2,
+     52.8
+    ],
+    "residual_mm": 0.95
+   },
+   {
+    "tag": "CB41",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     1277.9,
+     363.2
+    ],
+    "expected_px": [
+     1278.9,
+     363.0
+    ],
+    "found_mm": [
+     353.8,
+     64.5
+    ],
+    "expected_mm": [
+     354.1,
+     64.4
+    ],
+    "residual_mm": 0.29
+   },
+   {
+    "tag": "CB42",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     1390.7,
+     367.1
+    ],
+    "expected_px": [
+     1391.8,
+     367.3
+    ],
+    "found_mm": [
+     387.7,
+     64.3
+    ],
+    "expected_mm": [
+     388.1,
+     64.4
+    ],
+    "residual_mm": 0.32
+   },
+   {
+    "tag": "CB43",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     1502.9,
+     370.9
+    ],
+    "expected_px": [
+     1504.1,
+     371.5
+    ],
+    "found_mm": [
+     421.7,
+     64.2
+    ],
+    "expected_mm": [
+     422.1,
+     64.4
+    ],
+    "residual_mm": 0.4
+   },
+   {
+    "tag": "1CBP01",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     277.9,
+     983.4
+    ],
+    "expected_px": [
+     280.0,
+     982.5
+    ],
+    "found_mm": [
+     59.4,
+     263.0
+    ],
+    "expected_mm": [
+     60.0,
+     262.8
+    ],
+    "residual_mm": 0.68
+   },
+   {
+    "tag": "1CBP02",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     280.7,
+     1355.0
+    ],
+    "expected_px": [
+     283.0,
+     1354.2
+    ],
+    "found_mm": [
+     59.3,
+     375.0
+    ],
+    "expected_mm": [
+     60.0,
+     374.8
+    ],
+    "residual_mm": 0.7
+   },
+   {
+    "tag": "1CBP04",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     287.0,
+     2098.2
+    ],
+    "expected_px": [
+     289.1,
+     2098.7
+    ],
+    "found_mm": [
+     59.4,
+     598.6
+    ],
+    "expected_mm": [
+     60.0,
+     598.8
+    ],
+    "residual_mm": 0.62
+   },
+   {
+    "tag": "PE",
+    "kind": "label",
+    "inlier": true,
+    "found_px": [
+     240.6,
+     2601.8
+    ],
+    "expected_px": [
+     238.3,
+     2602.3
+    ],
+    "found_mm": [
+     45.0,
+     749.6
+    ],
+    "expected_mm": [
+     44.4,
+     749.8
+    ],
+    "residual_mm": 0.65
+   },
+   {
+    "tag": "X3-1/CB41-2",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1722.9,
+     1053.1
+    ],
+    "expected_px": [
+     1723.5,
+     1052.8
+    ],
+    "found_mm": [
+     486.8,
+     275.1
+    ],
+    "expected_mm": [
+     487.0,
+     275.0
+    ],
+    "residual_mm": 0.21
+   },
+   {
+    "tag": "X3-2/CB42-2",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1723.7,
+     1226.1
+    ],
+    "expected_px": [
+     1725.2,
+     1225.7
+    ],
+    "found_mm": [
+     486.5,
+     329.1
+    ],
+    "expected_mm": [
+     487.0,
+     329.0
+    ],
+    "residual_mm": 0.48
+   },
+   {
+    "tag": "X3-3/CB43-2",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1725.4,
+     1399.0
+    ],
+    "expected_px": [
+     1727.0,
+     1398.6
+    ],
+    "found_mm": [
+     486.5,
+     383.1
+    ],
+    "expected_mm": [
+     487.0,
+     383.0
+    ],
+    "residual_mm": 0.5
+   },
+   {
+    "tag": "X3-4/CB44-2",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1726.6,
+     1571.9
+    ],
+    "expected_px": [
+     1728.7,
+     1571.5
+    ],
+    "found_mm": [
+     486.4,
+     437.1
+    ],
+    "expected_mm": [
+     487.0,
+     437.0
+    ],
+    "residual_mm": 0.64
+   },
+   {
+    "tag": "X3-5/PS11+",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1727.9,
+     1744.8
+    ],
+    "expected_px": [
+     1730.4,
+     1744.6
+    ],
+    "found_mm": [
+     486.2,
+     491.1
+    ],
+    "expected_mm": [
+     487.0,
+     491.0
+    ],
+    "residual_mm": 0.78
+   },
+   {
+    "tag": "X3-6/PS11-",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1747.4,
+     1918.1
+    ],
+    "expected_px": [
+     1732.1,
+     1917.7
+    ],
+    "found_mm": [
+     491.7,
+     545.1
+    ],
+    "expected_mm": [
+     487.0,
+     545.0
+    ],
+    "residual_mm": 4.69
+   },
+   {
+    "tag": "X3-7/D12-L",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1730.8,
+     2090.5
+    ],
+    "expected_px": [
+     1733.9,
+     2090.9
+    ],
+    "found_mm": [
+     486.1,
+     598.9
+    ],
+    "expected_mm": [
+     487.0,
+     599.0
+    ],
+    "residual_mm": 0.95
+   },
+   {
+    "tag": "X3-8/PE-1",
+    "kind": "ferrule",
+    "inlier": true,
+    "found_px": [
+     1732.0,
+     2263.4
+    ],
+    "expected_px": [
+     1735.6,
+     2264.2
+    ],
+    "found_mm": [
+     485.9,
+     652.7
+    ],
+    "expected_mm": [
+     487.0,
+     653.0
+    ],
+    "residual_mm": 1.12
+   }
+  ],
+  "valid": true,
+  "invalid_reason": null
+ },
+ "H": [
+  [
+   1.1293394137997586,
+   -0.008896221573106386,
+   -68.81236647273148
+  ],
+  [
+   -0.05171124920173961,
+   1.2008310915958478,
+   -120.20169174002565
+  ],
+  [
+   -2.4559295248487513e-05,
+   1.4685403816290385e-06,
+   0.9998372743003191
+  ]
+ ],
+ "photo_size": [
+  2200,
+  2900
+ ],
+ "rect_px_per_mm": 4,
+ "ga": {
+  "cabinet": "EE-DEMO-01",
+  "size": [
+   600,
+   800
+  ],
+  "devices": [
+   {
+    "tag": "PS11",
+    "type": "psu",
+    "box": [
+     30.0,
+     40.0,
+     95.0,
+     125.0
+    ],
+    "label_box": [
+     37.0,
+     42.6,
+     31.2,
+     20.3
+    ]
+   },
+   {
+    "tag": "PS12",
+    "type": "psu",
+    "box": [
+     140.0,
+     40.0,
+     95.0,
+     125.0
+    ],
+    "label_box": [
+     147.0,
+     42.6,
+     31.2,
+     20.3
+    ]
+   },
+   {
+    "tag": "D12",
+    "type": "controller",
+    "box": [
+     250.0,
+     40.0,
+     70.0,
+     125.0
+    ],
+    "label_box": [
+     257.0,
+     42.6,
+     24.4,
+     20.3
+    ]
+   },
+   {
+    "tag": "CB41",
+    "type": "breaker",
+    "box": [
+     340.0,
+     55.0,
+     30.0,
+     95.0
+    ],
+    "label_box": [
+     340.0,
+     55.4,
+     28.1,
+     18.0
+    ],
+    "group": "RAIL-1"
+   },
+   {
+    "tag": "CB42",
+    "type": "breaker",
+    "box": [
+     374.0,
+     55.0,
+     30.0,
+     95.0
+    ],
+    "label_box": [
+     374.0,
+     55.4,
+     28.1,
+     18.0
+    ],
+    "group": "RAIL-1"
+   },
+   {
+    "tag": "CB43",
+    "type": "breaker",
+    "box": [
+     408.0,
+     55.0,
+     30.0,
+     95.0
+    ],
+    "label_box": [
+     408.0,
+     55.4,
+     28.1,
+     18.0
+    ],
+    "group": "RAIL-1"
+   },
+   {
+    "tag": "CB44",
+    "type": "breaker",
+    "box": [
+     442.0,
+     55.0,
+     30.0,
+     95.0
+    ],
+    "label_box": [
+     442.0,
+     55.4,
+     28.1,
+     18.0
+    ],
+    "group": "RAIL-1"
+   },
+   {
+    "tag": "1CBP01",
+    "type": "baseplate",
+    "box": [
+     30.0,
+     250.0,
+     270.0,
+     92.0
+    ],
+    "label_box": [
+     37.0,
+     252.6,
+     46.0,
+     20.3
+    ]
+   },
+   {
+    "tag": "1CBP02",
+    "type": "baseplate",
+    "box": [
+     30.0,
+     362.0,
+     270.0,
+     92.0
+    ],
+    "label_box": [
+     37.0,
+     364.6,
+     46.0,
+     20.3
+    ]
+   },
+   {
+    "tag": "1CBP03",
+    "type": "baseplate",
+    "box": [
+     30.0,
+     474.0,
+     270.0,
+     92.0
+    ],
+    "label_box": [
+     37.0,
+     476.6,
+     46.0,
+     20.3
+    ]
+   },
+   {
+    "tag": "1CBP04",
+    "type": "baseplate",
+    "box": [
+     30.0,
+     586.0,
+     270.0,
+     92.0
+    ],
+    "label_box": [
+     37.0,
+     588.6,
+     46.0,
+     20.3
+    ]
+   },
+   {
+    "tag": "PE",
+    "type": "earth",
+    "box": [
+     30.0,
+     735.0,
+     540.0,
+     30.0
+    ],
+    "label_box": [
+     35.0,
+     739.6,
+     18.8,
+     20.3
+    ]
+   }
+  ],
+  "terminals": [
+   {
+    "tag": "X3:1",
+    "n": 1,
+    "box": [
+     400.0,
+     262.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:2",
+    "n": 2,
+    "box": [
+     400.0,
+     316.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:3",
+    "n": 3,
+    "box": [
+     400.0,
+     370.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:4",
+    "n": 4,
+    "box": [
+     400.0,
+     424.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:5",
+    "n": 5,
+    "box": [
+     400.0,
+     478.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:6",
+    "n": 6,
+    "box": [
+     400.0,
+     532.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:7",
+    "n": 7,
+    "box": [
+     400.0,
+     586.0,
+     50.0,
+     26.0
+    ]
+   },
+   {
+    "tag": "X3:8",
+    "n": 8,
+    "box": [
+     400.0,
+     640.0,
+     50.0,
+     26.0
+    ]
+   }
+  ],
+  "rails": [
+   {
+    "name": "RAIL-1",
+    "tags": [
+     "CB41",
+     "CB42",
+     "CB43",
+     "CB44"
+    ]
+   }
+  ]
+ },
+ "wires": [
+  {
+   "terminal": "X3:1",
+   "ferrule": "X3-1/CB41-2",
+   "colour": "BN"
+  },
+  {
+   "terminal": "X3:2",
+   "ferrule": "X3-2/CB42-2",
+   "colour": "BN"
+  },
+  {
+   "terminal": "X3:3",
+   "ferrule": "X3-3/CB43-2",
+   "colour": "BN"
+  },
+  {
+   "terminal": "X3:4",
+   "ferrule": "X3-4/CB44-2",
+   "colour": "BN"
+  },
+  {
+   "terminal": "X3:5",
+   "ferrule": "X3-5/PS11+",
+   "colour": "RD"
+  },
+  {
+   "terminal": "X3:6",
+   "ferrule": "X3-6/PS11-",
+   "colour": "BK"
+  },
+  {
+   "terminal": "X3:7",
+   "ferrule": "X3-7/D12-L",
+   "colour": "BU"
+  },
+  {
+   "terminal": "X3:8",
+   "ferrule": "X3-8/PE-1",
+   "colour": "GNYE"
+  }
+ ],
+ "enabled": [
+  "GA",
+  "ORDER",
+  "LABEL",
+  "FERRULE",
+  "COLOUR"
+ ],
+ "counts": {
+  "PASS": 38,
+  "FAIL": 2,
+  "REVIEW": 1,
+  "SKIP": 0
+ },
+ "timing": {
+  "parse": 0.023,
+  "register": 0.443,
+  "checks": {
+   "GA": 0.088,
+   "ORDER": 0.036,
+   "LABEL": 0.061,
+   "FERRULE": 0.098,
+   "COLOUR": 0.008
+  },
+  "total": 0.757
+ },
+ "engine": "3.3.0",
+ "orientation": 0,
+ "warnings": [],
+ "wire_rule": {
+  "source": "wire list (WireList_EE-DEMO-01.xlsx)",
+  "kind": "wire_list",
+  "wires": 8,
+  "classes": {},
+  "notes": [
+   "each terminal's wire has its own colour in the wire list"
+  ],
+  "universal": "green-and-yellow identifies protective earth only"
+ },
+ "safety_schema": "eagle-eye-evidence/1",
+ "preview_scale": 0.5517241379310345,
+ "photo_meta": {
+  "sha256": "980d440b437d3b900b160f929bf0ed5e189fd032e3e860d675db217d289141c5",
+  "bytes": 733078,
+  "name": "forge_135.jpg",
+  "size": [
+   2200,
+   2900
+  ],
+  "exif_orientation": 1,
+  "format": "JPEG"
+ },
+ "confidence": {
+  "score": 0.9972,
+  "decided": 40,
+  "expected_errors": 0.11,
+  "review": 1,
+  "lowest": [
+   {
+    "id": "LBL-CB44",
+    "result": "FAIL",
+    "confidence": 0.961
+   },
+   {
+    "id": "COL-X3:3",
+    "result": "FAIL",
+    "confidence": 0.961
+   },
+   {
+    "id": "GA-PS11",
+    "result": "PASS",
+    "confidence": 0.9983
+   }
+  ]
+ }
+}

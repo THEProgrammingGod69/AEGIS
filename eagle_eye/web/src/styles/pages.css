@@ -2881,3 +2881,15 @@
 .angle-chip { gap: 5px; }
 .angle-chip.oblique { color: var(--review); border-color: rgba(251, 191, 36, 0.4); }
 .angle-chip.steep { color: var(--fail); border-color: rgba(251, 113, 133, 0.45); }
+
+/* ---- History showcase cases (showcase.py) */
+.showcase-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.05);
+}

@@ -18,6 +18,7 @@ python eval_forge.py 50 200          # Fault Forge self-test: 50 held-out cabine
 python eval_forge.py --summarize     # recompute out/forge/summary.json from results.json
 python calibration.py --reuse        # refit the confidence calibration (out/forge/calibration.json)
 python eval_angle.py                 # angle sweep of the real-cabinet registration (out/forge/angle_sweep.json)
+python showcase.py                   # add the showcase cases (clean + planted anomalies) to History
 python make_samples.py               # regenerate sample_photos/ + ANSWER_KEY.txt + manifest.json
 python spec.py                       # regenerate the demo inputs/ (GA PDF, wire list, checklist)
 python -m pytest tests -q            # engine regression, robustness guards, OCR parity, service, REST + cloud API
@@ -33,6 +34,7 @@ python export_static.py              # re-record the hosted console's replay run
 | `EAGLE_EYE_OCR` | in-process | `cli` forces the tesseract subprocess instead of libtesseract's C API. |
 | `TESSERACT_LIB` | auto | Path to `libtesseract` if it is not found automatically. |
 | `EAGLE_EYE_CLOUD` | off | `1` = hosted engine container: `/` redirects to the console, `/api/v2` serves it. |
+| `EAGLE_OCR_SMALL_UPSCALE` | `4.0` | Tile magnification of the small-print read (only for photos the regular read could not place). |
 | `EAGLE_COLOUR_PROFILE` | none | Wire-colour profile for drawing sets without their own colour legend (`iec-60204-1`, `nfpa-79`, `iec-60445`, `is-732-legacy`, `as-nzs-3000-legacy`; see `wire_profiles.json`). Never a default. |
 
 ## Pipeline
@@ -81,10 +83,42 @@ sweep on GA-drawing renders of the real cabinet (4 views, turned left and right;
 
 | Turned | Read labels placed: flat → perspective | Labels verified (PASS) | Angle measured | False FAILs |
 |---|---|---|---|---|
-| 0° | 117 → 117 of 174 | 262 → 262 | 2.2° | 0 |
-| 20° | 231 → 233 of 360 | 523 → 523 | 16.5° | 0 |
-| 35° | 166 → 225 of 347 | 482 → 500 | 35.0° | 0 |
-| 50° | 106 → 177 of 269 | 332 → 362 | 47.3° | 0 |
+| 0° | 117 → 117 of 175 | 268 → 268 | 2.2° | 0 |
+| 20° | 231 → 233 of 361 | 536 → 536 | 16.5° | 0 |
+| 35° | 173 → 232 of 357 | 507 → 530 | 35.0° | 0 |
+| 50° | 130 → 199 of 302 | 413 → 445 | 47.4° | 0 |
+
+### Small labels: drawing-guided reading (real cabinets)
+
+A whole-cabinet photo leaves small labels a few pixels high: the regular OCR passes read them partly or not at all,
+which left them REVIEW or NOT_IN_VIEW. `vision/guided.py` uses the drawing the way an inspector leans in: after a first
+registration, every label of a placed view that is predicted inside the photo without a certain read is read again in
+a window around its predicted spot, magnified so its letters are about 34 px high, at two magnifications, by the same
+neural reader (PP-OCRv4). Only an exact read of that label's own tag is taken; at a few pixels per letter, a look-alike
+read ('C871' for CB71) is taken only when the recognizer itself rates the drawing's tag at least half as likely as its
+own reading and clearly likelier than any neighbouring tag (lexicon-constrained CTC scoring, `vision.ocr.score_texts`),
+with both magnifications agreeing. The photo is registered again with the new reads and the next round looks for the
+rest; a photo that cannot be placed at all gets one more magnified read of the tiles that hold text. Nothing is
+invented: what still cannot be read stays REVIEW or NOT_IN_VIEW, and a missing label is never inferred. Labels of the
+photographed view on GA-drawing renders of the real cabinet (4 views, 122 labels per size):
+
+| Photo size (letters) | Verified (PASS) | REVIEW | NOT_IN_VIEW | False FAILs |
+|---|---|---|---|---|
+| 100 % (12 px) | 121 → 121 | 1 → 1 | 0 → 0 | 0 |
+| 60 % (7 px) | 91 → 112 | 23 → 10 | 8 → 0 | 0 |
+| 40 % (5 px) | 53 → 62 | 5 → 14 | 64 → 46 | 0 |
+
+Planted faults on the forged renders are unchanged: 12 of 12 flagged, 0 incorrect PASS, 0 false FAIL. At 5 px per
+letter B and 8 are genuinely ambiguous to the recognizer, so those labels ask for a closer photo instead of a guess.
+
+### Showcase cases
+
+`python showcase.py` (or History → Load showcase cases) adds saved inspections for a demo: seven on the generated demo
+cabinet (a clean cabinet, Emerson's four faults, ferrule and wire colour, wrong label and missing breaker, the re-check
+chain, a bad photo, hidden Fault Forge faults) and, where `data/emerson_render/` exists, seven on renders of the real
+cabinet (clean, wrong label, swap, removed label, a photo from 35°, small labels, a green-and-yellow wire on an AC
+circuit). Each case records what was planted and what to look at, and checks its own outcome. The hosted History leads
+with the demo-cabinet cases (`export_static.py`); the real-cabinet cases are never published.
 
 ## Adding a check
 

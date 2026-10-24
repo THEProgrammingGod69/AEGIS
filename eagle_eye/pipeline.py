@@ -21,7 +21,7 @@ from checks.builtin import wire_list_requirement
 from inspector import R, InspectionError
 from kb import drawing_kb
 from kb.tags import tag_sort_key
-from vision import ocr
+from vision import guided, ocr
 from vision.preprocess import load_photo
 from vision.register import OBLIQUE_DEG, STEEP_DEG, register
 
@@ -99,6 +99,7 @@ def _registration(reg, ctx):
             "refined": any(f["model"] == "homography" for f in reg["fits"]), "targets": targets,
             "localised": reg["localised"], "valid": reg["localised"],
             "angle": next((f["angle"] for f in reg["fits"] if f.get("angle")), None),
+            "guided": getattr(ctx, "guided", None),
             "invalid_reason": None if reg["localised"] else reg["hint"] or "The photo could not be placed on this drawing",
             "hint": reg["hint"], "views": [f["view"] for f in reg["fits"]],
             "candidates": reg["candidates"], "fits": fits, "quad": primary, "anchor_points": pts,
@@ -222,13 +223,21 @@ def inspect_real(photos, ga_pdf, wires=None, checklist=None, enabled=None, on_ev
         t = time.perf_counter()
         stage("register", "start", **multi)
         reg = register(tokens, kb, photo)
+        # small labels: read again where the drawing places them, magnified (vision/guided.py)
+        tokens, reg, gstats = guided.refine(photo, kb, tokens, reg,
+                                            read=lambda *a, **kw: ocr.read_region(*a, **kw),
+                                            small_print=lambda ph, near: ocr.read_small_print(ph, near, mode=ocr_mode),
+                                            score=lambda *a: ocr.score_texts(*a),
+                                            workers=max(1, min(8, ocr.WORKERS)))
         ctx = Context(kb, str(ga_pdf), photo, tokens, reg, wires=wires, checklist=checklist,
                       cfg={"colour_profile": config.COLOUR_PROFILE}, workers=max(1, min(8, ocr.WORKERS)))
+        ctx.guided = gstats
         t_reg = round(time.perf_counter() - t, 3)
         stage("register", "done", anchors=reg["anchors"], inliers=reg["inliers"],
               outliers=sorted({o["tag"] for f in reg["fits"] for o in f["outliers"]}, key=tag_sort_key),
               refined=any(f["model"] == "homography" for f in reg["fits"]), rotated=0, localised=reg["localised"],
-              views=[f["view"] for f in reg["fits"]], in_view=len(reg["in_view"]), hint=reg["hint"], **multi)
+              views=[f["view"] for f in reg["fits"]], in_view=len(reg["in_view"]), hint=reg["hint"],
+              guided=gstats, **multi)
 
         findings, t_checks = run_checks(ctx, checks_on, on_event=lambda ev: emit(dict(ev, engine="real", **multi)),
                                         clock=clock)

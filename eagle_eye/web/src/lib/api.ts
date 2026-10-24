@@ -46,6 +46,8 @@ const liveApi = {
   run: (id: string) => req<RunPayload>(`/api/runs/${id}`),
   chain: (id: string) => req<RunMeta[]>(`/api/runs/${id}/chain`),
   clearRuns: () => req<{ deleted: number }>("/api/runs", { method: "DELETE" }),
+  showcaseInfo: () => req<{ demo: number; real: number }>("/api/showcase"),
+  showcase: () => req<JobView>("/api/showcase", { method: "POST" }),
   job: (id: string, since = 0) => req<JobView>(`/api/jobs/${id}?since=${since}`),
   forgeLive: () => req<ForgeLive>("/api/forge/live"),
   selftest: () => req<SelfTest>("/api/forge/selftest"),

@@ -1,7 +1,7 @@
 {
  "schema": "eagle-eye-gap/1",
- "created": "2026-10-24T17:21:18+00:00",
- "engine": "3.1.0",
+ "created": "2026-10-24T20:19:17+00:00",
+ "engine": "3.3.0",
  "synthetic": {
   "photos": 50,
   "planted": 87,
@@ -86,10 +86,10 @@
   "incorrect_pass_rate": 0.0,
   "false_fail": 0,
   "false_fail_rate": 0.0,
-  "review_rate": 0.0386,
+  "review_rate": 0.0154,
   "not_in_view_rate": 0.7491,
   "judged": 777,
-  "sec_per_photo": 21.53,
+  "sec_per_photo": 1.93,
   "categories": {
    "missing": {
     "planted": 4,
@@ -154,7 +154,7 @@
   "flag_rate": 0.0,
   "incorrect_pass_rate": 0.0,
   "false_fail_rate": 0.0,
-  "review_rate": 0.0294,
+  "review_rate": 0.0062,
   "not_in_view_rate": 0.7491
  },
  "categories": [
