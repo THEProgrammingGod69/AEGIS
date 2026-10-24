@@ -10,6 +10,20 @@ Two pieces:
 The console talks to the engine at `VITE_ENGINE_URL` (`eagle_eye/web/.env.static`). Secrets live only in the engine's
 environment; nothing secret is ever shipped to the browser.
 
+## Photos are kept as metadata, not as photos
+
+* **Fingerprint first.** The console computes the SHA-256 of the photo (and of the drawing set) in the browser and sends
+  only the fingerprints. If the engine already holds the result / the drawing, nothing is uploaded; otherwise it answers
+  `409 {"need": ["photo"]}` and the console sends exactly the files it asked for.
+* **Read once, then discarded.** The engine reads the full-resolution photo once (OCR, registration, proof crops of the
+  issues) and deletes it. What is stored is metadata: fingerprint, size, EXIF orientation, quality score, OCR reads,
+  results with photo-pixel boxes, a small preview (<= 1600 px) and the proof crops. Drawing sets are stored once,
+  content-addressed (`cache/inputs/<sha256>.pdf`).
+* **Nothing photo-like is sent back.** `/api/v2` returns the run as JSON plus the PDF, the filled checklist and drawing
+  crops. The browser draws the boxes on its own copy of the photo and keeps only a preview in IndexedDB.
+* **Same photo again = instant.** Results are cached by fingerprint (photo + inputs + checks + engine version + verifier),
+  so re-opening or re-checking a known photo needs neither the upload nor the OCR.
+
 ## Engine environment
 
 | Variable | Default | Meaning |
@@ -20,6 +34,7 @@ environment; nothing secret is ever shipped to the browser.
 | `EAGLE_EYE_REAL_DATA` | `/app/data/emerson` | Folder with a real drawing set + photos for the "Emerson 13GE03331" preset (mounted, never baked) |
 | `EAGLE_CORS_ORIGINS` | console URL + localhost | Comma-separated allowed origins |
 | `EAGLE_OCR_MODE` / `EAGLE_OCR_WORKERS` | `FULL` / `2` | OCR passes and parallel lanes (match the vCPUs) |
+| `EAGLE_OCR_GATE` | `0` | `1` skips tiles where a low-resolution pass sees no text: ~3x faster, but loses small labels (whole-cabinet and rear photos) |
 | `ANTHROPIC_API_KEY` | unset | Enables the Claude vision agent. Unset = deterministic engine only (uncertain items go to REVIEW) |
 | `EAGLE_AGENT_ENABLED` | `1` | `0` switches the agent off even with a key |
 | `EAGLE_AGENT_MODEL` | `auto` | Main model: `claude-fable-5-1` when the key can use it, else `claude-opus-5-5` |
@@ -60,6 +75,10 @@ Project root `eagle_eye/web` (already configured by `vercel.json`). Set `VITE_EN
 `eagle_eye/web/.env.static` (or as a Vercel environment variable) and redeploy. When the engine cannot be reached the console
 falls back to the recorded demo runs automatically.
 
+The console shrinks photos to 2900 px / 3.6 MB before upload, which fits a serverless engine. With the engine on Cloud Run /
+Render, let full-resolution phone photos through (small labels need them): `VITE_MAX_PHOTO_SIDE=4096` and
+`VITE_MAX_PHOTO_MB=20` in `.env.static`.
+
 ## On-prem / local ("drawings never leave the plant")
 
 ```bash
@@ -70,13 +89,14 @@ Leave `ANTHROPIC_API_KEY` empty to keep every byte on site (deterministic engine
 re-photo hint), or set `ANTHROPIC_BASE_URL` to an approved gateway. Only cropped regions and a downscaled photo are ever sent to
 the agent; the drawing PDF never leaves the machine unless a GA page is a raster scan and the VLM fallback is enabled.
 
-Without Docker: `cd eagle_eye && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt` (plus
-`pip install --no-deps rapidocr-onnxruntime==1.4.4`), then `python server.py`.
+Without Docker: `eagle_eye/run.bat` (Windows) or `./eagle_eye/run.sh` installs everything, including
+`rapidocr-onnxruntime==1.4.4` with `--no-deps`, and starts `python server.py`. Put the drawing set and photos in
+`data/emerson/` and the console shows the "Emerson 13GE03331" preset on the Inspect page.
 
 ## Smoke test
 
 ```bash
-curl -s "$ENGINE/api/v2/health" | python -m json.tool      # ocr.ok, agent.enabled, kb cache, version
+curl -s "$ENGINE/api/v2/health" | python -m json.tool      # ocr.ok, agent.enabled, presets, storage: "metadata"
 ```
 Then open the console, pick the "Emerson 13GE03331" preset (or upload the PDF + photos), and check the live stages, the
 coverage bar, proof crops with agent reasons, the PDF report, the filled checklist and the work order.

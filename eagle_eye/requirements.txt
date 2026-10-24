@@ -10,6 +10,16 @@ Pillow>=10.0
 fastapi>=0.110
 uvicorn>=0.29
 python-multipart>=0.0.9
+# real-cabinet engine: PP-OCRv4 on ONNX Runtime. rapidocr-onnxruntime itself is installed with --no-deps by run.bat /
+# run.sh (its metadata asks for the GUI build of OpenCV, which clashes with opencv-python-headless); these are its deps.
+onnxruntime>=1.17
+pyclipper>=1.3
+shapely>=2.0
+PyYAML>=6.0
+six>=1.16
+tqdm>=4.60
+# Claude verifier (optional at run time: without ANTHROPIC_API_KEY the engine is deterministic-only)
+anthropic>=0.40
 # Streamlit fallback UI (streamlit run app.py)
 streamlit>=1.36
 pandas>=2.0

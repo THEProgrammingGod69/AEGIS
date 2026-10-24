@@ -25,12 +25,14 @@ MUTED = colors.HexColor("#5B6577")
 LINE = colors.HexColor("#E3E7EE")
 BAND = colors.HexColor("#0A1020")
 ACCENT = colors.HexColor("#0EA5E9")
-TONE = {"PASS": "#059669", "FAIL": "#E11D48", "REVIEW": "#D97706", "SKIP": "#6B7280", "CLOSED": "#059669",
+TONE = {"PASS": "#059669", "FAIL": "#E11D48", "REVIEW": "#D97706", "SKIP": "#6B7280", "NOT_IN_VIEW": "#64748B",
+        "CLOSED": "#059669",
         "OPEN": "#E11D48", "REGRESSION": "#9333EA", "NEW": "#EA580C", "HOLD": "#E11D48"}
-SOFT = {"PASS": "#ECFDF5", "FAIL": "#FFF1F2", "REVIEW": "#FFFBEB", "SKIP": "#F3F4F6", "CLOSED": "#ECFDF5",
+SOFT = {"PASS": "#ECFDF5", "FAIL": "#FFF1F2", "REVIEW": "#FFFBEB", "SKIP": "#F3F4F6", "NOT_IN_VIEW": "#F8FAFC",
+        "CLOSED": "#ECFDF5",
         "OPEN": "#FFF1F2", "REGRESSION": "#FAF5FF", "NEW": "#FFF7ED", "HOLD": "#FFF1F2"}
-CHECK_TITLE = {"GA": "Part present", "ORDER": "Rail order", "LABEL": "Device label", "FERRULE": "Ferrule text",
-               "COLOUR": "Wire colour"}
+CHECK_TITLE = {"GA": "Part present", "MISSING": "Part present", "ORDER": "Rail order", "LABEL": "Device label",
+               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Ferrule text", "COLOUR": "Wire colour"}
 
 S = dict(
     h1=ParagraphStyle("h1", fontName="EE-Bold", fontSize=15, leading=19, textColor=INK, spaceBefore=4, spaceAfter=8),
@@ -122,13 +124,17 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
                             ("LEFTPADDING", (0, 0), (-1, -1), 10), ("TOPPADDING", (0, 0), (0, 0), 9),
                             ("BOTTOMPADDING", (0, -1), (-1, -1), 9), ("ROUNDEDCORNERS", [6, 6, 6, 6])]))
     story += [vt, Spacer(1, 6)]
-    cells = [[Paragraph(f"<font color='{TONE[x]}'>{k[x]}</font>", S["kpi"]) for x in ("PASS", "FAIL", "REVIEW", "SKIP")],
-             [Paragraph(x, S["kpil"]) for x in ("PASS", "FAIL · FIX BEFORE SHIPPING", "REVIEW · RE-PHOTO ZONE", "SKIP · ROOT CAUSE ELSEWHERE")]]
+    real = rep.get("engine_kind") == "real"
+    last = "NOT_IN_VIEW" if real else "SKIP"
+    keys = ("PASS", "FAIL", "REVIEW", last)
+    cells = [[Paragraph(f"<font color='{TONE[x]}'>{k.get(x, 0)}</font>", S["kpi"]) for x in keys],
+             [Paragraph(x, S["kpil"]) for x in ("PASS", "FAIL · FIX BEFORE SHIPPING", "REVIEW · RE-PHOTO ZONE",
+                                               "NOT IN VIEW · NOT JUDGED HERE" if real else "SKIP · ROOT CAUSE ELSEWHERE")]]
     kt = Table(cells, colWidths=[44.5 * mm] * 4)
     kt.setStyle(TableStyle([("BOX", (0, 0), (0, -1), 0.6, LINE), ("BOX", (1, 0), (1, -1), 0.6, LINE),
                             ("BOX", (2, 0), (2, -1), 0.6, LINE), ("BOX", (3, 0), (3, -1), 0.6, LINE),
                             ("TOPPADDING", (0, 0), (-1, 0), 8), ("BOTTOMPADDING", (0, -1), (-1, -1), 7)] +
-                           [("BACKGROUND", (i, 0), (i, -1), colors.HexColor(SOFT[x])) for i, x in enumerate(("PASS", "FAIL", "REVIEW", "SKIP"))]))
+                           [("BACKGROUND", (i, 0), (i, -1), colors.HexColor(SOFT[x])) for i, x in enumerate(keys)]))
     story += [kt, Spacer(1, 10)]
 
     reg = rep.get("registration", {})
@@ -144,6 +150,18 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
                              f"{reg.get('inliers', 0)} RANSAC inliers" + (f"; off-pattern: {', '.join(reg['outliers'])}" if reg.get("outliers") else "")),
             ("Processing", f"{rep.get('timing', {}).get('total', 0):.1f} s on CPU"),
             ("Engine", f"EAGLE EYE {rep.get('engine', config.VERSION)} · Tesseract OCR · OpenCV · PyMuPDF")]
+    if rep.get("engine_kind") == "real":
+        cov, ag = rep.get("coverage") or {}, rep.get("agent") or {}
+        judged = len(results) - k.get("NOT_IN_VIEW", 0)
+        rows[6:] = [("Items checked", f"{judged} judged in this photo, {k.get('NOT_IN_VIEW', 0)} not in view"),
+                    ("Coverage", f"{cov.get('verified', 0)} of {cov.get('total', 0)} labelled drawing items verified "
+                                 f"(views: {', '.join(rep.get('views') or []) or 'none'})"),
+                    ("Registration", f"{reg.get('anchors', 0)} label anchors, {reg.get('inliers', 0)} on the drawing"
+                                     + (f"; off-pattern: {', '.join(reg['outliers'])}" if reg.get("outliers") else "")),
+                    ("Verifier", (f"Claude ({ag.get('model')}, {ag.get('calls', 0)} calls)" if ag.get("enabled")
+                                  else f"off: {ag.get('reason') or 'no API key'}")),
+                    ("Processing", f"{rep.get('timing', {}).get('total', 0):.1f} s on CPU"),
+                    ("Engine", f"EAGLE EYE {rep.get('engine', config.VERSION)} · PP-OCRv4 · OpenCV · PyMuPDF")]
     if meta.get("parent"):
         rows.insert(2, ("Re-check of", meta["parent"]))
     left = [Paragraph("Inspection details", S["h2"]), Spacer(1, 4), _kv(rows, [24 * mm, 66 * mm]), Spacer(1, 10),
@@ -151,7 +169,10 @@ def build_pdf(out_pdf, rep, meta, marked_path, crop_paths):
             Paragraph("Every item is checked one at a time at the spot the GA drawing gives it. An item is <b>FAIL</b> "
                       "only when independent evidence agrees; anything unclear is <b>REVIEW</b> (re-photo that zone) "
                       "instead of a guess. <b>SKIP</b> means the root cause is already reported by another item "
-                      "(a missing part is one FAIL, not five). Numbers match the boxes on the photo.", S["small"])]
+                      "(a missing part is one FAIL, not five)."
+                      + (" <b>NOT_IN_VIEW</b> items are outside this photo or too small in it to read: they are "
+                         "neither passed nor failed." if rep.get("engine_kind") == "real" else "")
+                      + " Numbers match the boxes on the photo.", S["small"])]
     lt = Table([[x] for x in left], colWidths=[92 * mm])
     lt.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0)]))
     small = out_pdf + ".marked.jpg"               # ~1100 px is plenty at 84 mm wide; keeps the PDF small

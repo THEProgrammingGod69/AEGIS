@@ -7,10 +7,10 @@
  *  - recorded runs (export_static.py): genuine engine runs replayed with their stage timings. Used when the
  *    viewer picks "recorded", or automatically when the engine cannot be reached, so the demo never breaks.
  */
-import { EngineUnreachable, b64Blob, engine, ensureEngine, liveReady, preparePhoto, stream, type StreamResult } from "./cloud";
+import { ENGINE_URL, EngineUnreachable, NeedFiles, b64Blob, engine, ensureEngine, liveReady, makePreview, preparePhoto, renderMarked, sha256, stream, type StreamResult } from "./cloud";
 import * as store from "./store";
 import type { InputKey, LiveRun } from "./store";
-import type { CheckInfo, ForgeLive, Health, JobEvent, JobView, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 import type { InspectInput } from "./api";
 
 const BASE = "demo/";
@@ -46,7 +46,7 @@ const blobUrls = new Map<string, Record<string, string>>();
 const MAX_LIVE = 40;
 
 const MIME: Record<string, string> = {
-  photo: "image/jpeg", rectified: "image/jpeg", marked: "image/jpeg", ga: "image/jpeg", overlay: "image/png",
+  photo: "image/jpeg", preview: "image/jpeg", rectified: "image/jpeg", marked: "image/jpeg", ga: "image/jpeg", overlay: "image/png",
   pdf: "application/pdf", checklist: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", json: "application/json",
 };
 
@@ -139,9 +139,21 @@ async function evict() {
   await store.remove(drop);
 }
 
-async function keep(r: StreamResult, events: JobEvent[], inputs?: LiveRun["inputs"]): Promise<string> {
+/**
+ * Keep a cloud run on this device as metadata: payload, report, PDF, checklist, drawing crops, plus a small preview
+ * of the photo (made here from the photo the browser already has, or sent by the engine for photos it generated)
+ * and the marked-up preview drawn from the boxes. The full photo is never stored.
+ */
+async function keep(r: StreamResult, events: JobEvent[], inputs?: LiveRun["inputs"], photo?: Blob | null): Promise<string> {
   const files: Record<string, Blob> = {};
-  for (const [k, v] of Object.entries(r.files)) files[k] = b64Blob(v, MIME[k] ?? "application/octet-stream");
+  for (const [k, v] of Object.entries(r.files)) {
+    if (k === "preview") continue;
+    files[k] = b64Blob(v, MIME[k] ?? (k.startsWith("exp:") ? "image/jpeg" : "application/octet-stream"));
+  }
+  if (r.files.preview) files.photo = b64Blob(r.files.preview, "image/jpeg");
+  else if (r.files.photo) files.photo = b64Blob(r.files.photo, "image/jpeg");      // engines older than metadata-first
+  else if (photo) files.photo = await makePreview(photo).catch(() => photo);
+  if (files.photo && !files.marked) files.marked = await renderMarked(files.photo, r.payload).catch(() => files.photo);
   files.json = new Blob([JSON.stringify(r.report, null, 1)], { type: MIME.json });
   const run: LiveRun = { id: r.payload.meta.id, meta: { ...r.payload.meta, origin: "cloud" }, payload: r.payload, report: r.report, events, files, inputs, saved: Date.now() };
   mount(run);
@@ -295,6 +307,16 @@ export const staticApi = {
   checks: async () => IX.checks,
   samples: async (): Promise<Sample[]> => IX.samples,
   inputs: async () => IX.inputs,
+  /** Real drawing sets the cloud engine holds (mounted EAGLE_EYE_REAL_DATA); none in replay mode. */
+  presets: async (): Promise<Preset[]> => {
+    if (!(await ensureEngine())) return [];
+    try {
+      const r = await fetch(`${ENGINE_URL}/api/v2/presets`, { cache: "no-store" });
+      return r.ok ? ((await r.json()) as Preset[]) : [];
+    } catch {
+      return [];
+    }
+  },
   runs: async (): Promise<RunMeta[]> => [...hist()].reverse().map(metaOf).filter((m): m is RunMeta => !!m),
   run: async (id: string): Promise<RunPayload> => {
     const l = live.get(id);
@@ -366,7 +388,7 @@ export const staticApi = {
   inspect: async (i: InspectInput): Promise<JobView> => {
     const sample = i.sample ?? "01";
     const rec = recordedFor(i);
-    const label = i.photo ? `Upload · ${i.photo.name}` : sampleLabel(sample);
+    const label = i.photo ? `Upload · ${i.photo.name}` : i.preset ? `Real cabinet · ${i.presetPhoto ?? ""}` : sampleLabel(sample);
     const kind = i.parent ? "recheck" : "inspect";
     if (!(await ensureEngine())) {
       if (!rec) {
@@ -378,29 +400,52 @@ export const staticApi = {
       return startReplay(kind, rec, (i.parent ? "Re-check · " : "") + label, i.parent ?? null);
     }
     return startLive(kind, (i.parent ? "Re-check · " : "") + label, i.parent ?? null, async (j) => {
-      const fd = new FormData();
-      if (i.photo) {
-        const f = await preparePhoto(i.photo);
-        fd.append("photo", f, f.name);
-      } else fd.append("sample", sample);
+      // Metadata first: fingerprints go before files. The engine answers from what it already holds (stored
+      // results, drawing sets) and asks (409) only for the files it does not have.
+      const photo = i.photo ? await preparePhoto(i.photo) : null;
+      const photoSha = photo ? await sha256(photo) : null;
       // a re-check reuses the drawing set of the run it re-checks, unless a new one is given
       const parentInputs = i.parent ? live.get(i.parent)?.inputs : undefined;
       const inputs: LiveRun["inputs"] = {};
+      const shas: Partial<Record<InputKey, string>> = {};
       for (const k of ["ga", "wires", "checklist"] as InputKey[]) {
         const f = i[k];
         const given = f ? { name: f.name, blob: f as Blob } : parentInputs?.[k];
         if (given) {
           inputs[k] = given;
-          fd.append(k, given.blob, given.name);
+          shas[k] = await sha256(given.blob);
         }
       }
-      if (i.checks) fd.append("checks", i.checks.join(","));
-      if (i.parent) fd.append("parent", await parentData(i.parent), "parent.json");
-      await stream("/api/v2/inspect", { method: "POST", body: fd }, {
-        onEvent: (ev) => { j.queue = 0; j.events.push(ev); },
-        onQueued: (n) => { j.queue = n; },
-        onResult: async (r) => { j.runs.push(await keep(r, j.events.slice(), Object.keys(inputs).length ? inputs : undefined)); },
-      });
+      const parentBlob = i.parent ? await parentData(i.parent) : null;
+      const send = async (need: Set<string>) => {
+        const fd = new FormData();
+        if (photo) {
+          fd.append("photo_sha", photoSha!);
+          fd.append("photo_name", i.photo!.name);
+          if (need.has("photo")) fd.append("photo", photo, photo.name);
+        } else if (i.preset) {
+          fd.append("preset", i.preset);
+          if (i.presetPhoto) fd.append("preset_photo", i.presetPhoto);
+        } else fd.append("sample", sample);
+        for (const k of Object.keys(inputs) as InputKey[]) {
+          fd.append(`${k}_sha`, shas[k]!);
+          if (need.has(k)) fd.append(k, inputs[k]!.blob, inputs[k]!.name);
+        }
+        if (i.checks) fd.append("checks", i.checks.join(","));
+        if (parentBlob) fd.append("parent", parentBlob, "parent.json");
+        await stream("/api/v2/inspect", { method: "POST", body: fd }, {
+          onEvent: (ev) => { j.queue = 0; j.events.push(ev); },
+          onQueued: (n) => { j.queue = n; },
+          onResult: async (r) => { j.runs.push(await keep(r, j.events.slice(), Object.keys(inputs).length ? inputs : undefined, photo)); },
+        });
+      };
+      try {
+        await send(new Set());
+      } catch (e) {
+        if (!(e instanceof NeedFiles)) throw e;
+        j.events = [];
+        await send(new Set(e.need));
+      }
     }, () => rec);
   },
   review: async (rid: string, item: string, decision: Review["decision"] | "CLEAR", note = "", by = "Inspector"): Promise<RunMeta> => {
@@ -426,6 +471,7 @@ export const staticUrl = {
   download: (run: string, name: string) => staticUrl.file(run, name),
   crop: () => "",
   input: (key: string) => BASE + (IX.inputs[key]?.href ?? ""),
+  presetPhoto: (id: string, file: string, w = 360) => `${ENGINE_URL}/api/v2/presets/${id}/photos/${encodeURIComponent(file)}?w=${w}`,
   gaPreview: () => BASE + "img/ga_preview.png",
 };
 

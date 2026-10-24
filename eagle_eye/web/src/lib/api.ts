@@ -1,6 +1,6 @@
 import { liveReady, useEngine } from "./cloud";
 import { staticApi, staticUrl } from "./static";
-import type { CheckInfo, ForgeLive, Health, JobView, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, ForgeLive, Health, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 
 /** True in the hosted build (npm run build:static): cloud engine + recorded runs, history kept in the browser. */
 export const STATIC = import.meta.env.VITE_STATIC === "1";
@@ -28,6 +28,9 @@ export interface InspectInput {
   checklist?: File | null;
   checks?: string[];
   parent?: string | null;
+  /** real drawing set + photo found by the engine (EAGLE_EYE_REAL_DATA), e.g. the Emerson 13GE03331 preset */
+  preset?: string | null;
+  presetPhoto?: string | null;
 }
 
 const liveApi = {
@@ -35,6 +38,7 @@ const liveApi = {
   checks: () => req<CheckInfo[]>("/api/checks"),
   samples: () => req<Sample[]>("/api/samples"),
   inputs: () => req<Record<string, { name: string; size: number }>>("/api/inputs"),
+  presets: () => req<Preset[]>("/api/presets"),
   runs: (limit = 200) => req<RunMeta[]>(`/api/runs?limit=${limit}`),
   run: (id: string) => req<RunPayload>(`/api/runs/${id}`),
   chain: (id: string) => req<RunMeta[]>(`/api/runs/${id}/chain`),
@@ -47,7 +51,10 @@ const liveApi = {
   inspect: (i: InspectInput) => {
     const fd = new FormData();
     if (i.photo) fd.append("photo", i.photo);
-    else if (i.sample) fd.append("sample", i.sample);
+    else if (i.preset) {
+      fd.append("preset", i.preset);
+      if (i.presetPhoto) fd.append("preset_photo", i.presetPhoto);
+    } else if (i.sample) fd.append("sample", i.sample);
     if (i.ga) fd.append("ga", i.ga);
     if (i.wires) fd.append("wires", i.wires);
     if (i.checklist) fd.append("checklist", i.checklist);
@@ -69,6 +76,7 @@ const liveUrl = {
   crop: (run: string, item: string, kind: "expected" | "found" | "aligned") =>
     `/api/runs/${run}/items/${encodeURIComponent(item)}/${kind}`,
   input: (key: string) => `/api/inputs/${key}`,
+  presetPhoto: (id: string, file: string, w = 360) => `/api/presets/${id}/photos/${encodeURIComponent(file)}?w=${w}`,
   gaPreview: () => "/api/inputs/ga/preview",
 };
 

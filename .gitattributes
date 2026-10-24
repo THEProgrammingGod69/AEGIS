@@ -1,0 +1,16 @@
+# Line endings: LF in the repository whatever the editor or OS writes (the project moves between Windows and Linux
+# machines and containers). Shell scripts and Dockerfiles stay LF in the working tree too.
+* text=auto
+*.sh text eol=lf
+Dockerfile* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# binary assets: never touched
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.xlsx binary
+*.ttf binary
+*.onnx binary

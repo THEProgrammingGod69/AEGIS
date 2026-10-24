@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.11", "3.12"]
     defaults:
       run:
         working-directory: eagle_eye
@@ -21,11 +21,13 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: eagle_eye/requirements.txt
+          cache-dependency-path: eagle_eye/requirements-engine.txt
       - name: Install Tesseract OCR
         run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt pytest httpx
+      - name: Install Python dependencies (pinned engine set + PP-OCRv4 without the GUI OpenCV it asks for)
+        run: |
+          pip install -r requirements-engine.txt pytest httpx
+          pip install --no-deps rapidocr-onnxruntime==1.4.4
       - name: Run tests
         run: python -m pytest tests -q
 

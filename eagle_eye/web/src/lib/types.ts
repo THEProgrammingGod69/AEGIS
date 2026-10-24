@@ -1,4 +1,5 @@
-export type Result = "PASS" | "FAIL" | "REVIEW" | "SKIP";
+/** NOT_IN_VIEW: the real-cabinet engine could not see the item in this photo (neither passed nor failed). */
+export type Result = "PASS" | "FAIL" | "REVIEW" | "SKIP" | "NOT_IN_VIEW";
 export type Recheck = "CLOSED" | "OPEN" | "REGRESSION" | "NEW";
 export type Status = Result | Recheck;
 export type Pt = [number, number];
@@ -32,6 +33,43 @@ export interface Item {
   votes?: string[];
   occupancy?: number;
   root_cause?: string;
+  /* real-cabinet engine */
+  view?: string | null;
+  hint?: string | null;
+  rule?: string | null;
+  candidate?: string;
+  strength?: "strong" | "weak" | null;
+  reads?: { raw: string; tag: string | null; conf: number; passes: number; box: number[]; method?: string | null }[];
+  agent?: AgentDecision | null;
+  verified_by?: string[];
+}
+
+export interface AgentDecision {
+  decision: "CONFIRMED_OK" | "CONFIRMED_FAULT" | "UNCLEAR";
+  confidence: number;
+  reason: string;
+  model: string | null;
+  cached: boolean;
+  source?: string;
+  rephoto_hint?: string | null;
+}
+
+export interface Coverage {
+  in_view: number;
+  verified: number;
+  total: number;
+  ratio: number;
+  by_view: Record<string, { verified: number; total: number }>;
+}
+
+/** What is kept of a photo instead of the photo (metadata-first storage). */
+export interface PhotoMeta {
+  sha256?: string;
+  sha?: string;
+  size: [number, number];
+  name?: string | null;
+  bytes?: number;
+  exif_orientation?: number;
 }
 
 export interface Counts {
@@ -39,6 +77,7 @@ export interface Counts {
   FAIL: number;
   REVIEW: number;
   SKIP: number;
+  NOT_IN_VIEW?: number;
 }
 
 export interface RecheckCounts {
@@ -80,13 +119,15 @@ export interface Timing {
   checks: Record<string, number>;
   total: number;
   report?: number;
+  ocr?: number;
+  agent?: number;
 }
 
 export interface RunMeta {
   id: string;
   created: string;
   label: string;
-  source: "upload" | "sample" | "forge";
+  source: "upload" | "sample" | "forge" | "preset";
   photo_name: string;
   photo: string;
   inputs: { ga: InputRef; wires: InputRef; checklist: InputRef };
@@ -109,6 +150,13 @@ export interface RunMeta {
   reviews?: Record<string, Review>;
   /** Where the run came from in the hosted console: recorded showcase or the live cloud engine. */
   origin?: "recorded" | "cloud" | "local";
+  engine_kind?: "legacy" | "real";
+  storage?: "metadata";
+  photo_meta?: PhotoMeta;
+  cached?: boolean;
+  coverage?: Coverage;
+  views?: string[];
+  agent?: { enabled: boolean; backend: string | null; model: string | null; calls: number; cost_usd: number; reason?: string };
 }
 
 export interface Review {
@@ -158,6 +206,24 @@ export interface RunPayload {
   timing: Timing;
   /** Raster of a custom GA drawing (cloud runs); the demo drawing's raster ships with the console. */
   ga_raster?: { w: number; h: number; ox: number; oy: number; k: number };
+  /** false for real-cabinet runs: there is no drawing-aligned view of the photo. */
+  rectified?: boolean;
+  engine_kind?: "legacy" | "real";
+  coverage?: Coverage;
+  views?: string[];
+  agent?: { enabled: boolean; backend: string | null; model: string | null; calls: number; cost_usd: number; summary?: string; reason?: string };
+  ocr?: { engine: string; tokens: number; seconds: number | null; cached: boolean; mode: string };
+  quality?: { blur: number; brightness: number; glare: number; score: number; issues: string[] };
+  notes?: string[];
+  photo_meta?: PhotoMeta;
+}
+
+export interface Preset {
+  id: string;
+  title: string;
+  cabinet: string | null;
+  ga: string;
+  photos: { file: string; content: string }[];
 }
 
 export interface JobEvent {
@@ -208,6 +274,10 @@ export interface Health {
   mode?: "local" | "cloud" | "recorded";
   uptime?: number;
   busy?: number;
+  ocr?: { engine: string; version: string | null; ok: boolean; fallback: string | null; mode?: string; workers?: number };
+  agent?: { enabled: boolean; backend: string | null; model: string; fast_model: string; reason: string };
+  presets?: { id: string; title: string; photos: number }[];
+  storage?: "metadata";
 }
 
 export interface CheckInfo {

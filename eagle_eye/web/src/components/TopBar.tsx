@@ -71,7 +71,8 @@ function EnginePill() {
 
 export function TopBar({ page, health, onPalette }: { page: string; health: Health | null; onPalette: () => void }) {
   const active = page === "run" || page === "work" ? "inspect" : page;
-  const ok = health?.tesseract.ok;
+  const ok = health?.ok ?? health?.tesseract.ok;
+  const label = !health ? "" : health.tesseract.ok ? "Engine ready" : health.ocr?.ok ? "Real-cabinet engine ready" : "Tesseract missing";
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -92,7 +93,7 @@ export function TopBar({ page, health, onPalette }: { page: string; health: Heal
           {STATIC ? <EnginePill /> : (
             <div className="status-pill" title={health ? (ok ? health.tesseract.version ?? "" : health.tesseract.error) : "Connecting…"}>
               <span className={`dot${ok ? " pulse" : ""}`} style={{ ["--c" as string]: health == null ? "var(--text-3)" : ok ? "var(--pass)" : "var(--fail)" }} />
-              {health == null ? "Connecting…" : ok ? "Engine ready" : "Tesseract missing"}
+              {health == null ? "Connecting…" : label}
               {health && (
                 <span className="hide-sm faint row" style={{ ["--gap" as string]: "5px" }}>
                   · <Cpu size={13} /> {health.workers} OCR lanes

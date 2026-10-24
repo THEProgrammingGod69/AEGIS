@@ -19,7 +19,8 @@ from inspector import R
 F = config.font("DejaVuSans-Bold.ttf")
 FR = config.font("DejaVuSans.ttf")
 COL = {"FAIL": (225, 29, 72), "REVIEW": (245, 158, 11), "PASS": (16, 185, 129), "SKIP": (120, 120, 130),
-       "CLOSED": (16, 185, 129), "OPEN": (225, 29, 72), "REGRESSION": (147, 51, 234), "NEW": (234, 88, 12)}
+       "NOT_IN_VIEW": (100, 116, 139), "CLOSED": (16, 185, 129), "OPEN": (225, 29, 72), "REGRESSION": (147, 51, 234),
+       "NEW": (234, 88, 12)}
 ISSUE = ("FAIL", "REVIEW", "CLOSED", "OPEN", "REGRESSION", "NEW")
 DRAWING_BLUE = (31, 79, 168)
 
@@ -43,29 +44,34 @@ def status_of(r, status_key="result"):
     return r.get(status_key) or r["result"]
 
 
-def markup(photo_path, rep, out_path, status_key="result"):
-    """Box and number every issue on the photo (translucent fill, thick outline, numbered badge)."""
+def markup(photo_path, rep, out_path, status_key="result", scale=1.0):
+    """Box and number every issue on the photo (translucent fill, thick outline, numbered badge).
+
+    ``scale`` maps the report's photo pixels onto the image given (a preview smaller than the inspected photo).
+    """
     im = Image.open(photo_path).convert("RGB")
     over = Image.new("RGBA", im.size, (0, 0, 0, 0)); d = ImageDraw.Draw(over)
-    f = ImageFont.truetype(F, 46); fs = ImageFont.truetype(F, 26)
+    u = max(0.35, min(1.0, max(im.size) / 2900))         # badge and caption sizes follow the image size
+    f = ImageFont.truetype(F, max(14, int(46 * u))); fs = ImageFont.truetype(F, max(11, int(26 * u)))
     for r in rep["results"]:
         st = status_of(r, status_key)
         if st not in ISSUE or "marker" not in r or r.get("marker") is None:
             continue
-        p = to_photo(r["box"], rep["H"]); c = COL[st]
-        pad = 10
+        p = to_photo(r["box"], rep["H"]) * scale; c = COL[st]
+        pad = 10 * u
         x0, y0 = p[:, 0].min() - pad, p[:, 1].min() - pad
         x1, y1 = p[:, 0].max() + pad, p[:, 1].max() + pad
-        d.rectangle([x0, y0, x1, y1], fill=c + (46,), outline=c + (255,), width=9)
+        d.rectangle([x0, y0, x1, y1], fill=c + (46,), outline=c + (255,), width=max(3, int(9 * u)))
         cap = f"{st} · {r['id']}"
         tw = d.textlength(cap, font=fs)
-        ty = y1 + 8 if y1 + 50 < im.height else y0 - 46
-        d.rounded_rectangle([x0, ty, x0 + tw + 24, ty + 38], radius=10, fill=(10, 14, 20, 225))
-        d.text((x0 + 12, ty + 5), cap, fill=c + (255,), font=fs)
-        cx, cy = x1 + 4, y0 - 34
-        d.ellipse([cx - 36, cy - 36, cx + 36, cy + 36], fill=c + (255,), outline=(255, 255, 255, 255), width=5)
+        ty = y1 + 8 * u if y1 + 50 * u < im.height else y0 - 46 * u
+        d.rounded_rectangle([x0, ty, x0 + tw + 24 * u, ty + 38 * u], radius=10 * u, fill=(10, 14, 20, 225))
+        d.text((x0 + 12 * u, ty + 5 * u), cap, fill=c + (255,), font=fs)
+        cx, cy, rr = x1 + 4 * u, y0 - 34 * u, 36 * u
+        d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=c + (255,), outline=(255, 255, 255, 255),
+                  width=max(2, int(5 * u)))
         t = str(r["marker"]); w_ = d.textlength(t, font=f)
-        d.text((cx - w_ / 2, cy - 28), t, fill=(255, 255, 255, 255), font=f)
+        d.text((cx - w_ / 2, cy - 28 * u), t, fill=(255, 255, 255, 255), font=f)
     im = Image.alpha_composite(im.convert("RGBA"), over).convert("RGB")
     im.save(out_path, quality=90)
     return out_path
@@ -117,21 +123,26 @@ def expected_crop(ga_img, s, box, margin=15, color=(14, 165, 233)):
     return _outline(c, pts, color, max(2, int(k * 0.6)))
 
 
-def found_crop(photo_img, H, box, color, margin=60):
-    """Zoomed crop of the photo around where the drawing says the item is."""
-    p = to_photo(box, H)
+def found_crop(photo_img, H, box, color, margin=60, scale=1.0, max_side=None):
+    """Zoomed crop of the photo around where the drawing says the item is (``scale``: image px per report px)."""
+    p = to_photo(box, H) * scale
+    margin = max(12, margin * scale)
     x0, y0 = int(p[:, 0].min() - margin), int(p[:, 1].min() - margin)
     x1, y1 = int(p[:, 0].max() + margin), int(p[:, 1].max() + margin)
     c = photo_img.crop((x0, y0, x1, y1)).convert("RGB")
-    return _outline(c, p - np.float32([x0, y0]), color, 5)
+    c = _outline(c, p - np.float32([x0, y0]), color, max(2, int(5 * min(1.0, scale * 2))))
+    if max_side and max(c.size) > max_side:
+        c.thumbnail((max_side, max_side), Image.LANCZOS)
+    return c
 
 
-def aligned_crop(rect_img, box, color, margin=15):
-    """Same window as ``expected_crop`` but from the perspective-corrected photo (pixel-aligned with the drawing)."""
+def aligned_crop(rect_img, box, color, margin=15, k=R):
+    """Same window as ``expected_crop`` but from the perspective-corrected photo (pixel-aligned with the drawing);
+    ``k`` = px per mm of ``rect_img`` (stored rectified images are kept at a reduced resolution)."""
     x, y, w, h = box
-    c = rect_img.crop((int((x - margin) * R), int((y - margin) * R), int((x + w + margin) * R), int((y + h + margin) * R))).convert("RGB")
-    pts = [(margin * R, margin * R), ((margin + w) * R, margin * R), ((margin + w) * R, (margin + h) * R), (margin * R, (margin + h) * R)]
-    return _outline(c, pts, color, 4)
+    c = rect_img.crop((int((x - margin) * k), int((y - margin) * k), int((x + w + margin) * k), int((y + h + margin) * k))).convert("RGB")
+    pts = [(margin * k, margin * k), ((margin + w) * k, margin * k), ((margin + w) * k, (margin + h) * k), (margin * k, (margin + h) * k)]
+    return _outline(c, pts, color, max(2, int(k)))
 
 
 def snippet(photo_path, rep, r, ga_png_path, ga_scale, out_path):
@@ -157,7 +168,7 @@ def fill_checklist(template_xlsx, rep, out_xlsx, meta=None):
     """Fill Emerson's QC checklist template in place (Expected / Found / Result / Evidence) and add a summary sheet."""
     wb = load_workbook(template_xlsx); ws = wb.active
     by = {r["id"]: r for r in rep["results"]}
-    fills = {"PASS": "DCFCE7", "FAIL": "FECACA", "REVIEW": "FEF3C7", "SKIP": "E5E7EB",
+    fills = {"PASS": "DCFCE7", "FAIL": "FECACA", "REVIEW": "FEF3C7", "SKIP": "E5E7EB", "NOT_IN_VIEW": "F1F5F9",
              "CLOSED": "DCFCE7", "OPEN": "FECACA", "REGRESSION": "E9D5FF", "NEW": "FFEDD5"}
     is_recheck = any(r.get("recheck") for r in rep["results"]) or bool(meta and meta.get("parent"))
     thin = Side(style="thin", color="D1D5DB")
@@ -186,15 +197,19 @@ def fill_checklist(template_xlsx, rep, out_xlsx, meta=None):
     ws.auto_filter.ref = ws.dimensions
 
     s = wb.create_sheet("Summary", 0)
-    k = {x: sum(r["result"] == x for r in rep["results"]) for x in ("PASS", "FAIL", "REVIEW", "SKIP")}
+    k = {x: sum(r["result"] == x for r in rep["results"]) for x in ("PASS", "FAIL", "REVIEW", "SKIP", "NOT_IN_VIEW")}
     verdict = (meta or {}).get("verdict", {}).get("label") or ("HOLD" if k["FAIL"] else "REVIEW" if k["REVIEW"] else "PASS")
     rows = [("EAGLE EYE · Cabinet QC", ""), ("", ""),
             ("Cabinet", rep.get("ga", {}).get("cabinet", "")),
             ("Photo", os.path.basename((meta or {}).get("photo_name") or rep["photo"])),
             ("Inspected", (meta or {}).get("created", datetime.datetime.now().isoformat(timespec="seconds"))),
             ("Verdict", verdict), ("", ""),
-            ("PASS", k["PASS"]), ("FAIL", k["FAIL"]), ("REVIEW", k["REVIEW"]), ("SKIP (root cause elsewhere)", k["SKIP"]),
-            ("Items checked", len(rep["results"]))]
+            ("PASS", k["PASS"]), ("FAIL", k["FAIL"]), ("REVIEW", k["REVIEW"]), ("SKIP (root cause elsewhere)", k["SKIP"])]
+    if k["NOT_IN_VIEW"] or rep.get("engine_kind") == "real":
+        cov = rep.get("coverage") or {}
+        rows += [("NOT_IN_VIEW (not in this photo)", k["NOT_IN_VIEW"]),
+                 ("Coverage", f"{cov.get('verified', 0)} of {cov.get('total', 0)} labelled drawing items verified")]
+    rows += [("Items checked", len(rep["results"]))]
     rc = (meta or {}).get("recheck")
     if rc:
         rows += [("", ""), ("Re-check of run", (meta or {}).get("parent", ""))] + [(x, rc.get(x, 0)) for x in ("CLOSED", "OPEN", "REGRESSION", "NEW")]
@@ -209,6 +224,28 @@ def fill_checklist(template_xlsx, rep, out_xlsx, meta=None):
     vc.fill = PatternFill("solid", fgColor={"HOLD": "E11D48", "REVIEW": "D97706"}.get(verdict, "059669"))
     s.column_dimensions["A"].width = 30; s.column_dimensions["B"].width = 40
     wb.active = 1
+    wb.save(out_xlsx)
+    return out_xlsx
+
+
+CHECK_NAMES = {"GA": "Part present", "MISSING": "Part present", "ORDER": "Order", "LABEL": "Device label",
+               "UNKNOWN_LABEL": "Unknown label", "FERRULE": "Wire ferrule", "COLOUR": "Wire colour"}
+
+
+def checklist_template(rep, out_xlsx):
+    """QC checklist generated from the drawing's knowledge base when the user supplies none (real drawing sets):
+    one row per checklist item of the report, in the column layout ``fill_checklist`` fills."""
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active; ws.title = "QC Checklist"
+    ws.append(["Item", "Check", "Description", "Expected (drawing)", "Found (photo)", "Result", "Evidence"])
+    for r in rep["results"]:
+        view = f" ({r['view']} view)" if r.get("view") else ""
+        desc = {"MISSING": f"{r['target']} installed where the GA drawing places it{view}",
+                "LABEL": f"Label of {r['target']} reads exactly '{r['target']}'{view}",
+                "ORDER": f"Devices of group {r['target']} in the drawing's order",
+                "UNKNOWN_LABEL": f"Label '{r['target']}' is a tag of the drawing set",
+                "FERRULE": f"Ferrule {r['target']} names a connection of the drawing"}.get(r["check"], r["check"])
+        ws.append([r["id"], CHECK_NAMES.get(r["check"], r["check"]), desc, "", "", "", ""])
     wb.save(out_xlsx)
     return out_xlsx
 

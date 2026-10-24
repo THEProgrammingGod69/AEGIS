@@ -259,3 +259,45 @@ def parse_ferrule(text, vocab=None):
     out = {"raw": raw, "from": end(fa), "to": end(fb), "partial": fa[1] is None or fb[1] is None}
     out["norm"] = "/".join(f"{e['device']}-{e['pin']}" if e["pin"] else e["device"] for e in (out["from"], out["to"]))
     return out
+
+
+# ------------------------------------------------------------------ token classification
+ANCHOR_METHODS = ("exact", "confusion")      # reads certain enough to place the photo on the drawing
+ANCHOR_MIN_LEN = 3                           # 'IE', 'X1' are too easily read off other print to place a photo
+
+
+def _centre(box):
+    return [(box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0]
+
+
+def classify_tokens(tokens, vocab):
+    """Split OCR tokens into device-label reads, wire-ferrule reads and unknown tag-shaped reads.
+
+    Returns ``{"reads", "ferrules", "unknown"}``; every entry keeps the token index ``i``, ``box``, ``center``, ``conf``,
+    ``passes`` and ``rot``. ``reads`` are vocabulary tags (``anchor`` True for exact / confusion decodes),
+    ``ferrules`` parsed ``A-n/B-m`` markers, ``unknown`` tag-shaped reads the drawing does not list (``tag_like``).
+    A token that decodes exactly onto a tag is a label even when it could also parse as a ferrule ('X-FSW1').
+    """
+    vocab = _as_vocab(vocab)
+    out = {"reads": [], "ferrules": [], "unknown": []}
+    for i, t in enumerate(tokens or ()):
+        box = [float(v) for v in t["box"]]
+        base = {"i": i, "raw": t.get("text", ""), "box": box, "center": _centre(box), "conf": float(t.get("conf", 0)),
+                "passes": int(t.get("passes", 1)), "rot": int(t.get("rot", 0))}
+        r = decode(t, vocab)
+        if r["tag"] and r["method"] == "exact":
+            out["reads"].append(dict(base, tag=r["tag"], method="exact", norm=r["norm"],
+                                     anchor=len(r["tag"]) >= ANCHOR_MIN_LEN))
+            continue
+        f = parse_ferrule(t, vocab) if ("/" in r["norm"] or "-" in r["norm"]) else None
+        if f and (("/" in r["norm"] and (f["from"]["known"] or f["to"]["known"]))
+                  or (not f["partial"] and f["from"]["known"] and f["to"]["known"])):
+            out["ferrules"].append(dict(base, **{k: f[k] for k in ("norm", "from", "to", "partial")}))
+            continue
+        if r["tag"] and not r["ambiguous"]:
+            out["reads"].append(dict(base, tag=r["tag"], method=r["method"], norm=r["norm"],
+                                     anchor=r["method"] in ANCHOR_METHODS and len(r["tag"]) >= ANCHOR_MIN_LEN))
+        elif r["tag_like"]:
+            out["unknown"].append(dict(base, tag_like=r["tag_like"], family=r["family"], norm=r["norm"],
+                                       candidates=r["candidates"]))
+    return out

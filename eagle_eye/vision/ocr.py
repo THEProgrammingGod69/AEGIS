@@ -20,7 +20,9 @@ with explicit detector input sizes, single-threaded sessions (one engine per wor
 recognition crops. Tesseract is the fallback only when RapidOCR / ONNX Runtime cannot be imported.
 
 Env: EAGLE_OCR_MODE (FULL | FAST), EAGLE_OCR_WORKERS (default: CPU count), EAGLE_OCR_TILE (900),
-EAGLE_OCR_UPSCALE (2.0), EAGLE_OCR_FULL_SIDE (2048), EAGLE_OCR_CACHE (1; 0 disables the cache).
+EAGLE_OCR_UPSCALE (2.0), EAGLE_OCR_FULL_SIDE (2048), EAGLE_OCR_CACHE (1; 0 disables the cache), EAGLE_OCR_GATE (0; 1
+skips tiles where the full pass sees no text - about 3x faster, but on photos whose labels are only a few pixels high at
+the full pass's scale, e.g. a whole cabinet or a rear view, it skipped almost every tile and lost every label).
 """
 import hashlib
 import json
@@ -55,6 +57,7 @@ TILE = max(256, _env("EAGLE_OCR_TILE", 900, int))
 UPSCALE = max(1.0, _env("EAGLE_OCR_UPSCALE", 2.0, float))
 FULL_SIDE = max(640, _env("EAGLE_OCR_FULL_SIDE", 2048, int))
 CACHE = _env("EAGLE_OCR_CACHE", "1", str) not in ("0", "false", "off")
+GATE = _env("EAGLE_OCR_GATE", "0", str) not in ("0", "false", "off")
 CACHE_DIR = config.DATA / "cache" / "ocr"
 
 OVERLAP = 0.2            # tile overlap
@@ -68,7 +71,8 @@ REC_CHUNK = 48           # crops per recognition job
 LIKELY_PROB = 0.15       # full-pass probability that marks "some text here" (tile block gating)
 ZOOM_MAX_SIDE = 2400     # read_region: cap on the scaled region's long side
 PARAMS = {"tile": TILE, "upscale": UPSCALE, "full_side": FULL_SIDE, "overlap": OVERLAP, "det_block": DET_BLOCK,
-          "det": DET, "text_score": TEXT_SCORE, "tall": TALL, "rec_height": REC_HEIGHT, "likely": LIKELY_PROB}
+          "det": DET, "text_score": TEXT_SCORE, "tall": TALL, "rec_height": REC_HEIGHT, "likely": LIKELY_PROB,
+          "gate": GATE}
 PASSES = {"FAST": ("full", "tile"), "FULL": ("full", "tile", "tile90", "tile270")}
 
 try:
@@ -514,7 +518,7 @@ def _run(photo, mode, workers, info):
     jobs = {"full": [pool.submit(_det_job, bgr, "full", 0, r, fscale, None, True) for r in full_regions]}
     full = [f.result() for f in jobs["full"]]
     pmap = _stitch([r.get("pmap") for r in full], full_regions, fscale, h, w)
-    gate = _likelihood_gate(pmap, fscale)
+    gate = _likelihood_gate(pmap, fscale) if GATE else None
     stats["t_full_det"] = round(time.perf_counter() - t0, 2)
 
     # 2. tile passes: TILE windows upscaled, split into detector blocks; the rotated pass serves 90 and 270 deg

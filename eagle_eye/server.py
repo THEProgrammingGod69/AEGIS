@@ -5,8 +5,10 @@
 
 Inspections run one at a time on a background worker; the UI follows them live through /api/jobs/{id}.
 
-/api/v2 is the stateless cloud API used by the hosted console: one request inspects and streams every result
-and artefact back (NDJSON), nothing is kept on the server, so any container instance can serve any request.
+/api/v2 is the stateless cloud API used by the hosted console: one request inspects and streams the result back
+(NDJSON), nothing is kept on the server, so any container instance can serve any request. Photos are metadata-first:
+the client sends fingerprints (SHA-256) before files, the engine reads a photo once and returns metadata (results,
+boxes, reads, small proof crops), never the photo itself.
 """
 import argparse
 import base64
@@ -21,9 +23,9 @@ import traceback
 import uuid
 import webbrowser
 from pathlib import Path
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -33,10 +35,23 @@ from pydantic import BaseModel, Field
 
 import config
 import service
-from inspector import ORDER, InspectionError, tesseract_info
+from inspector import InspectionError, tesseract_info
 
 UPLOADS = service.CACHE / "uploads"
-MAX_UPLOAD = 60 * 1024 * 1024
+
+
+def _mb(name, default):
+    try:
+        return max(1, int(float(os.environ.get(name) or default))) * 1024 * 1024
+    except ValueError:
+        return default * 1024 * 1024
+
+
+MAX_PHOTO = _mb("EAGLE_MAX_PHOTO_MB", 25)
+MAX_PDF = _mb("EAGLE_MAX_PDF_MB", 30)
+MAX_UPLOAD = max(MAX_PHOTO, MAX_PDF)
+RATE = max(0, int(os.environ.get("EAGLE_RATE_PER_MIN") or 6))
+REAL_DATA = Path(os.environ.get("EAGLE_EYE_REAL_DATA") or config.BASE.parent / "data" / "emerson")
 CLOUD = os.environ.get("EAGLE_EYE_CLOUD") == "1"          # hosted engine container: stateless API only
 CONSOLE_URL = os.environ.get("EAGLE_EYE_CONSOLE", "https://eagle-eye-enigma.vercel.app")
 STARTED = time.time()
@@ -119,9 +134,12 @@ try:                                    # never gzip the NDJSON stream: compress
                        exclude_content_types=DEFAULT_EXCLUDED_CONTENT_TYPES + ("application/x-ndjson",))
 except ImportError:                     # older Starlette: progress lines may arrive in bursts
     app.add_middleware(GZipMiddleware, minimum_size=2048)
-# The cloud API is public and cookie-free, so any origin may call it (the hosted console lives on another domain).
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"],
-                   max_age=86400)
+# The cloud API is cookie-free; EAGLE_CORS_ORIGINS limits which consoles may call it (default: any origin).
+_ORIGINS = [o.strip() for o in (os.environ.get("EAGLE_CORS_ORIGINS") or "*").split(",") if o.strip()]
+if _ORIGINS != ["*"]:
+    _ORIGINS += ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"]
+app.add_middleware(CORSMiddleware, allow_origins=_ORIGINS, allow_methods=["GET", "POST", "OPTIONS"],
+                   allow_headers=["*"], max_age=86400)
 
 
 def _err(status, msg):
@@ -135,8 +153,9 @@ async def _save_upload(up: Optional[UploadFile], kind, folder: Path):
     if ext not in KINDS[kind]:
         _err(400, f"{kind}: expected {' / '.join(KINDS[kind])}, got '{up.filename}'")
     data = await up.read()
-    if len(data) > MAX_UPLOAD:
-        _err(413, f"{up.filename} is larger than {MAX_UPLOAD // 2**20} MB")
+    limit = MAX_PDF if kind == "ga" else MAX_PHOTO if kind == "photo" else MAX_UPLOAD
+    if len(data) > limit:
+        _err(413, f"{up.filename} is larger than {limit // 2**20} MB")
     if not data:
         _err(400, f"{up.filename} is empty")
     folder.mkdir(parents=True, exist_ok=True)
@@ -162,12 +181,87 @@ def _photo_source(sample, photo_path, photo_name):
     return p, "01_emerson_example_4_faults.jpg", "sample", "Sample 01 · Emerson's example"
 
 
+def _enabled(checks):
+    return [c.strip().upper() for c in checks.split(",") if c.strip()] if checks else None
+
+
+_hits, _hits_lock = {}, threading.Lock()
+
+
+def _rate_limit(request):
+    """At most EAGLE_RATE_PER_MIN inspections per client IP per minute on the public cloud API (0 = no limit)."""
+    if not (CLOUD and RATE):
+        return
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0]
+    now_ = time.time()
+    with _hits_lock:
+        hits = [t for t in _hits.get(ip, []) if now_ - t < 60]
+        if len(hits) >= RATE:
+            _err(429, f"Too many inspections from this address: at most {RATE} per minute. Try again shortly.")
+        _hits[ip] = hits + [now_]
+        for k in [k for k, v in _hits.items() if not v or now_ - v[-1] > 120]:
+            _hits.pop(k, None)
+
+
+# ------------------------------------------------------------------ real-cabinet presets
+def _presets():
+    """Real drawing sets with photos found in EAGLE_EYE_REAL_DATA (never in git, mounted or copied locally)."""
+    if not REAL_DATA.is_dir():
+        return []
+    pdfs = sorted(REAL_DATA.glob("*.pdf"))
+    photos = sorted(p for p in REAL_DATA.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
+    if not pdfs or not photos:
+        return []
+    cab = None
+    try:
+        from kb import drawing_kb
+        kb = drawing_kb._load_cached(drawing_kb._cache_file(drawing_kb._sha256(pdfs[0])))
+        cab = kb and kb.get("cabinet")
+    except Exception:  # noqa: BLE001
+        pass
+    gt = {}
+    if (REAL_DATA / "ground_truth.json").exists():
+        try:
+            gt = json.loads((REAL_DATA / "ground_truth.json").read_text(encoding="utf-8")).get("photos", {})
+        except (OSError, ValueError):
+            gt = {}
+    title = f"{REAL_DATA.name.capitalize()} {cab}" if cab else f"Real cabinet ({pdfs[0].stem})"
+    return [dict(id=REAL_DATA.name.lower(), title=title, cabinet=cab, ga=pdfs[0],
+                 photos=[dict(file=p.name, content=gt.get(p.name, {}).get("content", "")) for p in photos])]
+
+
+def _preset(pid, photo_name=None):
+    pre = next((p for p in _presets() if p["id"] == pid), None)
+    if pre is None:
+        _err(404, f"Unknown preset '{pid}' (no real drawing set in {REAL_DATA.name}/)")
+    names = [p["file"] for p in pre["photos"]]
+    name = photo_name or names[0]
+    if name not in names:
+        _err(404, f"Unknown photo '{name}' in preset '{pid}'")
+    return dict(pre, photo=REAL_DATA / name)
+
+
 # ------------------------------------------------------------------ API
 @app.get("/api/health")
 def health():
     t = tesseract_info()
-    return dict(ok=t["ok"], version=config.VERSION, tesseract=t, workers=config.WORKERS, cpu=os.cpu_count(),
-                checks=list(service.CHECKS), runs=len(list(config.RUNS.glob("*/meta.json"))))
+    eh = _engine_health()          # ok when either engine can run: Tesseract (demo cabinets) or PP-OCRv4 (real ones)
+    return dict(ok=t["ok"] or eh["ocr"].get("ok", False), version=config.VERSION, tesseract=t, workers=config.WORKERS,
+                cpu=os.cpu_count(), checks=list(service.CHECKS), runs=len(list(config.RUNS.glob("*/meta.json"))), **eh)
+
+
+@app.get("/api/presets")
+@app.get("/api/v2/presets")
+def presets():
+    return [dict(id=p["id"], title=p["title"], cabinet=p["cabinet"], ga=p["ga"].name, photos=p["photos"])
+            for p in _presets()]
+
+
+@app.get("/api/presets/{pid}/photos/{name}")
+@app.get("/api/v2/presets/{pid}/photos/{name}")
+def preset_photo(pid: str, name: str, w: int = 480):
+    p = _preset(pid, name)["photo"]
+    return FileResponse(service.thumbnail(p, max(64, min(1600, w or 480))), headers={"Cache-Control": "max-age=3600"})
 
 
 @app.get("/api/checks")
@@ -212,7 +306,8 @@ def ga_preview():
 async def start_inspect(photo: Optional[UploadFile] = File(None), sample: Optional[str] = Form(None),
                         ga: Optional[UploadFile] = File(None), wires: Optional[UploadFile] = File(None),
                         checklist: Optional[UploadFile] = File(None), checks: Optional[str] = Form(None),
-                        parent: Optional[str] = Form(None)):
+                        parent: Optional[str] = Form(None), engine: Optional[str] = Form(None),
+                        preset: Optional[str] = Form(None), preset_photo: Optional[str] = Form(None)):
     folder = UPLOADS / uuid.uuid4().hex[:12]
     try:
         photo_path, photo_name = await _save_upload(photo, "photo", folder)
@@ -227,14 +322,20 @@ async def start_inspect(photo: Optional[UploadFile] = File(None), sample: Option
             service.get_meta(parent)
         except KeyError:
             _err(404, f"Unknown run '{parent}'")
-    src, name, source, label = _photo_source(sample, photo_path, photo_name)
-    enabled = [c.strip().upper() for c in checks.split(",") if c.strip()] if checks else list(ORDER)
+    if preset and not photo_path:
+        pre = _preset(preset, preset_photo)
+        src, name, source, label = pre["photo"], pre["photo"].name, "preset", f"{pre['title']} · {pre['photo'].name}"
+        if not ga_p:
+            ga_p, ga_n = pre["ga"], pre["ga"].name
+    else:
+        src, name, source, label = _photo_source(sample, photo_path, photo_name)
+    enabled = _enabled(checks)
     names = {k: n for k, n in (("ga", ga_n), ("wires", wl_n), ("checklist", cl_n)) if n}
 
     def work(emit, job):
         meta = service.run_inspection(src, ga_p, wl_p, cl_p, enabled=enabled, parent=parent or None,
                                       label=("Re-check · " + label) if parent else label, source=source,
-                                      photo_name=name, input_names=names, on_event=emit)
+                                      photo_name=name, input_names=names, on_event=emit, engine=engine or "auto")
         return [meta]
 
     return JOBS.submit("recheck" if parent else "inspect", work, cleanup=lambda: shutil.rmtree(folder, ignore_errors=True),
@@ -372,27 +473,48 @@ def _file_b64(path):
 
 
 def _pack(meta):
-    """Everything the browser needs to keep a run on its own: payload, report and every artefact."""
+    """What the browser keeps of a run: metadata (payload + report), the PDF and the filled checklist.
+
+    Photos are never sent back: the browser shows its own copy of the photo it inspected and draws the boxes from the
+    metadata. Only images the browser cannot have are included, all small: the preview of an engine-generated photo
+    (Fault Forge, server samples), the demo engine's drawing-aligned view, and drawing crops of a real drawing set.
+    """
     rid = meta["id"]
     d = service.run_dir(rid)
     F = service.FILES
-    files = dict(photo=_jpeg_b64(d / meta["photo"], 2000, 84), rectified=_jpeg_b64(d / F["rectified"], 1600),
-                 marked=_jpeg_b64(d / F["marked"], 1600), pdf=_file_b64(d / F["pdf"]),
-                 checklist=_file_b64(d / F["checklist"]))
+    files = dict(pdf=_file_b64(d / F["pdf"]), checklist=_file_b64(d / F["checklist"]))
     payload = service.run_payload(rid)
-    if not meta["inputs"]["ga"]["demo"]:                  # the demo drawing's overlay and raster ship with the console
-        files["overlay"] = _file_b64(d / F["overlay"])
-        png, scale = service.ga_raster(meta["inputs"]["ga"]["path"])
-        with Image.open(png) as im:
-            payload["ga_raster"] = dict(w=im.width, h=im.height, **scale)
-        files["ga"] = _jpeg_b64(png, 2400, 88)
+    report = service.get_report(rid)
+    if meta.get("source") in ("forge", "sample", "preset"):
+        files["preview"] = _file_b64(d / F["preview"])
+    if meta.get("engine_kind") != "real":
+        if (d / F["rectified"]).exists():
+            files["rectified"] = _file_b64(d / F["rectified"])
+        if not meta["inputs"]["ga"]["demo"]:              # the demo drawing's overlay and raster ship with the console
+            files["overlay"] = _file_b64(d / F["overlay"])
+            png, scale = service.ga_raster(service.input_path(rid, meta, "ga"))
+            with Image.open(png) as im:
+                payload["ga_raster"] = dict(w=im.width, h=im.height, **scale)
+            files["ga"] = _jpeg_b64(png, 2400, 88)
+    else:
+        # one drawing crop per checklist target (MISS-X and LBL-X share it); photo crops are made by the browser
+        seen = {}
+        for r in report["results"]:
+            if r["result"] == "NOT_IN_VIEW":
+                continue
+            key = f"{r['check'] in ('MISSING', 'LABEL') and r['target'] or r['id']}"
+            if key not in seen:
+                p = service.item_crop(rid, r["id"], "expected", rep=report, meta=meta)
+                seen[key] = _jpeg_b64(p, service.CROP_SIDE, 80)
+            files[f"exp:{r['id']}"] = seen[key]
     for k in ("ga", "wires", "checklist"):                 # server paths mean nothing to the browser
         payload["meta"]["inputs"][k].pop("path", None)
-    return dict(payload=payload, report=service.get_report(rid), files=files)
+    return dict(payload=payload, report=report, files=files, storage="metadata")
 
 
-def _stream(work, cleanup=None):
-    """Run ``work(emit) -> [meta, ...]`` on a worker thread; stream progress, then each packed run, as NDJSON."""
+def _stream(work, cleanup=None, session_kb=None):
+    """Run ``work(emit) -> [meta, ...]`` on a worker thread; stream progress, then each packed run, as NDJSON.
+    With several runs and ``session_kb`` (real drawing set), a ``session`` line merges them (coverage across photos)."""
     q = queue.Queue()
 
     def runner():
@@ -411,8 +533,16 @@ def _stream(work, cleanup=None):
                 def emit(ev):
                     q.put(dict(type="event", event=ev))
 
+                reports = []
                 for meta in work(emit, made):
-                    q.put(dict(type="result", **_pack(meta)))
+                    packed = _pack(meta)
+                    reports.append(packed["report"])
+                    q.put(dict(type="result", **packed))
+                if session_kb and len(reports) > 1:
+                    import pipeline
+                    q.put(dict(type="session", session=pipeline.session(reports, session_kb), runs=list(made)))
+        except service.NeedPhoto as e:
+            q.put(dict(type="need", need=[str(e)]))
         except InspectionError as e:
             q.put(dict(type="error", detail=str(e)))
         except Exception as e:  # noqa: BLE001
@@ -454,39 +584,131 @@ def _parent_data(raw):
     return meta, rep
 
 
+def _engine_health():
+    out = {}
+    try:
+        from vision import ocr
+        out["ocr"] = ocr.engine_info()
+    except Exception as e:  # noqa: BLE001
+        out["ocr"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    try:
+        from agent import status
+        out["agent"] = status()
+    except Exception as e:  # noqa: BLE001
+        out["agent"] = {"enabled": False, "reason": f"{type(e).__name__}: {e}"}
+    out["presets"] = [dict(id=p["id"], title=p["title"], photos=len(p["photos"])) for p in _presets()]
+    out["storage"] = "metadata"                  # photos are read once and never stored
+    return out
+
+
 @app.get("/api/v2/health")
 def health_v2():
     t = tesseract_info()
-    return dict(ok=t["ok"], version=config.VERSION, tesseract=t, workers=config.WORKERS, cpu=os.cpu_count(),
-                checks=list(service.CHECKS), mode="cloud" if CLOUD else "local", stateless=True,
-                uptime=round(time.time() - STARTED, 1), busy=_waiting[0])
+    return dict(ok=t["ok"] or _engine_health()["ocr"].get("ok", False), version=config.VERSION, tesseract=t,
+                workers=config.WORKERS, cpu=os.cpu_count(), checks=list(service.CHECKS),
+                mode="cloud" if CLOUD else "local", stateless=True, uptime=round(time.time() - STARTED, 1),
+                busy=_waiting[0], **_engine_health())
+
+
+class _Need(Exception):
+    def __init__(self, need):
+        super().__init__(", ".join(need))
+        self.need = need
+
+
+def _fingerprinted(kind, up_path, sha):
+    """An input given as a file, or as a SHA-256 fingerprint the engine already holds; None when neither."""
+    if up_path is not None:
+        if sha and service.sha256_file(up_path) != sha:
+            _err(400, f"{kind}: the file does not match its fingerprint")
+        return up_path
+    if sha:
+        p = service.input_by_sha(sha, KINDS[kind][0])
+        if p is None:
+            raise _Need([kind])
+        return p
+    return None
 
 
 @app.post("/api/v2/inspect")
-async def inspect_v2(photo: Optional[UploadFile] = File(None), sample: Optional[str] = Form(None),
+async def inspect_v2(request: Request, photo: Optional[UploadFile] = File(None), sample: Optional[str] = Form(None),
                      ga: Optional[UploadFile] = File(None), wires: Optional[UploadFile] = File(None),
                      checklist: Optional[UploadFile] = File(None), checks: Optional[str] = Form(None),
-                     parent: Optional[UploadFile] = File(None), label: Optional[str] = Form(None)):
-    """Inspect one photo and stream progress + the complete run back. ``parent`` = JSON {meta, report} of the run
-    being re-checked (the browser keeps the history). Without GA / wire list / checklist the demo set is used."""
+                     parent: Optional[UploadFile] = File(None), label: Optional[str] = Form(None),
+                     photo_sha: Optional[str] = Form(None), photo_name: Optional[str] = Form(None),
+                     ga_sha: Optional[str] = Form(None), wires_sha: Optional[str] = Form(None),
+                     checklist_sha: Optional[str] = Form(None), engine: Optional[str] = Form(None),
+                     preset: Optional[str] = Form(None), preset_photo: Optional[str] = Form(None),
+                     photos: Optional[List[UploadFile]] = File(None)):
+    """Inspect and stream progress + the complete run back (metadata, never the photo).
+
+    Fingerprint-first: send ``photo_sha`` (and ``ga_sha`` / ``wires_sha`` / ``checklist_sha``) without the files. If
+    the engine already holds the result / the inputs, nothing is uploaded; otherwise it answers 409 with
+    ``{"need": [...]}`` and the client sends just those files. ``photos`` (several files) inspects one cabinet from
+    several sides and ends with a ``session`` line (coverage across photos). ``parent`` = JSON {meta, report} of the
+    run being re-checked (the browser keeps the history). Without GA / wire list / checklist the demo set is used.
+    """
+    _rate_limit(request)
     folder = UPLOADS / uuid.uuid4().hex[:12]
     try:
-        photo_path, photo_name = await _save_upload(photo, "photo", folder)
+        photo_path, up_name = await _save_upload(photo, "photo", folder)
         ga_p, ga_n = await _save_upload(ga, "ga", folder)
         wl_p, wl_n = await _save_upload(wires, "wires", folder)
         cl_p, cl_n = await _save_upload(checklist, "checklist", folder)
+        multi = []
+        for i, up in enumerate(photos or []):
+            p, n = await _save_upload(up, "photo", folder / f"p{i}")
+            if p:
+                multi.append((p, n))
         parent_data = _parent_data(await parent.read()) if parent is not None and parent.filename else None
+        pre = _preset(preset, preset_photo) if preset else None
+        if pre:
+            ga_p, ga_n = pre["ga"], pre["ga"].name
+        need = []
+        for kind, up, sha in (("ga", ga_p, ga_sha), ("wires", wl_p, wires_sha), ("checklist", cl_p, checklist_sha)):
+            try:
+                _fingerprinted(kind, up, sha)
+            except _Need as e:
+                need += e.need
+        ga_p = _fingerprinted("ga", ga_p, ga_sha) if "ga" not in need else None
+        wl_p = _fingerprinted("wires", wl_p, wires_sha) if "wires" not in need else None
+        cl_p = _fingerprinted("checklist", cl_p, checklist_sha) if "checklist" not in need else None
+        if (not photo_path and photo_sha and not sample and not pre and not multi and not need and not
+                service.has_result(photo_sha, ga_p, wl_p, cl_p, _enabled(checks), engine or "auto",
+                                   (parent_data[0].get("engine_kind") if parent_data else None))):
+            need.append("photo")
+        if need:
+            shutil.rmtree(folder, ignore_errors=True)
+            return JSONResponse(status_code=409, content=dict(detail="send these files", need=need))
     except HTTPException:
         shutil.rmtree(folder, ignore_errors=True)
         raise
-    src, name, source, default_label = _photo_source(sample, photo_path, photo_name)
+    enabled = _enabled(checks)
+    names = {k: n for k, n in (("ga", ga_n or (ga_p.name if ga_p and ga_sha else None)), ("wires", wl_n),
+                               ("checklist", cl_n)) if n}
+    if multi:
+        def work(emit, made):
+            for i, (p, n) in enumerate(multi):
+                emit(dict(stage="cabinet", status="start", index=i + 1, count=len(multi), t=0))
+                meta = service.run_inspection(p, ga_p, wl_p, cl_p, enabled=enabled, label=f"Upload · {n}",
+                                              source="upload", photo_name=n, input_names=names, on_event=emit,
+                                              engine=engine or "auto")
+                made.append(meta["id"])
+                yield meta
+        return _stream(work, cleanup=lambda: shutil.rmtree(folder, ignore_errors=True),
+                       session_kb=str(ga_p) if ga_p else None)
+    if pre:
+        src, name, source, default_label = pre["photo"], pre["photo"].name, "preset", f"{pre['title']} · {pre['photo'].name}"
+    elif photo_path is None and photo_sha and not sample:
+        src, name, source, default_label = None, photo_name or "photo", "upload", f"Upload · {photo_name or 'photo'}"
+    else:
+        src, name, source, default_label = _photo_source(sample, photo_path, up_name)
     label = (label or "").strip()[:120] or (("Re-check · " + default_label) if parent_data else default_label)
-    enabled = [c.strip().upper() for c in checks.split(",") if c.strip()] if checks else list(ORDER)
-    names = {k: n for k, n in (("ga", ga_n), ("wires", wl_n), ("checklist", cl_n)) if n}
 
     def work(emit, made):
         meta = service.run_inspection(src, ga_p, wl_p, cl_p, enabled=enabled, label=label, source=source,
-                                      photo_name=name, input_names=names, on_event=emit, parent_data=parent_data)
+                                      photo_name=photo_name or name, input_names=names, on_event=emit,
+                                      parent_data=parent_data, engine=engine or "auto", photo_sha=photo_sha)
         made.append(meta["id"])
         yield meta
 
@@ -500,8 +722,10 @@ class ForgeOne(BaseModel):
 
 
 @app.post("/api/v2/forge")
-def forge_v2(req: ForgeOne):
+def forge_v2(req: ForgeOne, request: Request):
     """Fault Forge: build an unseen cabinet with hidden faults, inspect it, score it against the answer key."""
+    _rate_limit(request)
+
     def work(emit, made):
         meta = service.run_forge(k=req.faults, strength=req.strength, seed=req.seed, on_event=emit)
         made.append(meta["id"])
@@ -576,6 +800,8 @@ else:
 
 @app.exception_handler(InspectionError)
 def _inspection_error(_, exc):
+    if isinstance(exc, service.NeedPhoto):
+        return JSONResponse(status_code=409, content=dict(detail="send the photo", need=["photo"]))
     return JSONResponse(status_code=422, content=dict(detail=str(exc)))
 
 

@@ -5,6 +5,7 @@ export const STATUS_COLOR: Record<Status | "HOLD", string> = {
   FAIL: "var(--fail)",
   REVIEW: "var(--review)",
   SKIP: "var(--skip)",
+  NOT_IN_VIEW: "var(--niv)",
   CLOSED: "var(--closed)",
   OPEN: "var(--open)",
   REGRESSION: "var(--regression)",
@@ -17,6 +18,7 @@ export const STATUS_HEX: Record<Status, string> = {
   FAIL: "#fb7185",
   REVIEW: "#fbbf24",
   SKIP: "#94a3b8",
+  NOT_IN_VIEW: "#64748b",
   CLOSED: "#34d399",
   OPEN: "#fb7185",
   REGRESSION: "#c084fc",
@@ -25,6 +27,8 @@ export const STATUS_HEX: Record<Status, string> = {
 
 export const CHECK_TITLE: Record<string, string> = {
   GA: "Part present",
+  MISSING: "Part present",
+  UNKNOWN_LABEL: "Unknown label",
   ORDER: "Rail order",
   LABEL: "Device label",
   FERRULE: "Ferrule text",
@@ -81,9 +85,24 @@ export function plural(n: number, w: string, p?: string) {
   return `${n} ${n === 1 ? w : p ?? w + "s"}`;
 }
 
+/** Short label for a status chip (NOT_IN_VIEW reads better with spaces). */
+export const statusText = (s: string) => (s === "NOT_IN_VIEW" ? "NOT IN VIEW" : s);
+
+/** Explanation of a real-cabinet engine item: its result, the evidence and the second opinion that settled it. */
+function explainReal(it: Item): string {
+  const ev = it.evidence.filter((e) => !e.startsWith("Claude:")).join("; ");
+  const agent = it.agent ? ` Claude (${it.agent.model ?? "agent"}) said ${it.agent.decision.replace("CONFIRMED_", "").toLowerCase()} with ${Math.round(it.agent.confidence * 100)}% confidence: ${it.agent.reason}` : "";
+  if (it.result === "NOT_IN_VIEW") return `Not judged: this photo does not show ${it.target} clearly enough (${ev}). It is neither passed nor failed.`;
+  if (it.result === "SKIP") return `Not judged on its own: ${it.root_cause ? `the root cause is reported by ${it.root_cause}` : ev}.`;
+  if (it.result === "FAIL") return `Two independent signals agree. OCR and geometry: ${ev}.${agent}`;
+  if (it.result === "REVIEW") return `One signal is not enough for FAIL: ${ev}.${agent || " The Claude verifier is off, so a person decides."}${it.hint ? ` Re-photo: ${it.hint}.` : ""}`;
+  return `Verified by ${(it.verified_by ?? []).join(" + ") || "OCR"} against the drawing: ${ev}.${agent}`;
+}
+
 /** Human explanation of why the engine decided what it decided for an item. */
 export function explain(it: Item): string {
   const ev = it.evidence.join("; ");
+  if (it.verified_by !== undefined || it.check === "MISSING" || it.check === "UNKNOWN_LABEL") return explainReal(it);
   switch (it.check) {
     case "GA":
       if (it.result === "FAIL")

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, FileImage, Layers, ScanLine } from "lucide-react";
+import { ArrowRight, Bot, Camera, FileImage, Layers, ScanLine } from "lucide-react";
 import { useState } from "react";
 import { STATIC, url } from "../lib/api";
 import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf } from "../lib/format";
@@ -48,13 +48,22 @@ function Swatch({ code, hex, label }: { code: string; hex?: string; label: strin
 export interface Geo {
   photoSize: [number, number];
   sizeMm: [number, number];
+  /** real-cabinet run: photo-pixel boxes, drawing crops per item, no drawing-aligned view */
+  real?: boolean;
 }
+
+const isReal = (it: Item, geo?: Geo) => geo?.real ?? it.verified_by !== undefined;
 
 /** Proof crop built in the browser (hosted showcase): same windows as report.py's expected/found/aligned crops. */
 function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expected" | "found" | "aligned"; geo: Geo }) {
   const [x, y, w, h] = it.box;
   const m = 15;
   const quad = (f: (v: number, a: "x" | "y") => number): Pt[] => [[f(x, "x"), f(y, "y")], [f(x + w, "x"), f(y, "y")], [f(x + w, "x"), f(y + h, "y")], [f(x, "x"), f(y + h, "y")]];
+  if (kind === "expected" && isReal(it, geo)) {
+    const src = url.file(run, `exp:${it.id}`);
+    return src ? <img src={src} alt={`Drawing crop for ${it.id}`} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
+      : <div className="empty tiny">No drawing crop kept for this item</div>;
+  }
   if (kind === "expected") {
     const g = gaFor(run);
     const T = (v: number, a: "x" | "y") => (a === "x" ? g.ox : g.oy) + v * g.k;
@@ -78,6 +87,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
   const [found, setFound] = useState<"found" | "aligned">("found");
   const s = statusOf(it);
   const isPass = it.result === "PASS" && !it.recheck;
+  const real = isReal(it, geo);
   return (
     <AnimatePresence mode="wait">
       <motion.div key={it.id} className="proof" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.28 }}>
@@ -105,10 +115,10 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
           <figure>
             <figcaption className="row between">
               <span className="row" style={{ ["--gap" as string]: "6px" }}><ScanLine size={13} /> Found · photo</span>
-              <Seg value={found} onChange={setFound} options={[{ value: "found", label: "Photo", title: "Zoomed crop of the original photo" }, { value: "aligned", label: <><Layers size={12} />Aligned</>, title: "Perspective-corrected, pixel-aligned with the drawing" }]} />
+              {!real && <Seg value={found} onChange={setFound} options={[{ value: "found", label: "Photo", title: "Zoomed crop of the original photo" }, { value: "aligned", label: <><Layers size={12} />Aligned</>, title: "Perspective-corrected, pixel-aligned with the drawing" }]} />}
             </figcaption>
             <div className="proof-img" style={{ ["--c" as string]: STATUS_COLOR[s] }}>
-              {STATIC && geo ? <StaticCrop key={found} run={run} it={it} kind={found} geo={geo} /> : <img key={found} src={url.crop(run, it.id, found)} alt={`Photo crop for ${it.id}`} />}
+              {STATIC && geo ? <StaticCrop key={found} run={run} it={it} kind={real ? "found" : found} geo={geo} /> : <img key={found} src={url.crop(run, it.id, real ? "found" : found)} alt={`Photo crop for ${it.id}`} />}
             </div>
           </figure>
         </div>
@@ -150,6 +160,18 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
           </div>
         )}
 
+        {real && it.agent && (
+          <div className="callout info" style={{ margin: 0 }}>
+            <Bot />
+            <span className="small">
+              <b>Claude {it.agent.model ? `(${it.agent.model})` : ""}: {it.agent.decision.replace("_", " ").toLowerCase()}</b>
+              {" "}· {Math.round(it.agent.confidence * 100)}%{it.agent.cached ? " · cached" : ""} — {it.agent.reason}
+            </span>
+          </div>
+        )}
+        {real && it.result === "REVIEW" && it.hint && (
+          <div className="callout warn" style={{ margin: 0 }}><Camera /><span className="small">Re-photo: {it.hint}</span></div>
+        )}
         <p className="proof-why">{explain(it)}</p>
         {it.prev_result && (
           <div className="proof-before">

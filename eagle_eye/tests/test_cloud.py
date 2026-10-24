@@ -1,4 +1,5 @@
-"""Stateless cloud API (/api/v2): one streamed response carries the whole run, nothing stays on the server."""
+"""Stateless cloud API (/api/v2): one streamed response carries the run as metadata, nothing stays on the server and
+no photo is ever sent back (the browser keeps its own)."""
 import base64
 import json
 
@@ -43,8 +44,9 @@ def test_v2_inspect_then_stateless_recheck(runs_dir):
     files = r1["files"]
     assert base64.b64decode(files["pdf"])[:4] == b"%PDF"
     assert base64.b64decode(files["checklist"])[:2] == b"PK"
-    assert base64.b64decode(files["marked"])[:2] == b"\xff\xd8"
-    assert "overlay" not in files                                  # demo drawing: the console ships its overlay
+    assert not {"photo", "marked", "preview"} & set(files)         # metadata only: the browser has its own photo
+    assert r1["storage"] == "metadata" and len(meta["photo_meta"]["sha256"]) == 64
+    assert "overlay" not in files                                 # demo drawing: the console ships its overlay
     assert not list(runs_dir.iterdir())                            # nothing kept server-side
 
     parent = json.dumps(dict(meta=meta, report=r1["report"]))
@@ -61,7 +63,7 @@ def test_v2_forge_scores_against_answer_key(runs_dir):
     r = result(stream(client.post("/api/v2/forge", json={"faults": 2, "seed": 777})))
     score = r["payload"]["meta"]["forge"]["score"]
     assert score["n_planted"] == 2 and not score["false_alarms"]
-    assert base64.b64decode(r["files"]["photo"])[:2] == b"\xff\xd8"
+    assert base64.b64decode(r["files"]["preview"])[:2] == b"\xff\xd8"   # engine-made photo: only a small preview
 
 
 def test_v2_errors(runs_dir):

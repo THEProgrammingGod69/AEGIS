@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, FileJson, FileSpreadsheet, FileText, GitCommitHorizontal,
-  Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed, Timer, UserCheck, XCircle,
+  ArrowLeft, Bot, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, Eye, FileJson, FileSpreadsheet, FileText, Fingerprint,
+  GitCommitHorizontal, Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed,
+  Timer, UserCheck, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CompareSlider } from "../components/CompareSlider";
@@ -26,6 +27,9 @@ function VerdictBanner({ p }: { p: RunPayload }) {
   const Icon = v.label === "PASS" ? ShieldCheck : v.label === "REVIEW" ? ShieldQuestion : ShieldAlert;
   const c = v.label === "PASS" ? "var(--pass)" : v.label === "REVIEW" ? "var(--review)" : "var(--fail)";
   const rc = p.meta.recheck;
+  const real = p.engine_kind === "real";
+  const cov = p.coverage;
+  const sha = p.meta.photo_meta?.sha256 ?? p.photo_meta?.sha256;
   return (
     <motion.div className="verdict card" style={{ ["--c" as string]: c }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div className="verdict-main">
@@ -33,15 +37,26 @@ function VerdictBanner({ p }: { p: RunPayload }) {
           <Icon />
         </motion.div>
         <div className="grow">
-          <div className="verdict-label mono">{v.label === "HOLD" ? "HOLD · DO NOT SHIP" : v.label === "PASS" ? "READY TO SHIP" : "NEEDS A RE-PHOTO"}</div>
+          <div className="verdict-label mono">{v.label === "HOLD" ? "HOLD · DO NOT SHIP" : v.label === "PASS"
+            ? (real && cov && cov.verified < cov.total ? "EVERYTHING IN VIEW VERIFIED · PHOTOGRAPH THE REST" : "READY TO SHIP") : "NEEDS A RE-PHOTO"}</div>
           <h2 className="verdict-head">{v.headline.split(" · ")[1] ?? v.headline}</h2>
           <p className="verdict-detail">{v.detail}</p>
           <div className="verdict-meta">
             {p.meta.origin === "cloud" && <span style={{ color: "var(--accent)" }}><Cloud size={13} /> Live cloud engine</span>}
             {p.meta.origin === "recorded" && <span><Cloud size={13} /> Recorded engine run</span>}
-            <span><Timer size={13} /> {p.timing.total.toFixed(1)} s on CPU</span>
-            <span><Crosshair size={13} /> {p.registration.anchors}/{p.registration.targets} anchors · {p.registration.inliers} inliers</span>
-            <span><ListChecks size={13} /> {p.meta.items} items from the drawing</span>
+            <span><Timer size={13} /> {p.timing.total.toFixed(1)} s on CPU{p.meta.cached ? " · answered from stored metadata" : ""}</span>
+            {real ? (
+              <>
+                <span><Eye size={13} /> {cov ? `${cov.verified}/${cov.total} labelled drawing items verified` : "coverage n/a"} · views {(p.views ?? []).join(", ") || "none"}</span>
+                <span style={{ color: p.agent?.enabled ? "var(--accent)" : undefined }}><Bot size={13} /> {p.agent?.enabled ? `Claude verifier · ${p.agent.calls} calls` : "Claude verifier off"}</span>
+              </>
+            ) : (
+              <>
+                <span><Crosshair size={13} /> {p.registration.anchors}/{p.registration.targets} anchors · {p.registration.inliers} inliers</span>
+                <span><ListChecks size={13} /> {p.meta.items} items from the drawing</span>
+              </>
+            )}
+            {sha && <span title={`SHA-256 ${sha}. The photo itself is not stored: only this fingerprint, its size and the results.`}><Fingerprint size={13} /> photo kept as metadata · {sha.slice(0, 10)}…</span>}
             {(() => {
               const r = reviewSummary(p.meta, p.results);
               return r.decided > 0 ? <span style={{ color: "var(--accent-3)" }}><UserCheck size={13} /> Inspector: {r.confirmed} confirmed · {r.overridden} overridden{r.pending ? ` · ${r.pending} pending` : ""}</span> : null;
@@ -62,7 +77,8 @@ function VerdictBanner({ p }: { p: RunPayload }) {
             <Kpi value={p.meta.counts.PASS} label="Pass" color="var(--pass)" note="verified" />
             <Kpi value={p.meta.counts.FAIL} label="Fail" color="var(--fail)" note="fix before shipping" />
             <Kpi value={p.meta.counts.REVIEW} label="Review" color="var(--review)" note="re-photo zone" />
-            <Kpi value={p.meta.counts.SKIP} label="Skip" color="var(--skip)" note="root cause elsewhere" />
+            {real ? <Kpi value={p.meta.counts.NOT_IN_VIEW ?? 0} label="Not in view" color="var(--niv)" note="not judged here" />
+              : <Kpi value={p.meta.counts.SKIP} label="Skip" color="var(--skip)" note="root cause elsewhere" />}
           </>
         )}
       </div>
@@ -125,7 +141,7 @@ function Checklist({ items, selected, onSelect }: { items: Item[]; selected: str
   const [f, setF] = useState<"ALL" | Result>("ALL");
   const [q, setQ] = useState("");
   const counts = useMemo(() => {
-    const c: Record<string, number> = { ALL: items.length, PASS: 0, FAIL: 0, REVIEW: 0, SKIP: 0 };
+    const c: Record<string, number> = { ALL: items.length, PASS: 0, FAIL: 0, REVIEW: 0, SKIP: 0, NOT_IN_VIEW: 0 };
     items.forEach((i) => c[i.result]++);
     return c;
   }, [items]);
@@ -133,9 +149,9 @@ function Checklist({ items, selected, onSelect }: { items: Item[]; selected: str
   return (
     <div className="checklist">
       <div className="row wrap" style={{ ["--gap" as string]: "6px", marginBottom: 10 }}>
-        {(["ALL", "FAIL", "REVIEW", "SKIP", "PASS"] as const).map((k) => (
+        {(["ALL", "FAIL", "REVIEW", "SKIP", "PASS", "NOT_IN_VIEW"] as const).filter((k) => k !== "NOT_IN_VIEW" || counts[k] > 0).map((k) => (
           <button key={k} className="chip" aria-pressed={f === k} style={{ ["--c" as string]: k === "ALL" ? "var(--accent)" : STATUS_COLOR[k] }} onClick={() => setF(k)}>
-            {k === "ALL" ? "All" : k} <span className="count">{counts[k]}</span>
+            {k === "ALL" ? "All" : k === "NOT_IN_VIEW" ? "Not in view" : k} <span className="count">{counts[k]}</span>
           </button>
         ))}
       </div>
@@ -180,11 +196,19 @@ function Registration({ p }: { p: RunPayload }) {
         <div><b>{r.inliers}</b><span>RANSAC inliers</span></div>
         <div><b style={{ color: r.outliers.length ? "var(--fail)" : undefined }}>{r.outliers.length}</b><span>off-pattern</span></div>
       </div>
-      <p className="small muted">
-        The backplate outline gives a coarse fit; every label and ferrule EAGLE EYE can read with certainty then becomes an anchor, and a RANSAC
-        homography refines the fit ({r.refined ? "refinement accepted" : "coarse fit kept"}).
-        {r.outliers.length > 0 && <> Anchors that don't fit the drawing point to misplaced parts: <b className="mono">{r.outliers.join(", ")}</b>.</>}
-      </p>
+      {p.engine_kind === "real" ? (
+        <p className="small muted">
+          Every device label read with certainty is an anchor; per GA view a 2-point RANSAC finds the placement of the drawing on the photo
+          ({r.refined ? "refined to a homography" : "similarity transform"}). Only drawing items inside the covered area are judged; the rest are NOT IN VIEW.
+          {r.outliers.length > 0 && <> Labels that don't fit the drawing point to misplaced parts: <b className="mono">{r.outliers.join(", ")}</b>.</>}
+        </p>
+      ) : (
+        <p className="small muted">
+          The backplate outline gives a coarse fit; every label and ferrule EAGLE EYE can read with certainty then becomes an anchor, and a RANSAC
+          homography refines the fit ({r.refined ? "refinement accepted" : "coarse fit kept"}).
+          {r.outliers.length > 0 && <> Anchors that don't fit the drawing point to misplaced parts: <b className="mono">{r.outliers.join(", ")}</b>.</>}
+        </p>
+      )}
       <div className="table-wrap" style={{ maxHeight: 300 }}>
         <table className="table">
           <thead><tr><th>Anchor</th><th>Kind</th><th>Residual</th><th>Fit</th></tr></thead>
@@ -193,7 +217,7 @@ function Registration({ p }: { p: RunPayload }) {
               <tr key={a.tag + a.found_px.join()} style={{ cursor: "default" }}>
                 <td className="mono small">{a.tag}</td>
                 <td className="tiny faint">{a.kind}</td>
-                <td className="mono small">{a.residual_mm.toFixed(1)} mm</td>
+                <td className="mono small">{a.residual_mm.toFixed(1)} {p.engine_kind === "real" ? "pt" : "mm"}</td>
                 <td>{a.inlier === false ? <StatusBadge s="FAIL" label="OUTLIER" /> : <StatusBadge s="PASS" label="INLIER" />}</td>
               </tr>
             ))}
@@ -208,8 +232,10 @@ function TimingCard({ p }: { p: RunPayload }) {
   const t = p.timing;
   const parts = [
     { k: "Parse drawing", v: t.parse, c: "#818cf8" },
+    ...(t.ocr != null ? [{ k: "Read labels (OCR)", v: t.ocr, c: "#f472b6" }] : []),
     { k: "Register photo", v: t.register, c: "#38bdf8" },
     ...Object.entries(t.checks).map(([k, v]) => ({ k: `${k} check`, v, c: "#22d3ee" })),
+    ...(t.agent ? [{ k: "Claude verifier", v: t.agent, c: "#fbbf24" }] : []),
     { k: "Report + PDF", v: p.meta.timing.report ?? 0, c: "#a78bfa" },
   ];
   const total = parts.reduce((a, b) => a + b.v, 0) || 1;
@@ -265,7 +291,8 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
   const [photo, setPhoto] = useState<File | null>(null);
   const samples = useAsync(api.samples);
   const live = useCanLive();
-  const suggested = p.meta.photo_name.startsWith("01_") && !p.meta.parent ? "05" : null;
+  const real = p.engine_kind === "real";
+  const suggested = !real && p.meta.photo_name.startsWith("01_") && !p.meta.parent ? "05" : null;
   const recorded = STATIC && !live ? recheckOptions(p.meta.id) : null;
   return (
     <div className="card pad recheck">
@@ -285,6 +312,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
           <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop the photo taken after the fix" hint="Same cabinet, any angle" icon={<Camera />} />
         )}
         <div className="stack" style={{ ["--gap" as string]: "8px" }}>
+          {real ? <div className="tiny faint">Re-photograph the same side of the cabinet after the fix; the drawing set of this run is reused.</div> : <>
           <div className="tiny faint">…or re-check with a sample photo</div>
           <div className="row wrap" style={{ ["--gap" as string]: "6px" }}>
             {samples.data?.filter((s) => !recorded || recorded.includes(s.id)).map((s) => (
@@ -294,6 +322,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
             ))}
           </div>
           {suggested && <div className="tiny muted">Suggested: <b>05 · After the fix</b>, a re-photo of sample 01 with one fault left.</div>}
+          </>}
           {live && (
             <button className="btn btn-primary btn-lg" disabled={!photo} onClick={() => onStart(photo, null)} style={{ marginTop: "auto" }}>
               <RefreshCcw /> Re-check with uploaded photo
@@ -422,7 +451,7 @@ export function Run({ id }: { id: string }) {
           <div className="viewer-toolbar">
             <Seg value={mode} onChange={setMode} options={[
               { value: "photo", label: <><ImageIcon /> Photo</>, title: "The photo as taken, with every issue boxed" },
-              { value: "rect", label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing (4 px/mm)" },
+              ...(p.rectified === false ? [] : [{ value: "rect" as const, label: <><SquareDashed /> Aligned to drawing</>, title: "Photo warped onto the GA drawing" }]),
             ]} />
             <div className="row" style={{ ["--gap" as string]: "6px" }}>
               <button className="chip" aria-pressed={layers.issues} onClick={() => setLayers({ ...layers, issues: !layers.issues })}><ScanLine /> Issues</button>
@@ -462,7 +491,7 @@ export function Run({ id }: { id: string }) {
 
         <div className="side">
           <div className="card pad">
-            {sel ? <ProofCard run={id} it={sel} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm }} /> : <div className="empty">Select an item</div>}
+            {sel ? <ProofCard run={id} it={sel} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm, real: p.engine_kind === "real" }} /> : <div className="empty">Select an item</div>}
             {sel && <DecisionBar key={sel.id} it={sel} review={p.meta.reviews?.[sel.id]} onDecide={decide} />}
           </div>
           <div className="card side-tabs">

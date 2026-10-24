@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Aperture, Camera, Check, CloudOff, Download, FileSpreadsheet, FileText, Gauge, ImageIcon, ListChecks, Play, Puzzle, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { Aperture, Camera, Check, CloudOff, Download, Factory, FileSpreadsheet, FileText, Fingerprint, Gauge, ImageIcon, ListChecks, Play, Puzzle, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CameraCapture } from "../components/Camera";
 import { DropZone } from "../components/DropZone";
@@ -12,7 +12,40 @@ import { CHECK_TITLE } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { analyzePhoto, type PhotoQuality } from "../lib/quality";
 import { go } from "../lib/router";
-import type { JobView, Sample } from "../lib/types";
+import type { JobView, Preset, Sample } from "../lib/types";
+
+/** Real drawing set + photos the engine holds (data/emerson locally, a mounted volume in the cloud). */
+function PresetCard({ presets, onRun, disabled }: { presets: Preset[]; onRun: (p: Preset, file: string) => void; disabled: boolean }) {
+  if (!presets.length) return null;
+  return (
+    <>
+      {presets.map((p) => (
+        <motion.div key={p.id} className="card pad" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="card-head">
+            <div>
+              <div className="card-title"><Factory /> {p.title} · real cabinet</div>
+              <div className="card-sub">
+                Emerson's drawing set (<span className="mono">{p.ga}</span>) and photos of the built cabinet. The real-cabinet engine reads
+                the drawing, reads every label (PP-OCRv4), places the photo on the drawing and verifies each candidate fault with Claude.
+              </div>
+            </div>
+          </div>
+          <div className="samples">
+            {p.photos.map((ph) => (
+              <button key={ph.file} className="sample" disabled={disabled} onClick={() => onRun(p, ph.file)} title={ph.content}>
+                <div className="sample-img"><img src={url.presetPhoto(p.id, ph.file, 360)} alt={ph.file} loading="lazy" /></div>
+                <div className="sample-body">
+                  <div className="sample-title mono" style={{ fontSize: 12 }}>{ph.file.replace(/^IMG_\d+_/, "").replace(/\.[a-z]+$/i, "")}</div>
+                  <div className="sample-sub">{ph.content || "Inspect this photo"}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      ))}
+    </>
+  );
+}
 
 export function SampleCard({ s, active, onClick }: { s: Sample; active: boolean; onClick: () => void }) {
   const c = s.counts;
@@ -89,6 +122,8 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
   const samples = useAsync(api.samples);
   const checks = useAsync(api.checks);
   const inputs = useAsync(api.inputs);
+  const presets = useAsync(api.presets);
+  const [presetTitle, setPresetTitle] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [sample, setSample] = useState<string>("01");
   const [ga, setGa] = useState<File | null>(null);
@@ -115,12 +150,15 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
     return () => { alive = false; };
   }, [photo, photoUrl]);
 
-  const start = async (override?: { sample?: string }) => {
+  const start = async (override?: { sample?: string; preset?: Preset; presetPhoto?: string }) => {
     if (busy) return;
     setBusy(true);
     setJob(null);
+    setPresetTitle(override?.preset ? `${override.preset.title} · ${override.presetPhoto}` : null);
     try {
-      const j = await api.inspect({ photo: override ? null : photo, sample: override?.sample ?? sample, ga, wires, checklist, checks: on });
+      const j = await api.inspect(override?.preset
+        ? { preset: override.preset.id, presetPhoto: override.presetPhoto, checks: enabled ?? undefined }
+        : { photo: override ? null : photo, sample: override?.sample ?? sample, ga, wires, checklist, checks: on });
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Inspection failed");
@@ -155,7 +193,7 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
   if (busy) {
     return (
       <div className="main">
-        <Running job={job} photo={photoUrl} enabled={on} title={photo ? photo.name : activeSample ? `Sample ${activeSample.id} · ${activeSample.title}` : "Emerson's example"} />
+        <Running job={job} photo={photoUrl} enabled={on} title={presetTitle ?? (photo ? photo.name : activeSample ? `Sample ${activeSample.id} · ${activeSample.title}` : "Emerson's example")} />
       </div>
     );
   }
@@ -166,7 +204,8 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
         <div>
           <span className="eyebrow">Inspect</span>
           <h1>Photo in. Filled checklist with proof out.</h1>
-          <p>Drop a cabinet photo or pick a sample. Leave the engineering inputs empty to use the demo drawing set (GA drawing, wire list, QC checklist for cabinet EE-DEMO-01).</p>
+          <p>Drop a cabinet photo or pick a sample. Leave the engineering inputs empty to use the demo drawing set (GA drawing, wire list, QC checklist for cabinet EE-DEMO-01).
+            Drop a real drawing set (vector PDF) and the real-cabinet engine takes over automatically.</p>
         </div>
         <button className="btn btn-primary btn-xl" onClick={() => start()}>
           <Play /> Inspect <kbd style={{ marginLeft: 4, background: "rgba(4,18,28,.15)", color: "inherit", borderColor: "rgba(4,18,28,.25)" }}>Ctrl ↵</kbd>
@@ -189,6 +228,14 @@ export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; au
           {eng.preferLive && eng.state === "down" && <button className="btn btn-sm" onClick={() => void pingEngine()}><RefreshCw /> Retry</button>}
         </div>
       )}
+
+      <div className="callout info">
+        <Fingerprint />
+        <span><b>Photos are kept as metadata.</b> The engine reads a photo once and keeps its SHA-256 fingerprint, size and results, never the photo.
+          The console sends the fingerprint first, so a photo the engine already knows is not uploaded again.</span>
+      </div>
+
+      <PresetCard presets={presets.data ?? []} disabled={!live} onRun={(p, f) => start({ preset: p, presetPhoto: f })} />
 
       <div className="setup">
         <div className="stack" style={{ ["--gap" as string]: "18px" }}>

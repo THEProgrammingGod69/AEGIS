@@ -1,14 +1,14 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
-import { STATUS_COLOR } from "../lib/format";
+import { STATUS_COLOR, statusText } from "../lib/format";
 import { useCountUp } from "../lib/hooks";
 import type { Status } from "../lib/types";
 
 export function StatusBadge({ s, lg, label }: { s: Status | "HOLD"; lg?: boolean; label?: string }) {
   return (
     <span className={`badge${lg ? " lg" : ""}`} style={{ ["--c" as string]: STATUS_COLOR[s] }}>
-      {label ?? s}
+      {label ?? statusText(s)}
     </span>
   );
 }

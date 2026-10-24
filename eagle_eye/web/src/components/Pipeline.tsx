@@ -12,6 +12,11 @@ export const STAGES = [
   { key: "consensus", title: "Consensus", sub: "FAIL only when evidence agrees; unclear → REVIEW." },
   { key: "report", title: "Report", sub: "Boxed photo, expected-vs-found proof, Excel, PDF." },
   { key: "recheck", title: "Re-check", sub: "Fixed items CLOSE, the rest stay OPEN, history kept." },
+  // real-cabinet engine
+  { key: "kb", title: "Read the drawing set", sub: "Vector GA views, nameplate list, groups and wiring → the cabinet model. No AI." },
+  { key: "ocr", title: "Read every label", sub: "PP-OCRv4 multi-pass: whole photo, upscaled tiles, rotated tiles for vertical labels." },
+  { key: "place", title: "Place the photo on the drawing", sub: "Labels read with certainty become anchors (RANSAC); coverage = what this photo shows." },
+  { key: "agent", title: "Claude verifier", sub: "Independent second opinion on every candidate fault, from zoomed crops." },
 ] as const;
 
 interface Derived {
@@ -22,16 +27,68 @@ interface Derived {
   checks?: { name: string; status: St; detail?: string }[];
 }
 
+/** Stages of the real-cabinet engine: drawing set -> OCR -> placement -> checks -> agent -> consensus -> report. */
+function deriveReal(ev: JobEvent[], withRecheck: boolean): Derived[] {
+  const find = (stage: string, status: string, extra?: (e: JobEvent) => boolean) =>
+    ev.find((e) => e.stage === stage && e.status === status && (!extra || extra(e)));
+  const st = (stage: string): St => (find(stage, "done") ? "done" : find(stage, "start") ? "running" : "pending");
+  const cached = ev.some((e) => e.cached);
+  const out: Derived[] = [];
+  const pd = find("parse", "done");
+  const views = (pd?.views as string[] | undefined) ?? [];
+  out.push({ key: "kb", status: st("parse"), t: pd?.t,
+    detail: pd ? `${pd.cabinet} · ${views.length} GA views (${views.join(", ")}) · ${pd.devices} drawn tags · ${pd.rails} device groups · ${pd.wires} wiring links` : undefined });
+  const od = find("ocr", "done");
+  out.push({ key: "ocr", status: st("ocr"), t: od?.t,
+    detail: od ? `${od.tokens} text reads${od.cached || cached ? " (from this photo's stored metadata)" : od.seconds != null ? ` in ${Number(od.seconds).toFixed(1)} s` : ""}` : undefined });
+  const rd = find("register", "done");
+  const outl = (rd?.outliers as string[] | undefined) ?? [];
+  out.push({ key: "place", status: st("register"), t: rd?.t,
+    detail: rd ? (rd.localised
+      ? `${((rd.views as string[]) ?? []).join(" + ")} view · ${rd.inliers} labels on the drawing · ${rd.in_view} drawing items in view${outl.length ? ` · off-pattern: ${outl.join(", ")}` : ""}`
+      : String(rd.hint ?? "Photo could not be placed on the drawing")) : undefined });
+  const names = [...new Set(ev.filter((e) => e.stage === "check").map((e) => String(e.check)))];
+  const checks = names.map((name) => {
+    const d = find("check", "done", (e) => e.check === name);
+    const c = d?.counts as Record<string, number> | undefined;
+    const bits = c ? [c.PASS && `${c.PASS} OK`, c.REVIEW && `${c.REVIEW} candidate${c.REVIEW > 1 ? "s" : ""}`, c.NOT_IN_VIEW && `${c.NOT_IN_VIEW} not in view`, c.SKIP && `${c.SKIP} SKIP`].filter(Boolean) : [];
+    return { name, status: (d ? "done" : "running") as St, detail: c ? bits.join(" · ") || "nothing to judge in this photo" : undefined };
+  });
+  const cAll = checks.length > 0 && checks.every((c) => c.status === "done");
+  out.push({ key: "check", status: find("agent", "start") || cAll ? "done" : checks.length ? "running" : "pending", checks,
+    t: ev.filter((e) => e.stage === "check" && e.status === "done").slice(-1)[0]?.t });
+  const ad = find("agent", "done");
+  const as = find("agent", "start");
+  const prog = ev.filter((e) => e.stage === "agent" && e.status === ("progress" as JobEvent["status"])).slice(-1)[0];
+  out.push({ key: "agent", status: ad ? "done" : as ? "running" : "pending", t: ad?.t,
+    detail: ad ? (ad.enabled ? `${ad.calls} API call${ad.calls === 1 ? "" : "s"} · ${ad.model ?? ""}${ad.cost_usd ? ` · $${Number(ad.cost_usd).toFixed(3)}` : ""} · ${ad.summary ?? ""}` : String(ad.summary ?? "off"))
+      : prog ? `${prog.done}/${prog.total} candidates verified` : as ? `${as.candidates} candidate${as.candidates === 1 ? "" : "s"} to verify` : undefined });
+  const cd = find("consensus", "done");
+  const cc = cd?.counts as Record<string, number> | undefined;
+  out.push({ key: "consensus", status: cd ? "done" : ad ? "running" : "pending", t: cd?.t,
+    detail: cc ? `${cc.FAIL} FAIL · ${cc.REVIEW} REVIEW · ${cc.PASS} PASS · ${cc.NOT_IN_VIEW ?? 0} not in view · ${cc.SKIP} SKIP` : undefined });
+  const rp = find("report", "done");
+  out.push({ key: "report", status: st("report"), t: rp?.t, detail: rp ? "Proof crops · filled checklist · PDF · photo kept as metadata only" : undefined });
+  if (withRecheck) {
+    const rc = find("recheck", "done");
+    out.push({ key: "recheck", status: rc ? "done" : rp ? "running" : "pending", t: rc?.t,
+      detail: rc ? `${rc.CLOSED} CLOSED · ${rc.OPEN} OPEN · ${rc.REGRESSION} REGRESSION · ${rc.NEW} NEW` : undefined });
+  }
+  return out;
+}
+
 /** Turn the raw job event stream into per-stage state (only the latest cabinet for multi-cabinet jobs). */
 export function derive(all: JobEvent[], enabled: string[], withRecheck: boolean): Derived[] {
   const lastCab = all.map((e) => e.stage).lastIndexOf("cabinet");
   const ev = lastCab >= 0 ? all.slice(lastCab + 1) : all;
+  if (ev.some((e) => e.engine === "real")) return deriveReal(ev, withRecheck);
   const find = (stage: string, status: string, extra?: (e: JobEvent) => boolean) =>
     ev.find((e) => e.stage === stage && e.status === status && (!extra || extra(e)));
   const st = (stage: string): St => (find(stage, "done") ? "done" : find(stage, "start") ? "running" : "pending");
   const out: Derived[] = [];
 
   const pd = find("parse", "done");
+  const cachedRun = ev.some((e) => e.cached);
   out.push({ key: "parse", status: st("parse"), t: pd?.t,
     detail: pd ? `${pd.cabinet} · ${pd.devices} devices · ${pd.terminals} terminals · ${pd.rails} rail · ${pd.wires} wires` : undefined });
 
@@ -61,7 +118,8 @@ export function derive(all: JobEvent[], enabled: string[], withRecheck: boolean)
     detail: cc ? `${cc.FAIL} FAIL · ${cc.REVIEW} REVIEW · ${cc.SKIP} root-cause SKIP · ${cc.PASS} PASS` : undefined });
 
   const rp = find("report", "done");
-  out.push({ key: "report", status: st("report"), t: rp?.t, detail: rp ? "Marked photo · proof snippets · filled checklist · PDF" : undefined });
+  out.push({ key: "report", status: st("report"), t: rp?.t,
+    detail: rp ? `Proof snippets · filled checklist · PDF · photo kept as metadata only${cachedRun ? " · answered from stored metadata (no re-read)" : ""}` : undefined });
 
   if (withRecheck) {
     const rc = find("recheck", "done");

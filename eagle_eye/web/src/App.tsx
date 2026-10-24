@@ -108,7 +108,10 @@ export function App() {
       <TopBar page={page} health={health} onPalette={() => setPalette(true)} />
       {!STATIC && health && !health.tesseract.ok && (
         <div className="setup-warn">
-          Tesseract OCR was not found, so inspections cannot run. Install it (Windows: UB-Mannheim installer · macOS: <code>brew install tesseract</code> · Linux: <code>apt install tesseract-ocr</code>) or set <code>TESSERACT_CMD</code>, then restart <code>python server.py</code>.
+          {health.ocr?.ok
+            ? <>Tesseract OCR was not found: the demo cabinets (samples, Fault Forge) cannot run. Real drawing sets use PP-OCRv4 and work. </>
+            : <>Tesseract OCR was not found, so inspections cannot run. </>}
+          Install it (Windows: UB-Mannheim installer · macOS: <code>brew install tesseract</code> · Linux: <code>apt install tesseract-ocr</code>) or set <code>TESSERACT_CMD</code>, then restart <code>python server.py</code>.
         </div>
       )}
       <AnimatePresence mode="wait">

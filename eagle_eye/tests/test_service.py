@@ -79,3 +79,31 @@ def test_recheck_reuses_an_uploaded_drawing_set(runs_dir, tmp_path):
     assert v2["inputs"]["ga"]["name"] == "customer_GA.pdf" and not v2["inputs"]["ga"]["demo"]
     assert v2["recheck"]["CLOSED"] == 3
     assert service.item_crop(v2["id"], "FER-X3:3", "expected").exists()
+
+
+def test_runs_keep_metadata_not_photos(runs_dir):
+    """The photo is read once and discarded: a run keeps its fingerprint, a small preview and the results."""
+    from PIL import Image
+    m = service.run_inspection(sample("01"), source="sample")
+    d = service.run_dir(m["id"])
+    names = {p.name for p in d.iterdir()}
+    assert not names & {"photo.jpg", "photo.png"}
+    assert m["storage"] == "metadata" and m["photo"] == "preview.jpg"
+    assert len(m["photo_meta"]["sha256"]) == 64 and m["photo_meta"]["size"] == list(Image.open(sample("01")).size)
+    assert max(Image.open(d / "preview.jpg").size) <= service.PREVIEW_SIDE
+    assert not list(service.WORK.glob("*/*"))                         # nothing left in the work folder
+    again = service.run_inspection(sample("01"), source="sample")       # same fingerprint: stored result, no engine
+    assert again["cached"] and again["counts"] == m["counts"] and not m["cached"]
+
+
+def test_fingerprint_only_request_needs_the_photo_once(runs_dir):
+    import hashlib
+    sha = hashlib.sha256(sample("02").read_bytes()).hexdigest()
+    try:
+        service.run_inspection(None, photo_sha=sha)
+        raise AssertionError("an unknown fingerprint must ask for the photo")
+    except service.NeedPhoto:
+        pass
+    service.run_inspection(sample("02"), photo_sha=sha)
+    m = service.run_inspection(None, photo_sha=sha, photo_name="02.jpg")
+    assert m["cached"] and m["photo_meta"]["sha256"] == sha
