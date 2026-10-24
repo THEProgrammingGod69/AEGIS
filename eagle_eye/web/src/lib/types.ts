@@ -288,6 +288,49 @@ export interface CheckInfo {
   builtin: boolean;
 }
 
+/** Fault Forge, synthetic vs real (eval_gap.py): planted faults scored the same way on both kinds of photo. */
+export type GapOutcome = "FAIL" | "REVIEW" | "missed";
+export interface GapCategory {
+  planted: number;
+  FAIL: number;
+  REVIEW: number;
+  missed: number;
+  fail_rate: number;
+  flag_rate: number;
+}
+export interface GapSide {
+  photos: number;
+  planted: number;
+  FAIL: number;
+  REVIEW: number;
+  missed: number;
+  fail_rate: number;
+  flag_rate: number;
+  false_fail: number;
+  false_fail_rate: number;
+  review_rate: number;
+  not_in_view_rate: number;
+  judged: number;
+  sec_per_photo: number | null;
+  categories: Record<string, GapCategory>;
+  engine: string;
+  source: string;
+  selection: string;
+  agent?: string;
+}
+export type GapRate = "fail_rate" | "flag_rate" | "false_fail_rate" | "review_rate" | "not_in_view_rate";
+export interface ForgeGap {
+  schema: string;
+  created: string;
+  engine: string;
+  synthetic: GapSide | null;
+  real: GapSide | null;
+  real_reason: string | null;
+  gap: Record<GapRate, number> | null;
+  categories: { id: string; label: string; synthetic: GapCategory | null; real: GapCategory | null }[];
+  real_rows: { photo: string; faults: { category: string; type: string; text?: string; outcome: GapOutcome }[]; false_fail: number }[];
+}
+
 export interface SelfTest {
   summary: {
     cabinets: number;

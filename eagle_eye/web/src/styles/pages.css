@@ -2535,3 +2535,81 @@
     padding: 26px 22px;
   }
 }
+
+/* Fault Forge: synthetic vs real (components/ForgeGap.tsx) */
+.gap-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 110px;
+  gap: 14px;
+  align-items: center;
+}
+.gap-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.gap-line {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.gap-line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.gap-split {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.gap-bar {
+  flex: 1;
+  min-width: 40px;
+  height: 8px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line-3);
+}
+.gap-bar i {
+  display: block;
+  height: 100%;
+}
+.gap-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.gap-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.gap-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.gap-item:last-child {
+  border-bottom: 0;
+}
+.gap-worse {
+  color: var(--fail);
+}
+.gap-better {
+  color: var(--pass);
+}
+@media (max-width: 720px) {
+  .gap-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .gap-grid > :nth-child(4) {
+    display: none;
+  }
+}

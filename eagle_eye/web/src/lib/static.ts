@@ -10,7 +10,7 @@
 import { ENGINE_URL, EngineUnreachable, NeedFiles, b64Blob, compactPdf, postInput, engine, ensureEngine, liveReady, makePreview, preparePhoto, renderMarked, sha256, stream, type StreamResult } from "./cloud";
 import * as store from "./store";
 import type { InputKey, LiveRun } from "./store";
-import type { CheckInfo, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, ForgeGap, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 import type { InspectInput } from "./api";
 
 const BASE = "demo/";
@@ -360,6 +360,13 @@ export const staticApi = {
     };
   },
   selftest: async (): Promise<SelfTest> => IX.selftest,
+  forgeGap: async (): Promise<ForgeGap> => {
+    if (!ENGINE_URL) throw new Error("This build has no cloud engine, so the synthetic vs real comparison is not available.");
+    await ensureEngine();
+    const res = await fetch(`${ENGINE_URL}/api/v2/forge/gap`).catch(() => null);
+    if (!res?.ok) throw new Error("The cloud engine is not reachable right now, so the synthetic vs real comparison could not be loaded.");
+    return res.json() as Promise<ForgeGap>;
+  },
   forge: async (body: { faults: number | null; strength: number; seed: number | null; count: number }): Promise<JobView> => {
     const recorded = () => {
       let pool = IX.forge.filter((id) => body.faults == null || IX.runs[id].meta.forge!.score.n_planted === body.faults);

@@ -514,6 +514,14 @@ def forge_selftest():
     return service.selftest()
 
 
+@app.get("/api/forge/gap")
+@app.get("/api/v2/forge/gap")
+def forge_gap():
+    """Fault Forge, synthetic vs real: the saved comparison (python eval_gap.py), else the synthetic side alone."""
+    import eval_gap
+    return eval_gap.load()
+
+
 # ------------------------------------------------------------------ stateless cloud API (/api/v2)
 GATE = threading.BoundedSemaphore(max(1, int(os.environ.get("EAGLE_EYE_CONCURRENCY", "1"))))
 _waiting = [0]

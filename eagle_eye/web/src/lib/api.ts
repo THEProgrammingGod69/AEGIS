@@ -1,6 +1,6 @@
 import { liveReady, useEngine } from "./cloud";
 import { staticApi, staticUrl } from "./static";
-import type { CheckInfo, ForgeLive, Health, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, ForgeGap, ForgeLive, Health, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 
 /** True in the hosted build (npm run build:static): cloud engine + recorded runs, history kept in the browser. */
 export const STATIC = import.meta.env.VITE_STATIC === "1";
@@ -46,6 +46,7 @@ const liveApi = {
   job: (id: string, since = 0) => req<JobView>(`/api/jobs/${id}?since=${since}`),
   forgeLive: () => req<ForgeLive>("/api/forge/live"),
   selftest: () => req<SelfTest>("/api/forge/selftest"),
+  forgeGap: () => req<ForgeGap>("/api/forge/gap"),
   forge: (body: { faults: number | null; strength: number; seed: number | null; count: number }) =>
     req<JobView>("/api/forge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
   inspect: (i: InspectInput) => {
