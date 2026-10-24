@@ -2613,3 +2613,27 @@
     display: none;
   }
 }
+.gap-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gap-notice.on {
+  border-color: var(--review);
+  background: color-mix(in srgb, var(--review) 10%, transparent);
+}
+.gap-example-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--review);
+  border: 1px solid var(--review);
+}
+.gap-example-val {
+  color: var(--review);
+}
