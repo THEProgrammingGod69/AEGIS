@@ -22,3 +22,10 @@ Thumbs.db
 
 # hosted showcase build output (built by Vercel from web/static-public)
 eagle_eye/web/dist-static/
+
+# Emerson's real drawing set and photos: hackathon use only, never committed (the repository is public).
+# Place them in data/emerson/ locally or mount them into the engine container (see data/README.md).
+data/emerson/
+eagle_eye/out/real_eval/
+eagle_eye/out/kb_debug/
+.env

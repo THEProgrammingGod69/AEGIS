@@ -13,7 +13,7 @@ RUN apt-get update \
 RUN python3 -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 COPY requirements-engine.txt /tmp/requirements-engine.txt
-RUN pip install -r /tmp/requirements-engine.txt
+RUN pip install -r /tmp/requirements-engine.txt && pip install --no-deps rapidocr-onnxruntime==1.4.4
 
 WORKDIR /app
 COPY . /app

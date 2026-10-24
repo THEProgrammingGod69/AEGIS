@@ -1,0 +1,24 @@
+{
+ "schema": "eagle-eye-agent-replay/1",
+ "comment": "Replay-backend format: decisions keyed by '<photo_sha>|<finding_id>'. An entry with crop_sha only matches the same evidence crop (null matches any). Synthetic sample used by tests/test_agent.py; real fixtures are recorded with EAGLE_AGENT_RECORD=<path>.",
+ "decisions": {
+  "synth0001|LBL-PS11": {
+   "verdict": "CONFIRMED_FAULT",
+   "confidence": 0.91,
+   "reason": "The label on the first power supply reads PS1I with a broken last character, not PS11.",
+   "evidence_boxes": [[200.0, 150.0, 320.0, 260.0]],
+   "rephoto_hint": null,
+   "model": "claude-opus-5-5",
+   "crop_sha": null
+  },
+  "synth0001|MISS-CB13": {
+   "verdict": "CONFIRMED_OK",
+   "confidence": 0.88,
+   "reason": "CB13 is present and its label is readable.",
+   "evidence_boxes": [[600.0, 150.0, 720.0, 260.0]],
+   "rephoto_hint": null,
+   "model": "claude-opus-5-5",
+   "crop_sha": "deadbeefdeadbeef"
+  }
+ }
+}

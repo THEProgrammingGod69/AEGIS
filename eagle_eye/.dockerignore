@@ -1,8 +1,12 @@
-# keep the engine image small: no web sources, recorded showcase, run store or tests
-web/
+# keep the engine image small: no web sources (only the built console in web/dist), run store, tests or local venvs
+web/*
+!web/dist
 out/runs/
 out/cache/
 out/forge/*.jpg
+out/real_eval/
+out/kb_debug/
+out/ocr_debug/
 tests/
 **/__pycache__/
 *.pyc

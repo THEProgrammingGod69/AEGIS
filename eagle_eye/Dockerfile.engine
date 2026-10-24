@@ -1,0 +1,29 @@
+# EAGLE EYE engine: real-cabinet engine (PP-OCRv4 + drawing knowledge base + Claude agent) and the demo-cabinet engine,
+# served by FastAPI. Python 3.11 slim, CPU only. Build from eagle_eye/:
+#   docker build -f Dockerfile.engine -t eagle-eye-engine .
+#   docker run -p 8080:8080 -e PORT=8080 -e ANTHROPIC_API_KEY=... -v "$PWD/../data/emerson:/app/data/emerson:ro" eagle-eye-engine
+# Deploy targets (Cloud Run, Render, Fly.io, Railway) and the on-prem compose file: docs/DEPLOY.md.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+# tesseract: only the demo-cabinet engine uses it; libgomp1/libglib2.0-0: ONNX Runtime and OpenCV runtime libraries
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng libgomp1 libglib2.0-0 fonts-dejavu-core \
+       ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements-engine.txt /tmp/requirements-engine.txt
+# PIP_INDEX_URL can point at a mirror when PyPI is slow from the build machine (hashes are PyPI's either way)
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --index-url "$PIP_INDEX_URL" -r /tmp/requirements-engine.txt \
+    && pip install --index-url "$PIP_INDEX_URL" --no-deps rapidocr-onnxruntime==1.4.4
+
+COPY . /app
+# Containers write only under /tmp. EAGLE_EYE_CLOUD=1 serves the stateless /api/v2 for the hosted console; set it to 0 to
+# serve the full console from this container (on-prem). Real drawing sets/photos are mounted at /app/data/emerson, never baked.
+ENV EAGLE_EYE_DATA=/tmp/eagle_eye EAGLE_EYE_CLOUD=1 OMP_THREAD_LIMIT=1 EAGLE_EYE_REAL_DATA=/app/data/emerson \
+    EAGLE_OCR_WORKERS=2
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:%s/api/v2/health' % os.environ.get('PORT','8080'), timeout=8)"
+CMD ["sh", "-c", "exec python server.py --host 0.0.0.0 --port ${PORT:-8080} --no-browser"]

@@ -1,7 +1,8 @@
-# Pinned engine + API dependencies for the hosted engine container (Dockerfile.vercel).
-# Same versions as the machine that recorded the showcase runs, so cloud results match local ones.
-numpy==2.5.4
-opencv-python-headless==5.0.0.93
+# Pinned engine + API dependencies for the engine containers (Dockerfile.engine, Dockerfile.vercel).
+# rapidocr-onnxruntime itself is installed separately with --no-deps (its metadata asks for the GUI build of OpenCV, which
+# would clash with opencv-python-headless); its real dependencies are listed here.
+numpy==2.2.6
+opencv-python-headless==4.11.0.86
 pymupdf==1.28.2
 pytesseract==0.3.13
 openpyxl==3.1.5
@@ -12,3 +13,12 @@ starlette==1.8.0
 pydantic==2.14.1
 uvicorn==0.54.0
 python-multipart==0.0.32
+# PP-OCRv4 through RapidOCR on ONNX Runtime (models ship inside the rapidocr wheel: no download at run time)
+onnxruntime==1.31.0
+pyclipper==1.4.0
+shapely==2.2.0
+six==1.17.0
+PyYAML==6.0.3
+tqdm==4.70.1
+# Claude vision agent (optional at run time: the engine runs deterministic-only without an API key)
+anthropic==2.2.0

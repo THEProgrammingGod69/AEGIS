@@ -1,0 +1,24 @@
+# Render Blueprint for the EAGLE EYE engine (the console stays on Vercel with VITE_ENGINE_URL pointing here).
+services:
+  - type: web
+    name: eagle-eye-engine
+    runtime: docker
+    dockerContext: ./eagle_eye
+    dockerfilePath: ./eagle_eye/Dockerfile.engine
+    plan: pro            # 2 vCPU / 4 GB: OCR + agent stays under ~60 s per photo
+    healthCheckPath: /api/v2/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false        # set in the Render dashboard, never in git
+      - key: EAGLE_AGENT_MODEL
+        value: auto
+      - key: EAGLE_AGENT_FAST_MODEL
+        value: claude-opus-5-5
+      - key: EAGLE_CORS_ORIGINS
+        value: https://eagle-eye-enigma.vercel.app
+      - key: EAGLE_OCR_WORKERS
+        value: "2"
+    disk:                  # optional: real drawing set + photos for the "Emerson 13GE03331" preset
+      name: emerson-data
+      mountPath: /app/data/emerson
+      sizeGB: 1
