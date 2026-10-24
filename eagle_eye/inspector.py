@@ -464,6 +464,41 @@ def vote(readings, vocab):
     return best, hits[best] / len(readings), maj
 
 
+def plausible_tag(read, tag):
+    """A reading that could be a complete device tag (same shape as the expected one), not an OCR fragment."""
+    n = norm(tag)
+    return (len(read) >= max(2, len(n) - 1) and (any(c.isalpha() for c in read) or not any(c.isalpha() for c in n))
+            and (any(c.isdigit() for c in read) or not any(c.isdigit() for c in n)))
+
+
+def supports(readings, tag):
+    """Do any OCR votes contain a piece of the expected tag (3 characters; 2 for short tags)? Then print is there,
+    just unreadable, and "No label" is not proven."""
+    t = canon(tag)
+    k = 3 if len(t) >= 4 else 2
+    pieces = {t[i:i + k] for i in range(len(t) - k + 1)}
+    return any(any(p in canon(r) for p in pieces) for r in readings if len(norm(r)) >= k)
+
+
+def zone_guard(results, keys, note, absent):
+    """When most of one zone's items come back *absent or unreadable* at once, the photo of that zone is suspect:
+    those absence FAILs become REVIEW. Positive evidence of a wrong item (a full, agreeing wrong reading) stays FAIL."""
+    zones = {}
+    for k, r in zip(keys, results):
+        zones.setdefault(k, []).append(r)
+    for rs in zones.values():
+        active = [r for r in rs if r["result"] != "SKIP"]
+        bad = [r for r in active if r["result"] == "REVIEW" or (r["result"] == "FAIL" and r["found"] == absent)]
+        n = len(active)
+        need = n // 2 + 1 if n >= 6 else max(2, (n + 1) // 2)       # long zones: a strict majority
+        if n >= 3 and len(bad) >= need:
+            for r in bad:
+                if r["result"] == "FAIL":
+                    r.update(result="REVIEW", found=f"Unverified: {r['found']}", conf=0.4,
+                             evidence=r["evidence"] + [note.format(bad=len(bad), n=len(active))])
+    return results
+
+
 # ------------------------------------------------------------------ 3. plug-in checks
 CHECKS = {}
 
@@ -494,7 +529,8 @@ class GACheck:
             lab, _ = has_label(crop(ctx.rect, d["label_box"], 4))
             if occ > 0.6 or (occ > 0.45 and lab):
                 r, found, conf = "PASS", "Present", min(1, occ)
-            elif occ < 0.15 or (occ < 0.6 and not lab):   # two weak evidences agree -> missing
+            elif occ < 0.15 or (occ < 0.35 and not lab):  # two evidences agree -> missing
+                # (self-test: missing parts read <= 28 % occupancy, installed parts >= 41 %; between is unclear)
                 r, found, conf = "FAIL", "Missing", 1 - occ
             else:
                 r, found, conf = "REVIEW", f"Unclear (occupancy {occ:.0%})", 0.5
@@ -596,18 +632,21 @@ class LabelCheck:
             best, agr, raw = vote(reads, vocab)
             if best == d["tag"] and agr >= 0.5:
                 r, found, conf = "PASS", d["tag"], agr
-            elif wf < 0.25 and not raw:
-                r, found, conf = "FAIL", "No label", 1 - wf
-            elif raw and (best is None or best != d["tag"]) and sum(norm(x) == raw for x in reads) >= 2:
+            elif best == d["tag"]:                   # some votes read the right tag: a label is there, just unclear
+                r, found, conf = "REVIEW", f"Label unreadable ('{raw}')", 0.4
+            elif raw and best != d["tag"] and sum(norm(x) == raw for x in reads) >= 2 and plausible_tag(raw, d["tag"]):
                 r, found, conf = "FAIL", f"Wrong label: reads '{raw}'", 0.8
-            elif wf < 0.25:
+            elif wf < 0.25 and not supports(reads, d["tag"]):
                 r, found, conf = "FAIL", "No label", 1 - wf
             else:
                 r, found, conf = "REVIEW", f"Label unreadable ('{raw}')", 0.4
             return res(iid, "LABEL", d["tag"], d["tag"], found, r, lb, conf,
                        [f"label sticker+print found: {lab}", f"OCR votes {reads}"], votes=reads)
 
-        return pmap(one, ctx.ga["devices"])
+        devs = ctx.ga["devices"]
+        return zone_guard(pmap(one, devs), [d.get("group") or d["type"] for d in devs],
+                          "{bad} of {n} labels in this zone missing or unreadable at once: photo of the zone is suspect",
+                          absent="No label")
 
 
 @check("FERRULE")
@@ -631,6 +670,11 @@ class FerruleCheck:
             wf = white_fraction(ctx.rect, ctx.bpm, fb, shrink=0.2)
             iid = f"FER-{t['tag']}"
             if wf < 0.2 and not lab:
+                if wf >= 0.08:                     # some sleeve pixels: look closer before calling it missing
+                    reads = ocr_variants(crop(ctx.rect, fb, 0))
+                    if any(len(norm(x)) >= 3 for x in reads):
+                        return res(iid, "FERRULE", t["tag"], w["ferrule"], f"Sleeve unclear ('{vote(reads, vocab)[2]}')", "REVIEW",
+                                   fb, 0.4, [f"sleeve pixels {wf:.0%}", f"OCR votes {reads}"], votes=reads)
                 return res(iid, "FERRULE", t["tag"], w["ferrule"], "No ferrule", "FAIL", fb, 1 - wf, [f"sleeve pixels {wf:.0%}"])
             reads = ocr_variants(crop(ctx.rect, fb, 0))
             best, agr, raw = vote(reads, vocab)
@@ -644,7 +688,14 @@ class FerruleCheck:
 
         for t, _ in pairs:
             ctx.facts[("fbox", t["tag"])] = fbox(t)
-        return pmap(one, pairs)
+        # A missing sleeve is a local fact; half a strip's sleeves vanishing or unreadable at once is a photo or
+        # alignment problem (keystone, glare, blur on that zone). Then "No ferrule" is not proven: re-photo instead.
+        return zone_guard(pmap(one, pairs), [t["tag"].split(":")[0] for t, _ in pairs],
+                          "{bad} of {n} sleeves on this strip missing or unreadable at once: photo of the zone is suspect",
+                          absent="No ferrule")
+
+
+COLOUR_WORD = dict(BN="brown", BU="blue", RD="red", GNYE="green-yellow", GY="grey", VT="violet")
 
 
 @check("COLOUR")
@@ -685,15 +736,18 @@ class WireColourCheck:
                 else:
                     c = "?"
             iid = f"COL-{t['tag']}"
+            ev = [f"green {green:.0%} yellow {yellow:.0%}"]
             if c == w["colour"]:
                 r = "PASS"
             elif c == "?":
                 r = "REVIEW"
+            elif "BK" in (c, w["colour"]) and 50 <= med[2] <= 115:
+                r = "REVIEW"                          # a dark wire: black vs a dark colour is not separable in this light
+                ev.append(f"brightness {int(med[2])}: black vs {COLOUR_WORD.get(c if c != 'BK' else w['colour'], 'colour')} ambiguous")
             else:
                 r = "FAIL"
             rgb = cv2.cvtColor(np.uint8([[med]]), cv2.COLOR_HSV2RGB)[0, 0]
-            out.append(res(iid, "COLOUR", t["tag"], w["colour"], c, r, sb, 0.85 if r != "REVIEW" else 0.4,
-                           [f"green {green:.0%} yellow {yellow:.0%}"],
+            out.append(res(iid, "COLOUR", t["tag"], w["colour"], c, r, sb, 0.85 if r != "REVIEW" else 0.4, ev,
                            swatch="#%02x%02x%02x" % tuple(int(v) for v in rgb)))
         return out
 

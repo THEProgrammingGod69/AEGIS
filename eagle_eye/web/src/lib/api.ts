@@ -1,7 +1,8 @@
+import { liveReady, useEngine } from "./cloud";
 import { staticApi, staticUrl } from "./static";
-import type { CheckInfo, ForgeLive, Health, JobView, RunMeta, RunPayload, Sample, SelfTest } from "./types";
+import type { CheckInfo, ForgeLive, Health, JobView, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 
-/** True in the hosted showcase build (npm run build:static): recorded runs, no live engine. */
+/** True in the hosted build (npm run build:static): cloud engine + recorded runs, history kept in the browser. */
 export const STATIC = import.meta.env.VITE_STATIC === "1";
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
@@ -54,10 +55,15 @@ const liveApi = {
     if (i.parent) fd.append("parent", i.parent);
     return req<JobView>("/api/inspect", { method: "POST", body: fd });
   },
+  review: (rid: string, item: string, decision: Review["decision"] | "CLEAR", note = "", by = "Inspector") =>
+    req<RunMeta>(`/api/runs/${rid}/review`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ item, decision, note, by }),
+    }),
 };
 
 const liveUrl = {
   sample: (id: string, w = 0) => `/api/samples/${id}/image${w ? `?w=${w}` : ""}`,
+  sampleFull: (id: string) => `/api/samples/${id}/image`,
   file: (run: string, name: string, w = 0) => `/api/runs/${run}/files/${name}${w ? `?w=${w}` : ""}`,
   download: (run: string, name: string) => `/api/runs/${run}/files/${name}?download=1`,
   crop: (run: string, item: string, kind: "expected" | "found" | "aligned") =>
@@ -68,6 +74,24 @@ const liveUrl = {
 
 export const api: typeof liveApi = STATIC ? (staticApi as unknown as typeof liveApi) : liveApi;
 export const url: typeof liveUrl = STATIC ? (staticUrl as unknown as typeof liveUrl) : liveUrl;
+
+/** Can this console run a real inspection right now? Local engine: always. Hosted: when the cloud engine is up. */
+export const canLive = () => !STATIC || liveReady();
+export function useCanLive() {
+  const e = useEngine();
+  return !STATIC || (e.state === "ready" && e.preferLive);
+}
+
+const DL: Record<string, [string, string]> = {
+  pdf: ["EAGLE_EYE_Report", "pdf"], checklist: ["QC_Checklist", "xlsx"], json: ["EAGLE_EYE", "json"], marked: ["Marked", "jpg"],
+};
+/** Props for a download link (hosted runs are blob URLs, so they need an explicit file name). */
+export function dl(run: string, name: string, cabinet = "EE") {
+  const href = url.download(run, name);
+  if (!STATIC) return { href };
+  const [stem, ext] = DL[name] ?? [name, "bin"];
+  return name === "pdf" ? { href, target: "_blank", rel: "noreferrer" } : { href, download: `${stem}_${cabinet}_${run}.${ext}` };
+}
 
 /** Poll a job until it finishes, streaming events to `onUpdate`. */
 export async function followJob(id: string, onUpdate: (j: JobView) => void, signal?: { stop: boolean }): Promise<JobView> {

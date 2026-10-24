@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Dices, Eye, EyeOff, FlaskConical, Gauge, Play, ShieldCheck, Target, Terminal, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhotoViewer } from "../components/PhotoViewer";
 import { Running } from "../components/Running";
 import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
-import { STATIC, api, followJob, url } from "../lib/api";
+import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
 import { STATUS_COLOR, isIssue, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import type { JobView, RunPayload } from "../lib/types";
@@ -167,7 +167,7 @@ function SelfTest() {
   );
 }
 
-export function Forge() {
+export function Forge({ auto = false }: { auto?: boolean }) {
   const toast = useToast();
   const [faults, setFaults] = useState<number | null>(null);
   const [strength, setStrength] = useState(1.0);
@@ -177,6 +177,7 @@ export function Forge() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ p: RunPayload; metas: RunPayload["meta"][] } | null>(null);
   const live = useAsync(api.forgeLive);
+  const canLive = useCanLive();
 
   const go = async () => {
     setBusy(true);
@@ -186,6 +187,7 @@ export function Forge() {
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Forge failed");
+      if (done.note) toast("ok", done.note);
       const last = await api.run(done.runs[done.runs.length - 1]);
       const metas = await Promise.all(done.runs.map((r) => api.run(r).then((x) => x.meta)));
       setResult({ p: last, metas });
@@ -197,6 +199,16 @@ export function Forge() {
       setJob(null);
     }
   };
+
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (auto && !autoStarted.current) {
+      autoStarted.current = true;
+      window.history.replaceState(null, "", "#/forge");
+      void go();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
 
   const lastRun = job?.runs?.length ? job.runs[job.runs.length - 1] : null;
   const L = live.data;
@@ -236,8 +248,11 @@ export function Forge() {
               <button className="btn btn-icon" onClick={() => setSeed(String(10000 + Math.floor(Math.random() * 89999)))} title="Random seed"><Dices /></button>
             </div>
           </label>
-          {STATIC && (
-            <div className="tiny muted">Showcase: picks one of the unseen cabinets Fault Forge generated and the real engine inspected (recorded), matching your fault count. Live forging with any seed and camera runs in the local engine.</div>
+          {STATIC && !canLive && (
+            <div className="tiny muted">Replay mode: picks one of the unseen cabinets Fault Forge generated and the real engine inspected (recorded), matching your fault count. Switch to the live engine (top right) to forge with any seed and camera.</div>
+          )}
+          {STATIC && canLive && (
+            <div className="tiny muted">Live: the cloud engine renders a brand-new cabinet from your seed, plants the faults, inspects it and scores it against the hidden answer key.</div>
           )}
           <button className="btn btn-primary btn-xl btn-block" onClick={go} disabled={busy}>
             <Play /> {busy ? "Forging…" : count > 1 ? `Forge & inspect ${count} cabinets` : "Forge & inspect"}
@@ -246,7 +261,7 @@ export function Forge() {
         <div className="card pad forge-live">
           <div className="card-head">
             <div>
-              <div className="card-title"><Gauge /> Live tally on this machine</div>
+              <div className="card-title"><Gauge /> Live tally {STATIC ? "in this browser" : "on this machine"}</div>
               <div className="card-sub">Every Fault Forge cabinet inspected here, scored against its answer key.</div>
             </div>
           </div>
@@ -288,7 +303,7 @@ export function Forge() {
         </Reveal>
         <SelfTest />
       </section>
-      <div className="tiny faint row" style={{ ["--gap" as string]: "6px", marginTop: 18 }}><Terminal size={13} /> Live tally and history are stored in <span className="mono">out/runs/</span>.</div>
+      <div className="tiny faint row" style={{ ["--gap" as string]: "6px", marginTop: 18 }}><Terminal size={13} /> Live tally and history are stored {STATIC ? "in this browser (IndexedDB); the cloud engine keeps nothing" : <>in <span className="mono">out/runs/</span></>}.</div>
     </div>
   );
 }

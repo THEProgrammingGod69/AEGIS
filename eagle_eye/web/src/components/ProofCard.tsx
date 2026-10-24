@@ -3,7 +3,7 @@ import { ArrowRight, FileImage, Layers, ScanLine } from "lucide-react";
 import { useState } from "react";
 import { STATIC, url } from "../lib/api";
 import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf } from "../lib/format";
-import { gaRaster } from "../lib/static";
+import { gaFor } from "../lib/static";
 import type { Item, Pt } from "../lib/types";
 import { CropView } from "./CropView";
 import { Marker, Meter, Seg, StatusBadge } from "./ui";
@@ -56,7 +56,7 @@ function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expe
   const m = 15;
   const quad = (f: (v: number, a: "x" | "y") => number): Pt[] => [[f(x, "x"), f(y, "y")], [f(x + w, "x"), f(y, "y")], [f(x + w, "x"), f(y + h, "y")], [f(x, "x"), f(y + h, "y")]];
   if (kind === "expected") {
-    const g = gaRaster();
+    const g = gaFor(run);
     const T = (v: number, a: "x" | "y") => (a === "x" ? g.ox : g.oy) + v * g.k;
     return <CropView src={g.src} size={[g.w, g.h]} rect={[T(x - m, "x"), T(y - m, "y"), T(x + w + m, "x"), T(y + h + m, "y")]} outline={quad(T)} color="#0ea5e9" bg="#fff" />;
   }
@@ -67,6 +67,11 @@ function StaticCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expe
   const xs = it.quad.map((p) => p[0]);
   const ys = it.quad.map((p) => p[1]);
   return <CropView src={url.file(run, "photo")} size={geo.photoSize} rect={[Math.min(...xs) - 60, Math.min(...ys) - 60, Math.max(...xs) + 60, Math.max(...ys) + 60]} outline={it.quad} color={STATUS_HEX[statusOf(it)]} />;
+}
+
+/** One proof image (drawing / photo / aligned) for an item: built in the browser on the hosted console, served by the local engine. */
+export function ProofCrop({ run, it, kind, geo }: { run: string; it: Item; kind: "expected" | "found" | "aligned"; geo: Geo }) {
+  return STATIC ? <StaticCrop run={run} it={it} kind={kind} geo={geo} /> : <img src={url.crop(run, it.id, kind)} alt={`${kind} crop for ${it.id}`} />;
 }
 
 export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }) {

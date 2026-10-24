@@ -105,6 +105,17 @@ export interface RunMeta {
   forge?: { seed: number; strength: number; faults: ForgeFault[]; score: ForgeScore };
   engine: string;
   warnings?: { code: string; message: string }[];
+  /** Inspector decisions (human in the loop), keyed by item id. */
+  reviews?: Record<string, Review>;
+  /** Where the run came from in the hosted console: recorded showcase or the live cloud engine. */
+  origin?: "recorded" | "cloud" | "local";
+}
+
+export interface Review {
+  decision: "PASS" | "FAIL";
+  note: string;
+  by: string;
+  at: string;
 }
 
 export interface AnchorPoint {
@@ -145,6 +156,8 @@ export interface RunPayload {
   rails: { name: string; tags: string[] }[];
   wires: { terminal: string; ferrule: string; colour: string }[];
   timing: Timing;
+  /** Raster of a custom GA drawing (cloud runs); the demo drawing's raster ships with the console. */
+  ga_raster?: { w: number; h: number; ox: number; oy: number; k: number };
 }
 
 export interface JobEvent {
@@ -168,6 +181,9 @@ export interface JobView {
   count?: number;
   queue_position: number;
   elapsed: number;
+  /** Hosted console: "cloud" = real engine run, "recorded" = replay of a recorded run. */
+  mode?: "cloud" | "recorded" | "local";
+  note?: string;
 }
 
 export interface Sample {
@@ -184,11 +200,14 @@ export interface Sample {
 export interface Health {
   ok: boolean;
   version: string;
-  tesseract: { ok: boolean; cmd: string; version: string | null; error?: string };
+  tesseract: { ok: boolean; cmd: string; version: string | null; error?: string; backend?: string };
   workers: number;
   cpu: number;
   checks: string[];
   runs: number;
+  mode?: "local" | "cloud" | "recorded";
+  uptime?: number;
+  busy?: number;
 }
 
 export interface CheckInfo {

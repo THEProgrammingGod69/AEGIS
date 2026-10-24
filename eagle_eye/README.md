@@ -18,7 +18,8 @@ python eval_forge.py 50 200          # Fault Forge self-test: 50 held-out cabine
 python eval_forge.py --summarize     # recompute out/forge/summary.json from results.json
 python make_samples.py               # regenerate sample_photos/ + ANSWER_KEY.txt + manifest.json
 python spec.py                       # regenerate the demo inputs/ (GA PDF, wire list, checklist)
-python -m pytest tests -q            # 30 tests: engine regression, service, REST API
+python -m pytest tests -q            # engine regression, robustness guards, OCR parity, service, REST + cloud API
+python export_static.py              # re-record the hosted console's replay runs (web/static-public/demo)
 ```
 
 | Environment variable | Default | Meaning |
@@ -26,6 +27,10 @@ python -m pytest tests -q            # 30 tests: engine regression, service, RES
 | `TESSERACT_CMD` | auto | Path to `tesseract(.exe)`. Otherwise PATH, then the default Windows/Homebrew install folders are searched. |
 | `EAGLE_EYE_WORKERS` | CPU cores (2-8) | Parallel OCR lanes. |
 | `HOST`, `PORT` | `127.0.0.1`, `8000` | Console bind address (Docker uses `0.0.0.0`). |
+| `EAGLE_EYE_DATA` | `out/` | Where runs and caches are written (containers: `/tmp/eagle_eye`). |
+| `EAGLE_EYE_OCR` | in-process | `cli` forces the tesseract subprocess instead of libtesseract's C API. |
+| `TESSERACT_LIB` | auto | Path to `libtesseract` if it is not found automatically. |
+| `EAGLE_EYE_CLOUD` | off | `1` = hosted engine container: `/` redirects to the console, `/api/v2` serves it. |
 
 ## Pipeline
 
@@ -34,11 +39,20 @@ python -m pytest tests -q            # 30 tests: engine regression, service, RES
 | 1 Parse | `inspector.parse_ga` | Vector rectangles + words from the GA PDF → devices (tag, type, box, label box), terminals, breaker rails, backplate size and cabinet ID. Cached by file. |
 | 2 Register | `inspector.register` | Backplate quad from the photo (coarse homography), then every device label and ferrule read with certainty (closed-vocabulary OCR) becomes an anchor; RANSAC refines the fit. Off-pattern anchors are reported. Weak fits retry 180°/90°/270° (upside-down phone photos). |
 | 3 Checks | `@check` classes | `GA` part present (occupancy vs an illumination-aware empty-backplate model + label evidence) · `ORDER` swap-aware rail sequence · `LABEL` tag OCR + voting · `FERRULE` sleeve present + wire-list-constrained OCR · `COLOUR` wire colour after white-balancing on the labels. |
-| 4 Consensus | inside each check | FAIL needs agreeing evidence; disagreement is REVIEW. A label whose part is missing is SKIP (root cause reported once). If fewer than 40% of anchors match, the photo probably isn't this cabinet: every would-be FAIL becomes REVIEW (registration guard). |
+| 4 Consensus | inside each check | FAIL needs agreeing evidence; disagreement is REVIEW. A label whose part is missing is SKIP (root cause reported once). If fewer than 40% of anchors match, the photo probably isn't this cabinet: every would-be FAIL becomes REVIEW (registration guard). Zone guards: when half a terminal strip's sleeves or half a zone's labels come back absent at once, the zone photo is suspect and those absence FAILs become REVIEW. |
 | 5 Report | `report.py`, `pdf_report.py` | Numbered boxes on the photo, expected/found/aligned crops, the QC checklist template filled in (plus a Summary sheet), a PDF report, JSON. |
 | 6 Re-check | `report.recheck` | Against the previous run: CLOSED (fixed), OPEN (still failing), REGRESSION (was PASS, now FAIL), NEW (newly revealed). Items keep their marker numbers. |
 
-OCR calls run in parallel (one single-threaded Tesseract process per core): a full inspection takes ~4 s on 4 cores instead of ~20 s, with results identical to the sequential version on all 50 self-test cabinets.
+OCR runs in-process through libtesseract's C API (`ocr_capi.py`, one engine per OCR thread) instead of starting a tesseract process per crop: identical text on all 1,668 crops of the parity test, identical self-test, **~0.9 s per cabinet on 4 cores** (was ~4 s) and ~2 s on a single vCPU. It falls back to the CLI automatically when the library is not found.
+
+### Precision under bad photos
+
+The Robustness Lab (and `tests/test_robustness.py`) degrades photos with tilt, keystone, dim light, blur, noise, colour cast, glare and JPEG compression. Four evidence rules keep a bad photo from producing a false FAIL; each was measured on the 50-cabinet self-test (unchanged: 87/87, 0 false alarms) and on 115 degraded photos (false FAILs 22 → 0 on the first 90; 0 on 25 more from the browser stress sweep):
+
+- *Wrong label* needs an agreeing reading shaped like a complete tag (`PS17` for `PS11`), not a fragment (`43`, `J`).
+- *No label* is not proven when OCR reads a piece of the expected tag (`B43` at `CB43`): the label is there, just unclear → REVIEW.
+- *Missing part* needs occupancy below 35 % (planted missing parts read ≤ 28 %, installed parts ≥ 41 %); 35–60 % without a label is REVIEW.
+- *Black vs a dark colour* on a dim wire is REVIEW; *no ferrule* with some sleeve pixels gets a closer OCR look; zone guards (above).
 
 ## Adding a check
 
@@ -70,7 +84,7 @@ Every inspection is stored in `out/runs/<run_id>/` (git-ignored): `photo.jpg`, `
 
 ## REST API
 
-Interactive docs at `/docs` while the server runs.
+Interactive docs at `/docs` while the server runs. `/api` is the local console API (runs stored on this machine); `/api/v2` is the stateless cloud API.
 
 | Method | Path | |
 |---|---|---|
@@ -82,6 +96,15 @@ Interactive docs at `/docs` while the server runs.
 | `POST` | `/api/forge` | `{faults, strength, seed, count}`: forge unseen cabinets with hidden faults, inspect, score |
 | `GET` | `/api/forge/live`, `/api/forge/selftest` | live tally, saved self-test |
 | `GET` | `/api/health`, `/api/checks`, `/api/samples`, `/api/inputs` | status and catalogues |
+| `POST` | `/api/runs/{id}/review` | `{item, decision: PASS/FAIL/CLEAR, note, by}`: inspector decision, kept in `meta.reviews` with a timestamp |
+| `POST` | `/api/v2/inspect` | same inputs as `/api/inspect` plus `parent` = JSON file `{meta, report}`; streams NDJSON: `event` lines, then one `result` with payload, report and every artefact (base64), nothing stored |
+| `POST` | `/api/v2/forge` | `{faults, strength, seed}`: one unseen cabinet, streamed the same way |
+| `GET` | `/api/v2/health`, `/api/v2/diag/samples?ids=`, `/api/v2/diag/forge?start=&n=` | health and parity checks against the local engine |
+
+## Hosted console and cloud engine
+
+- **Console** (`web/`, `npm run build:static`, Vercel project root `eagle_eye/web`): the same React app. It talks to the engine at `VITE_ENGINE_URL` (`.env.static`), keeps every run in the browser (IndexedDB) and falls back to the recorded runs in `static-public/demo` when the engine is unreachable or the viewer picks *Instant replay*.
+- **Engine** (`Dockerfile.vercel`, Vercel container project root `eagle_eye`): Ubuntu 24.04 (Tesseract 5.3.4, the version the recorded runs and the self-test used), pinned `requirements-engine.txt`, `EAGLE_EYE_CLOUD=1`. Stateless, so any instance serves any request. Run it anywhere: `docker build -f Dockerfile.vercel -t eagle-eye-engine . && docker run -p 8080:8080 -e PORT=8080 eagle-eye-engine`.
 
 ## Web console development
 
@@ -95,7 +118,7 @@ React 18 + TypeScript + Vite, framer-motion, lucide icons; fonts are bundled so 
 
 ## Self-test (synthetic cabinets, held-out seeds 200–249)
 
-87/87 planted faults caught · 0 false alarms over 1,950 correct items · 6 items (0.3%) sent to REVIEW · 14/14 clean cabinets with zero FAIL · ~4 s per cabinet on a 4-core CPU. These are generated cabinets; real Emerson photos will be harder. The finale plan swaps in YOLO11 + PaddleOCR and re-runs this harness on Emerson's real samples.
+87/87 planted faults caught · 0 false alarms over 1,950 correct items · 6 items (0.3%) sent to REVIEW · 14/14 clean cabinets with zero FAIL · ~0.9 s per cabinet on a 4-core CPU. These are generated cabinets; real Emerson photos will be harder. The finale plan swaps in YOLO11 + PaddleOCR and re-runs this harness on Emerson's real samples.
 
 ## Tools declared
 

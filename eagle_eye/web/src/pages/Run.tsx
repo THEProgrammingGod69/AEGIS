@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Camera, ChevronRight, Crosshair, Download, FileJson, FileSpreadsheet, FileText, GitCommitHorizontal, Image as ImageIcon,
-  Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed, Timer,
+  ArrowLeft, Camera, CheckCircle2, ChevronRight, ClipboardList, Cloud, Crosshair, Download, FileJson, FileSpreadsheet, FileText, GitCommitHorizontal,
+  Image as ImageIcon, Layers, ListChecks, Plus, RefreshCcw, ScanLine, Search, ShieldAlert, ShieldCheck, ShieldQuestion, SquareDashed, Timer, UserCheck, XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CompareSlider } from "../components/CompareSlider";
@@ -10,12 +10,13 @@ import { PhotoViewer, type ViewerAnchor, type ViewerItem } from "../components/P
 import { ProofCard } from "../components/ProofCard";
 import { Running } from "../components/Running";
 import { Kpi, Marker, Seg, StatusBadge, useToast } from "../components/ui";
-import { STATIC, api, followJob, url } from "../lib/api";
+import { STATIC, api, dl, followJob, url, useCanLive } from "../lib/api";
+import { inspectorName, reviewSummary } from "../lib/reviews";
 import { recheckOptions } from "../lib/static";
 import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
-import type { Item, JobView, Pt, Result, RunMeta, RunPayload } from "../lib/types";
+import type { Item, JobView, Pt, Result, Review, RunMeta, RunPayload } from "../lib/types";
 
 const R = 4; // rectified px per mm (matches inspector.R)
 const mmQuad = (b: number[]): Pt[] => [[b[0] * R, b[1] * R], [(b[0] + b[2]) * R, b[1] * R], [(b[0] + b[2]) * R, (b[1] + b[3]) * R], [b[0] * R, (b[1] + b[3]) * R]];
@@ -36,9 +37,15 @@ function VerdictBanner({ p }: { p: RunPayload }) {
           <h2 className="verdict-head">{v.headline.split(" · ")[1] ?? v.headline}</h2>
           <p className="verdict-detail">{v.detail}</p>
           <div className="verdict-meta">
+            {p.meta.origin === "cloud" && <span style={{ color: "var(--accent)" }}><Cloud size={13} /> Live cloud engine</span>}
+            {p.meta.origin === "recorded" && <span><Cloud size={13} /> Recorded engine run</span>}
             <span><Timer size={13} /> {p.timing.total.toFixed(1)} s on CPU</span>
             <span><Crosshair size={13} /> {p.registration.anchors}/{p.registration.targets} anchors · {p.registration.inliers} inliers</span>
             <span><ListChecks size={13} /> {p.meta.items} items from the drawing</span>
+            {(() => {
+              const r = reviewSummary(p.meta, p.results);
+              return r.decided > 0 ? <span style={{ color: "var(--accent-3)" }}><UserCheck size={13} /> Inspector: {r.confirmed} confirmed · {r.overridden} overridden{r.pending ? ` · ${r.pending} pending` : ""}</span> : null;
+            })()}
           </div>
         </div>
       </div>
@@ -224,11 +231,42 @@ function TimingCard({ p }: { p: RunPayload }) {
   );
 }
 
+/** Human in the loop: the inspector confirms or overrides the engine on one item. Kept as an audit trail. */
+function DecisionBar({ it, review, onDecide }: { it: Item; review?: Review; onDecide: (item: string, d: Review["decision"] | "CLEAR", note: string) => void }) {
+  const [note, setNote] = useState(review?.note ?? "");
+  if (it.result === "SKIP") return null;
+  const engine = it.result;
+  return (
+    <div className={`decision${review ? " done" : ""}`} style={{ ["--c" as string]: review ? STATUS_COLOR[review.decision] : "var(--accent-3)" }}>
+      <div className="row between wrap" style={{ ["--gap" as string]: "8px" }}>
+        <div className="tiny faint row" style={{ ["--gap" as string]: "6px" }}><UserCheck size={13} /> Inspector decision</div>
+        {review && (
+          <span className="tiny">
+            <b style={{ color: STATUS_COLOR[review.decision] }}>{review.decision === engine ? "Confirmed" : "Overridden"} {review.decision}</b>
+            <span className="faint"> · {review.by} · {runDate(review.at)}</span>
+          </span>
+        )}
+      </div>
+      <div className="row" style={{ ["--gap" as string]: "6px" }}>
+        <input className="input grow" placeholder={engine === "REVIEW" ? "What did you see on the cabinet?" : "Note (optional)"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
+        <button className="btn btn-sm" style={{ ["--c" as string]: "var(--pass)" }} onClick={() => onDecide(it.id, "PASS", note)} title="The item is correct on the cabinet">
+          <CheckCircle2 style={{ color: "var(--pass)" }} /> PASS
+        </button>
+        <button className="btn btn-sm" onClick={() => onDecide(it.id, "FAIL", note)} title="The item is wrong on the cabinet">
+          <XCircle style={{ color: "var(--fail)" }} /> FAIL
+        </button>
+        {review && <button className="btn btn-sm btn-ghost" onClick={() => { setNote(""); onDecide(it.id, "CLEAR", ""); }}>Undo</button>}
+      </div>
+    </div>
+  );
+}
+
 function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | null, sample: string | null) => void }) {
   const [photo, setPhoto] = useState<File | null>(null);
   const samples = useAsync(api.samples);
+  const live = useCanLive();
   const suggested = p.meta.photo_name.startsWith("01_") && !p.meta.parent ? "05" : null;
-  const recorded = STATIC ? recheckOptions(p.meta.id) : null;
+  const recorded = STATIC && !live ? recheckOptions(p.meta.id) : null;
   return (
     <div className="card pad recheck">
       <div className="card-head">
@@ -238,10 +276,9 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
         </div>
       </div>
       <div className="recheck-grid">
-        {STATIC ? (
+        {!live ? (
           <div className="card flat pad small muted">
-            This hosted showcase replays re-checks recorded from the real engine. Uploading a new photo needs the live engine
-            (<span className="mono">run.bat</span> / <span className="mono">python server.py</span>).
+            Replay mode: re-checks recorded from the real engine. Uploading the after-fix photo needs the live engine (switch at the top right).
             {recorded && !recorded.length && <div style={{ marginTop: 8 }}>No re-check was recorded for this run; open <b>Sample 01</b> to try one.</div>}
           </div>
         ) : (
@@ -257,7 +294,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
             ))}
           </div>
           {suggested && <div className="tiny muted">Suggested: <b>05 · After the fix</b>, a re-photo of sample 01 with one fault left.</div>}
-          {!STATIC && (
+          {live && (
             <button className="btn btn-primary btn-lg" disabled={!photo} onClick={() => onStart(photo, null)} style={{ marginTop: "auto" }}>
               <RefreshCcw /> Re-check with uploaded photo
             </button>
@@ -270,7 +307,7 @@ function RecheckCard({ p, onStart }: { p: RunPayload; onStart: (photo: File | nu
 
 export function Run({ id }: { id: string }) {
   const toast = useToast();
-  const { data: p, error } = useAsync(() => api.run(id), [id]);
+  const { data: p, error, setData } = useAsync(() => api.run(id), [id]);
   const chain = useAsync(() => api.chain(id), [id]);
   const [mode, setMode] = useState<"photo" | "rect">("photo");
   const [layers, setLayers] = useState({ issues: true, drawing: false, anchors: false });
@@ -311,11 +348,23 @@ export function Run({ id }: { id: string }) {
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Re-check failed");
+      if (done.note) toast("ok", done.note);
       setJob(null);
       go(`run/${done.run_id}`);
     } catch (e) {
       toast("error", (e as Error).message);
       setJob(null);
+    }
+  };
+
+  const decide = async (item: string, decision: Review["decision"] | "CLEAR", note: string) => {
+    if (!p) return;
+    try {
+      const m = await api.review(id, item, decision, note, inspectorName());
+      setData({ ...p, meta: { ...p.meta, reviews: m.reviews ?? {} } });
+      toast("ok", decision === "CLEAR" ? `Decision on ${item} cleared` : `${item}: ${decision} recorded by ${inspectorName()}`);
+    } catch (e) {
+      toast("error", (e as Error).message);
     }
   };
 
@@ -350,10 +399,11 @@ export function Run({ id }: { id: string }) {
           {chain.data && <Chain chain={chain.data} current={id} />}
         </div>
         <div className="row wrap" style={{ ["--gap" as string]: "8px" }}>
-          <a className="btn" href={url.download(id, "pdf")}><FileText /> PDF report</a>
-          <a className="btn" href={url.download(id, "checklist")}><FileSpreadsheet /> Filled checklist</a>
-          <a className="btn btn-icon" href={url.download(id, "json")} title="Report JSON"><FileJson /></a>
-          <a className="btn btn-icon" href={url.download(id, "marked")} title="Marked-up photo"><Download /></a>
+          <a className="btn" {...dl(id, "pdf", p.meta.cabinet)}><FileText /> PDF report</a>
+          <a className="btn" {...dl(id, "checklist", p.meta.cabinet)}><FileSpreadsheet /> Filled checklist</a>
+          <a className="btn btn-icon" {...dl(id, "json", p.meta.cabinet)} title="Report JSON"><FileJson /></a>
+          <a className="btn btn-icon" {...dl(id, "marked", p.meta.cabinet)} title="Marked-up photo"><Download /></a>
+          <a className="btn" href={`#/work/${id}`} title="Printable fix list for the technician"><ClipboardList /> Work order</a>
           <button className="btn btn-primary" onClick={() => document.getElementById("recheck")?.scrollIntoView({ behavior: "smooth", block: "center" })}><RefreshCcw /> Re-check</button>
           <button className="btn btn-icon" onClick={() => go("inspect")} title="New inspection"><Plus /></button>
         </div>
@@ -413,6 +463,7 @@ export function Run({ id }: { id: string }) {
         <div className="side">
           <div className="card pad">
             {sel ? <ProofCard run={id} it={sel} geo={{ photoSize: p.photo_size, sizeMm: p.size_mm }} /> : <div className="empty">Select an item</div>}
+            {sel && <DecisionBar key={sel.id} it={sel} review={p.meta.reviews?.[sel.id]} onDecide={decide} />}
           </div>
           <div className="card side-tabs">
             <div className="tabs">

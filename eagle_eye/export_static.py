@@ -23,6 +23,8 @@ from inspector import CHECKS, ORDER, tesseract_info
 OUT = config.BASE / "web" / "static-public" / "demo"
 RECHECKS = {"01": ["01", "02", "03", "04", "05"], "02": ["02", "05"], "03": ["02", "05"], "04": ["02", "05"], "05": ["02", "05"]}
 FORGE_POOL = [(k, seed) for k in range(5) for seed in (101 + 17 * k, 233 + 31 * k)]
+# harsh camera (strength 1.45): the engine sends unreadable zones to REVIEW instead of guessing (Review station demo)
+REVIEW_POOL = [302, 305, 322]
 
 
 def jpg(src, dst, size, q):
@@ -34,7 +36,7 @@ def jpg(src, dst, size, q):
 def main():
     if OUT.exists():
         shutil.rmtree(OUT)
-    for d in ("img", "runs", "inputs"):
+    for d in ("img", "runs", "inputs", "samples"):
         (OUT / d).mkdir(parents=True)
     tmp_runs = Path(tempfile.mkdtemp(prefix="ee_static_"))
     config.RUNS = tmp_runs                      # keep the real run store untouched
@@ -69,6 +71,11 @@ def main():
     for k, seed in FORGE_POOL:
         m = record("forge", lambda e, k=k, seed=seed: service.run_forge(k=k, seed=seed, strength=round(rng.uniform(0.9, 1.3), 2), on_event=e))
         forge.append(m["id"])
+    review = []
+    for seed in REVIEW_POOL:
+        m = record("forge", lambda e, seed=seed: service.run_forge(seed=seed, strength=1.45, on_event=e))
+        forge.append(m["id"])
+        review.append(m["id"])
 
     # files: photos/rectified de-duplicated by content, marked/pdf/xlsx/json per run
     files = {}
@@ -103,11 +110,14 @@ def main():
     shutil.copyfile(prev, OUT / "img" / "ga_preview.png")
     for key, p in service.default_inputs().items():
         shutil.copyfile(p, OUT / "inputs" / p.name)
+    for smp in service.samples():                # full resolution, for the Robustness Lab
+        shutil.copyfile(service.sample_path(smp["id"]), OUT / "samples" / smp["file"])
 
     t = tesseract_info()
     index = dict(
         version=config.VERSION,
-        health=dict(ok=True, version=config.VERSION, tesseract=dict(ok=True, cmd="recorded", version=t.get("version") or "tesseract"),
+        health=dict(ok=True, version=config.VERSION, tesseract=dict(ok=True, cmd="recorded", version=t.get("version") or "tesseract",
+                                                                   backend=t.get("backend")),
                     workers=config.WORKERS, cpu=os.cpu_count(), checks=list(CHECKS), runs=len(runs)),
         checks=service.checks_info(),
         samples=[dict(s, image=files[base[s["id"]]]["photo"]) for s in service.samples()],
@@ -116,7 +126,7 @@ def main():
         ga=dict(src="img/ga.jpg", w=gw, h=gh, **scale),
         runs={rid: dict(meta=runs[rid], files=files[rid], events=events[rid]) for rid in runs},
         base=base, recheck=recheck, forge=forge,
-        history=[base["03"], base["04"], forge[3], forge[7], base["01"], v2, v3["id"]],
+        history=[review[0], base["03"], base["04"], forge[3], review[2], forge[7], base["01"], v2, v3["id"]],
         enabled=list(ORDER),
     )
     (OUT / "index.json").write_text(json.dumps(index, separators=(",", ":"), default=str), encoding="utf-8")

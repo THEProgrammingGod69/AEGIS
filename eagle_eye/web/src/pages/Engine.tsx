@@ -1,13 +1,15 @@
-import { Boxes, Code2, Cpu, ExternalLink, FileCode2, Network, Puzzle, ServerCog, Wrench } from "lucide-react";
+import { Boxes, Cloud, Code2, Cpu, ExternalLink, FileCode2, Gauge, Network, Puzzle, ServerCog, Wrench } from "lucide-react";
 import { Reveal } from "../components/ui";
 import { STATIC, api } from "../lib/api";
+import { useEngine } from "../lib/cloud";
 import { REPO_URL } from "../lib/static";
 import { useAsync } from "../lib/hooks";
 
 const FILES = [
   ["inspector.py", "The engine: drawing parser, registration, the 5 plug-in checks, consensus and root-cause skip. Read this first."],
-  ["service.py", "Run store: artefacts per run, re-check chains, proof crops, Fault Forge scoring."],
-  ["server.py", "FastAPI backend + this console. One inspection at a time on a background worker, live progress."],
+  ["ocr_capi.py", "In-process libtesseract (C API): the same OCR as the CLI, without a process start per crop. 5× faster."],
+  ["service.py", "Run store: artefacts per run, re-check chains, proof crops, Fault Forge scoring, inspector reviews."],
+  ["server.py", "FastAPI: the local console API (/api) and the stateless, streaming cloud API (/api/v2)."],
   ["report.py", "Marked-up photo, expected-vs-found crops, GA overlay, filled Excel checklist, re-check statuses."],
   ["pdf_report.py", "One-click PDF QC report: verdict, findings with proof, re-check table, full checklist."],
   ["render.py", "Photo generator + Fault Forge: plants faults and camera effects in test cabinets."],
@@ -23,6 +25,10 @@ const API = [
   ["GET", "/api/runs/{id}/items/{item}/{expected|found|aligned}", "proof crops"],
   ["GET", "/api/runs/{id}/files/{pdf|checklist|json|marked}", "downloads"],
   ["POST", "/api/forge", "plant faults in an unseen cabinet, inspect, score"],
+  ["POST", "/api/runs/{id}/review", "inspector decision on an item: PASS / FAIL / CLEAR, with note, who and when"],
+  ["POST", "/api/v2/inspect", "stateless: streams progress, then the whole run (report, images, PDF, Excel) as NDJSON"],
+  ["POST", "/api/v2/forge", "stateless Fault Forge: new cabinet, hidden faults, scored, streamed back"],
+  ["GET", "/api/v2/diag/samples", "parity check: inspect the shipped samples on this engine and report counts"],
 ];
 
 const TOOLS = ["Python", "OpenCV", "PyMuPDF", "Tesseract OCR", "NumPy", "openpyxl", "ReportLab", "FastAPI", "React", "Streamlit"];
@@ -30,7 +36,8 @@ const TOOLS = ["Python", "OpenCV", "PyMuPDF", "Tesseract OCR", "NumPy", "openpyx
 export function Engine() {
   const checks = useAsync(api.checks);
   const health = useAsync(api.health);
-  const h = health.data;
+  const eng = useEngine();
+  const h = STATIC && eng.health ? eng.health : health.data;
   return (
     <div className="main">
       <div className="page-head">
@@ -82,15 +89,23 @@ export function Engine() {
           </div>
         </Reveal>
         <Reveal className="card pad" delay={0.06}>
-          <div className="card-title" style={{ marginBottom: 14 }}><ServerCog /> {STATIC ? "Recorded on" : "This machine"}</div>
+          <div className="card-title" style={{ marginBottom: 14 }}>{STATIC ? <Cloud /> : <ServerCog />} {STATIC ? (eng.health ? "Cloud engine (live)" : "Recorded on") : "This machine"}</div>
           <div className="kv">
             <span>Engine</span><b className="mono">EAGLE EYE {h?.version ?? "…"}</b>
             <span>OCR</span><b className="mono" style={{ color: h ? (h.tesseract.ok ? "var(--pass)" : "var(--fail)") : undefined }}>{h ? h.tesseract.version ?? h.tesseract.error : "…"}</b>
-            <span>Binary</span><b className="mono ellipsis" title={h?.tesseract.cmd}>{h?.tesseract.cmd ?? "…"}</b>
-            <span>OCR lanes</span><b className="mono">{h?.workers ?? "…"} parallel · {h?.cpu ?? "…"} CPU cores</b>
-            <span>Stored runs</span><b className="mono">{h?.runs ?? "…"}</b>
-            <span>Cloud / GPU</span><b className="mono">none</b>
+            <span>OCR backend</span><b className="mono">{h?.tesseract.backend ?? "tesseract CLI"}</b>
+            <span>OCR lanes</span><b className="mono">{h?.workers ?? "…"} parallel · {h?.cpu ?? "…"} CPU core{h?.cpu === 1 ? "" : "s"}</b>
+            {STATIC && eng.health ? (
+              <><span>Endpoint</span><b className="mono ellipsis" title={eng.url}>{eng.url.replace(/^https?:\/\//, "")}/api/v2</b>
+              <span>State</span><b className="mono">stateless · runs kept in this browser</b></>
+            ) : (
+              <><span>Stored runs</span><b className="mono">{h?.runs ?? "…"}</b></>
+            )}
+            <span>GPU</span><b className="mono">none</b>
           </div>
+          <div className="divider" />
+          <div className="card-title" style={{ marginBottom: 10 }}><Gauge /> Speed</div>
+          <div className="small muted">OCR runs in-process through libtesseract's C API: identical text to the tesseract CLI on all 1,668 crops tested, and the 50-cabinet self-test is unchanged (87/87, 0 false alarms) at <b>0.9 s per cabinet</b> on 4 cores (was 4.0 s), ~2 s on the 1-vCPU cloud container.</div>
           <div className="divider" />
           <div className="card-title" style={{ marginBottom: 10 }}><Boxes /> Tools declared</div>
           <div className="row wrap" style={{ ["--gap" as string]: "6px" }}>

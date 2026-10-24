@@ -4,7 +4,7 @@
 
 Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1, Problem Statement #03
 
-**▶ Live showcase: https://eagle-eye-enigma.vercel.app** · the full console, replaying 29 inspections recorded from the real engine (all samples, re-checks, Fault Forge). Inspecting your own photo needs the local engine below.
+**▶ Live prototype: https://eagle-eye-enigma.vercel.app** · the full console on the real engine in the cloud: upload a photo or a drawing set, inspect, prove, print the work order, re-check, review, analyse. Nothing to install; runs stay in your browser. If the engine is unreachable it falls back to instant replays recorded from the same engine.
 
 ![EAGLE EYE overview](docs/screenshots/01_overview.jpg)
 
@@ -15,9 +15,29 @@ Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1,
 | Planted faults caught | **87 / 87** |
 | False alarms (correct items marked FAIL) | **0** of 1,950 |
 | Sent to REVIEW instead of guessing | 6 items (0.3%) |
-| Time per cabinet | **~4 s** on a 4-core laptop CPU, no GPU |
+| Time per cabinet | **0.9 s** on a 4-core laptop CPU (~2 s on the 1-vCPU cloud engine), no GPU |
+| Degraded photos (tilt, blur, glare, noise, colour cast) | **0** false FAILs on 115 photos; unclear zones go to REVIEW |
 
 These numbers come from Fault Forge's generated cabinets (held-out seeds 200–249). Real photos will be harder; see [honest limits](#honest-limits).
+
+## Round 3: the complete prototype
+
+| | |
+|---|---|
+| **Live cloud engine** | The same Python engine in a stateless container (`/api/v2`, NDJSON streaming). Any photo, any drawing set, any check selection, from any browser or phone. |
+| **5× faster engine** | OCR runs in-process through libtesseract's C API: identical text on 1,668 test crops, identical self-test, 4 s → 0.9 s per cabinet. |
+| **Technician work order** | Every FAIL as a numbered fix with location, proof crops, time estimate and sign-off. Print or save as PDF. |
+| **Review station** | Human in the loop: confirm or overturn findings with the proof on screen; every decision audit-logged (who, what, when). |
+| **QC analytics** | First-pass yield, fix closure, inspector agreement, time saved, and a heatmap of where faults cluster on the cabinet. |
+| **Robustness Lab** | Degrade a photo (tilt, keystone, blur, glare, noise, colour cast, JPEG) and send it to the engine: findings move to REVIEW, never to a false FAIL. It found four precision gaps, now closed by evidence rules (see the [engine README](eagle_eye/README.md#precision-under-bad-photos)). |
+| **Capture assistant** | Camera capture with a framing guide and an instant photo score (sharpness, exposure, glare) before a run is spent on a bad photo. |
+| **Presenter mode + Ctrl K** | The demo script on screen with clicker support, and a command palette to jump anywhere. |
+
+| Work order | Review station | Analytics |
+|---|---|---|
+| ![work order](docs/screenshots/r3_workorder.jpg) | ![review](docs/screenshots/r3_review.jpg) | ![analytics](docs/screenshots/r3_analytics.jpg) |
+
+Presenting? Read the [Round 3 run-sheet](docs/ROUND3_RUNSHEET.md).
 
 ---
 
@@ -44,7 +64,7 @@ python demo.py                # command-line demo: inspect -> fix -> re-photo ->
 
 No Node.js is needed: the built web console ships in `eagle_eye/web/dist`.
 
-**Hosted showcase.** `python export_static.py` records real runs into `eagle_eye/web/static-public/demo`; `npm run build:static` builds the replay console that Vercel serves (config in `eagle_eye/web/vercel.json`, project root `eagle_eye/web`).
+**Hosted version.** Two Vercel projects from this repo: the console (`eagle_eye/web`, `npm run build:static`, engine URL in `.env.static`) and the engine container (`eagle_eye/Dockerfile.vercel`). `python export_static.py` records the replay runs the console falls back to. Details: [engine README](eagle_eye/README.md#hosted-console-and-cloud-engine).
 
 ## What to click
 
@@ -57,8 +77,10 @@ No Node.js is needed: the built web console ships in `eagle_eye/web/dist`.
 | Clean cabinet | **Inspect → sample 02** | 41 / 41 PASS, no false alarms |
 | Unseen cabinet | **Fault Forge → Forge & inspect** | A new cabinet with hidden faults; reveal the answer key and compare |
 | Reports | **PDF report** / **Filled checklist** buttons | One-click PDF QC report and Emerson's Excel checklist filled in |
-
-Presenting? Read the [Round 2 run-sheet](docs/ROUND2_RUNSHEET.md).
+| Work order | **Work order** on any inspection | Printable fix list: 4 numbered fixes, ~33 min, with proof crops |
+| Human review | **Review**, press **F** or **P** | The decision lands in the audit trail and in Analytics |
+| Bad photos | **Robustness → Stress sweep** | 5 runs from clean to extreme; false alarms stay at 0 |
+| Anywhere | `Ctrl K` | Command palette; *Start presenter mode* |
 
 ## How it works
 
@@ -90,7 +112,9 @@ flowchart LR
 eagle_eye/
   inspector.py     engine: drawing parser, registration, plug-in checks, consensus
   service.py       run store, re-check chains, proof crops, Fault Forge scoring
-  server.py        FastAPI backend + web console (python server.py)
+  server.py        FastAPI backend + web console (python server.py), stateless cloud API /api/v2
+  ocr_capi.py      in-process libtesseract (C API), 5x faster OCR with identical text
+  Dockerfile.vercel  engine container for the hosted console
   report.py        marked photo, crops, GA overlay, filled Excel checklist, re-check
   pdf_report.py    one-click PDF QC report
   render.py        photo generator + Fault Forge
@@ -101,7 +125,7 @@ eagle_eye/
   sample_photos/   5 test photos + ANSWER_KEY.txt
   web/             React + TypeScript console (source and built dist/)
   tests/           pytest: engine, service, API
-docs/              screenshots, Round 2 run-sheet
+docs/              screenshots, Round 2 and Round 3 run-sheets
 ```
 
 Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_eye/README.md).
@@ -110,6 +134,7 @@ Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_ey
 
 - The numbers are on generated cabinets that copy Emerson's example layout. Real photos will be harder.
 - OCR is Tesseract today. A YOLO11 detector, PaddleOCR for curved ferrules and a local vision-model verifier for REVIEW items are planned, not built.
+- Very bad photos lose findings to REVIEW (the stress sweep catches 4/4 on mild, 3/4 on moderate, 0/4 once the photo no longer registers): safe, but a re-photo is needed.
 - The tool needs a vector GA PDF in this format. Scanned drawings are a later step.
 
 ## Tools declared

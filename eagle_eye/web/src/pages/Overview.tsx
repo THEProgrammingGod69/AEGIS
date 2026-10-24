@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import {
-  ArrowLeftRight, ArrowRight, BadgeCheck, Ban, Bot, Camera, Crosshair, Eye, FileCode2, FileSpreadsheet, FlaskConical,
-  GitMerge, Layers, Microscope, Play, RefreshCcw, ScanEye, ShieldCheck, Sparkles, SpellCheck2, Target, Timer, Wrench,
+  Aperture, ArrowLeftRight, ArrowRight, BadgeCheck, BarChart3, Bot, Camera, ClipboardList, Cloud, Command, Cpu, Crosshair, Eye, FileCode2,
+  FileSpreadsheet, FlaskConical, Gauge, GitMerge, Layers, Mic, Microscope, Play, RefreshCcw, ScanEye, ShieldCheck, Sparkles, SpellCheck2,
+  Target, Timer, UserCheck, Wrench,
 } from "lucide-react";
 import { ScanShowcase } from "../components/ScanShowcase";
 import { Count, Reveal, SectionHead } from "../components/ui";
@@ -45,6 +46,17 @@ const PIPE = [
   { n: 6, icon: RefreshCcw, t: "Re-check", s: "New photo after the fix: CLOSED / OPEN / REGRESSION" },
 ];
 
+const NEW = [
+  { icon: Cloud, t: "Live cloud engine", s: "The real Python engine in a container. Upload any photo, drawing set or check selection from any browser; results stay on your device.", to: "inspect", tag: "~2 s / cabinet" },
+  { icon: Gauge, t: "5× faster engine", s: "OCR now runs in-process through libtesseract: identical text on 1,668 crops, identical self-test, 4 s → 0.9 s per cabinet.", to: "engine", tag: "same results" },
+  { icon: ClipboardList, t: "Technician work orders", s: "Every FAIL becomes a numbered fix with location, proof crops, time estimate and sign-off. Print or save as PDF.", to: "history", tag: "printable" },
+  { icon: UserCheck, t: "Review station", s: "Human in the loop: inspectors confirm or overturn findings with the proof on screen. Every decision is audit-logged.", to: "review", tag: "audit trail" },
+  { icon: BarChart3, t: "QC analytics", s: "First-pass yield, fix closure, inspector agreement, time saved, and a heatmap of where faults cluster on the cabinet.", to: "analytics", tag: "heatmap" },
+  { icon: Microscope, t: "Robustness Lab", s: "Tilt, blur, glare, noise, colour cast: degrade a photo and watch findings move to REVIEW instead of false FAILs.", to: "lab", tag: "stress sweep" },
+  { icon: Aperture, t: "Capture assistant", s: "Camera capture with a framing guide, plus an instant photo score (sharpness, exposure, glare) before a run is wasted.", to: "inspect", tag: "on device" },
+  { icon: Command, t: "Presenter mode + ⌘K", s: "A command palette to jump anywhere and a step-by-step demo script with clicker support.", to: "", tag: "Ctrl K" },
+];
+
 const PLAN = [
   { icon: FileCode2, t: "Adapt the parser to Emerson's drawings", s: "Map their GA tag and title-block conventions; the checks stay unchanged." },
   { icon: Target, t: "Fine-tune a YOLO11 detector on their photos", s: "Swap the occupancy model for a detector trained on Emerson's samples." },
@@ -52,7 +64,7 @@ const PLAN = [
   { icon: FlaskConical, t: "Re-run Fault Forge on real cabinets", s: "Plant faults on Emerson's samples and publish the same self-test numbers." },
 ];
 
-export function Overview() {
+export function Overview({ onPresent }: { onPresent?: () => void }) {
   const st = useAsync(api.selftest);
   const s = st.data?.summary;
   const metrics = [
@@ -85,10 +97,15 @@ export function Overview() {
             <button className="btn btn-xl" onClick={() => go("forge")}>
               <FlaskConical /> Challenge it in Fault Forge
             </button>
+            {onPresent && (
+              <button className="btn btn-xl btn-ghost" onClick={onPresent} title="Step-by-step demo script">
+                <Mic /> Presenter mode
+              </button>
+            )}
           </motion.div>
           <motion.div className="hero-trust" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-            <span><Ban size={14} /> No cloud, no GPU</span>
-            <span><Timer size={14} /> ~4 s per cabinet</span>
+            <span><Cpu size={14} /> CPU only, no GPU</span>
+            <span><Timer size={14} /> ~{(s?.sec_per_cabinet ?? 1).toFixed(1)} s per cabinet</span>
             <span><Microscope size={14} /> Deterministic and auditable</span>
           </motion.div>
         </div>
@@ -112,6 +129,35 @@ export function Overview() {
         ))}
         <div className="metrics-note">Fault Forge self-test on generated cabinets (held-out seeds 200–249). Real photos will be harder; see the honest limits below.</div>
       </Reveal>
+
+      {/* ---------------- round 3 ---------------- */}
+      <section className="section">
+        <SectionHead eyebrow="Round 3 · the complete prototype" title={<>From one photo to a closed work order. <span className="gradient-text">End to end, live.</span></>} sub="Inspect, prove, fix, re-check, review, learn. Every step below runs on the real engine, from this page." />
+        <div className="new-grid">
+          {NEW.map((x, i) => (
+            <Reveal key={x.t} delay={(i % 4) * 0.05}>
+              <button className="card pad new-card" onClick={() => go(x.to)}>
+                <div className="row between">
+                  <span className="new-icon"><x.icon /></span>
+                  <span className="tag">{x.tag}</span>
+                </div>
+                <h3>{x.t}</h3>
+                <p>{x.s}</p>
+                <span className="new-go">Open <ArrowRight size={14} /></span>
+              </button>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal className="card pad flow">
+          {["Photo", "Inspect", "Proof", "Work order", "Fix", "Re-check", "Review", "Analytics"].map((t, i, a) => (
+            <div key={t} className="flow-step">
+              <span className="flow-n mono">{String(i + 1).padStart(2, "0")}</span>
+              <span>{t}</span>
+              {i < a.length - 1 && <ArrowRight size={14} className="faint" />}
+            </div>
+          ))}
+        </Reveal>
+      </section>
 
       {/* ---------------- problem ---------------- */}
       <section className="section">

@@ -43,5 +43,7 @@ jobs:
           cache: npm
           cache-dependency-path: eagle_eye/web/package-lock.json
       - run: npm ci
-      - name: Type-check and build
+      - name: Type-check and build (local console)
         run: npm run build
+      - name: Build the hosted console (cloud engine + recorded replays)
+        run: npm run build:static

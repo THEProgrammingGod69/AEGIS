@@ -1,13 +1,16 @@
 import { motion } from "framer-motion";
-import { Camera, Check, Download, FileSpreadsheet, FileText, ImageIcon, ListChecks, Play, Puzzle, Sparkles } from "lucide-react";
+import { Aperture, Camera, Check, CloudOff, Download, FileSpreadsheet, FileText, Gauge, ImageIcon, ListChecks, Play, Puzzle, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CameraCapture } from "../components/Camera";
 import { DropZone } from "../components/DropZone";
 import { Running } from "../components/Running";
 import { StatusBadge, useToast } from "../components/ui";
-import { STATIC, api, followJob, url } from "../lib/api";
-import { LIVE_ONLY, REPO_URL } from "../lib/static";
+import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
+import { pingEngine, useEngine } from "../lib/cloud";
+import { LIVE_ONLY } from "../lib/static";
 import { CHECK_TITLE } from "../lib/format";
 import { useAsync } from "../lib/hooks";
+import { analyzePhoto, type PhotoQuality } from "../lib/quality";
 import { go } from "../lib/router";
 import type { JobView, Sample } from "../lib/types";
 
@@ -32,10 +35,33 @@ export function SampleCard({ s, active, onClick }: { s: Sample; active: boolean;
   );
 }
 
-function InputRow({ icon, label, accept, file, onFile, demo, dl }: {
-  icon: React.ReactNode; label: string; accept: string; file: File | null; onFile: (f: File | null) => void; demo?: string; dl: string;
+const LEVEL_C = { good: "var(--pass)", warn: "var(--review)", bad: "var(--fail)" } as const;
+
+/** Capture assistant: sharpness, exposure, glare... checked in the browser before a run is spent on a bad photo. */
+function QualityPanel({ q }: { q: PhotoQuality | null }) {
+  if (!q) return <div className="skeleton" style={{ height: 74 }} />;
+  return (
+    <div className="quality">
+      <div className="quality-score" style={{ ["--c" as string]: LEVEL_C[q.level] }}>
+        <Gauge size={15} />
+        <b className="mono">{q.score}</b>
+        <span className="tiny faint">photo score</span>
+      </div>
+      <div className="quality-checks">
+        {q.checks.map((c) => (
+          <span key={c.key} className="quality-chip tip" data-tip={c.tip} style={{ ["--c" as string]: LEVEL_C[c.level] }}>
+            <i />{c.label} <b className="mono">{c.value}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InputRow({ icon, label, accept, file, onFile, demo, dl, live }: {
+  icon: React.ReactNode; label: string; accept: string; file: File | null; onFile: (f: File | null) => void; demo?: string; dl: string; live: boolean;
 }) {
-  if (STATIC)
+  if (!live)
     return (
       <div className="input-row">
         <div className="drop compact has" style={{ cursor: "default", flex: 1 }}>
@@ -58,7 +84,7 @@ function InputRow({ icon, label, accept, file, onFile, demo, dl }: {
   );
 }
 
-export function Inspect({ autoDemo }: { autoDemo: boolean }) {
+export function Inspect({ autoDemo, autoSample = null }: { autoDemo: boolean; autoSample?: string | null }) {
   const toast = useToast();
   const samples = useAsync(api.samples);
   const checks = useAsync(api.checks);
@@ -71,13 +97,23 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
   const [enabled, setEnabled] = useState<string[] | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cam, setCam] = useState(false);
+  const [quality, setQuality] = useState<PhotoQuality | null>(null);
   const started = useRef(false);
+  const live = useCanLive();
+  const eng = useEngine();
 
   const allChecks = checks.data?.map((c) => c.name) ?? ["GA", "ORDER", "LABEL", "FERRULE", "COLOUR"];
   const on = enabled ?? allChecks;
   const photoUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : url.sample(sample, 1400)), [photo, sample]);
   useEffect(() => () => { if (photoUrl.startsWith("blob:")) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   const activeSample = samples.data?.find((s) => s.id === sample);
+  useEffect(() => {
+    let alive = true;
+    setQuality(null);
+    analyzePhoto(photo ?? photoUrl).then((q) => alive && setQuality(q)).catch(() => alive && setQuality(null));
+    return () => { alive = false; };
+  }, [photo, photoUrl]);
 
   const start = async (override?: { sample?: string }) => {
     if (busy) return;
@@ -88,6 +124,7 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
       setJob(j);
       const done = await followJob(j.id, setJob);
       if (done.status === "error") throw new Error(done.error ?? "Inspection failed");
+      if (done.note) toast("ok", done.note);
       go(`run/${done.run_id}`);
     } catch (e) {
       toast("error", (e as Error).message);
@@ -97,13 +134,15 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
   };
 
   useEffect(() => {
-    if (autoDemo && !started.current) {
+    const want = autoDemo ? "01" : autoSample;
+    if (want && !started.current) {
       started.current = true;
       window.history.replaceState(null, "", "#/inspect");
-      start({ sample: "01" });
+      setSample(want);
+      start({ sample: want });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDemo]);
+  }, [autoDemo, autoSample]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -134,10 +173,20 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
         </button>
       </div>
 
-      {STATIC && (
+      {STATIC && live && (
+        <div className="callout ok">
+          <Zap />
+          <span><b>Live cloud engine.</b> Upload your own photo, drawing set or check selection: the real Python engine inspects it in a few seconds. Results stay in this browser.</span>
+        </div>
+      )}
+      {STATIC && !live && (
         <div className="callout info">
-          <Sparkles />
-          <span>{LIVE_ONLY} <a href={REPO_URL} target="_blank" rel="noreferrer">Get the code →</a></span>
+          {eng.preferLive ? <CloudOff /> : <Sparkles />}
+          <span>
+            {eng.preferLive ? (eng.state === "checking" ? "Waking the cloud engine… samples run as recorded replays meanwhile." : LIVE_ONLY)
+              : "Instant replay mode: samples replay inspections recorded from the same engine. Switch to the live engine (top right) to upload your own photo."}
+          </span>
+          {eng.preferLive && eng.state === "down" && <button className="btn btn-sm" onClick={() => void pingEngine()}><RefreshCw /> Retry</button>}
         </div>
       )}
 
@@ -156,7 +205,11 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
                 <span className="photo-preview-tag">{photo ? "Your upload" : `Sample ${sample}`}</span>
               </div>
               <div className="stack" style={{ ["--gap" as string]: "12px" }}>
-                {!STATIC && <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop your own cabinet photo" hint="…or pick one of the samples below" icon={<ImageIcon />} />}
+                {live && <DropZone accept=".jpg,.jpeg,.png" file={photo} onFile={setPhoto} preview title="Drop your own cabinet photo" hint="…or pick one of the samples below" icon={<ImageIcon />} />}
+                {live && (
+                  <button className="btn btn-block" onClick={() => setCam(true)}><Aperture /> Capture with camera</button>
+                )}
+                <QualityPanel q={quality} />
                 {activeSample && !photo && (
                   <div className="card flat pad sample-expect">
                     <div className="tiny faint" style={{ marginBottom: 6 }}>Planted faults (answer key)</div>
@@ -206,9 +259,9 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
               </div>
             )}
             <div className="stack" style={{ ["--gap" as string]: "8px", marginTop: 14 }}>
-              <InputRow icon={<FileText />} label="GA drawing (vector PDF)" accept=".pdf" file={ga} onFile={setGa} demo={inputs.data?.ga?.name} dl={url.input("ga")} />
-              <InputRow icon={<FileSpreadsheet />} label="Wire & label list (Excel)" accept=".xlsx" file={wires} onFile={setWires} demo={inputs.data?.wires?.name} dl={url.input("wires")} />
-              <InputRow icon={<ListChecks />} label="QC checklist (Excel)" accept=".xlsx" file={checklist} onFile={setChecklist} demo={inputs.data?.checklist?.name} dl={url.input("checklist")} />
+              <InputRow live={live} icon={<FileText />} label="GA drawing (vector PDF)" accept=".pdf" file={ga} onFile={setGa} demo={inputs.data?.ga?.name} dl={url.input("ga")} />
+              <InputRow live={live} icon={<FileSpreadsheet />} label="Wire & label list (Excel)" accept=".xlsx" file={wires} onFile={setWires} demo={inputs.data?.wires?.name} dl={url.input("wires")} />
+              <InputRow live={live} icon={<ListChecks />} label="QC checklist (Excel)" accept=".xlsx" file={checklist} onFile={setChecklist} demo={inputs.data?.checklist?.name} dl={url.input("checklist")} />
             </div>
             <div className="tiny faint" style={{ marginTop: 12 }}>
               A photo of another cabinet only works with that cabinet's own GA drawing and wire list.
@@ -227,7 +280,7 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
                 const active = on.includes(c.name);
                 return (
                   <button key={c.name} className={`check-tile${active ? " on" : ""}`} aria-pressed={active}
-                    disabled={STATIC} title={STATIC ? "Recorded runs use all five checks; toggling needs the live engine" : undefined}
+                    disabled={!live} title={!live ? "Recorded runs use all five checks; toggling needs the live engine" : undefined}
                     onClick={() => setEnabled(active ? on.filter((x) => x !== c.name) : [...on, c.name])}>
                     <span className="switch" role="switch" aria-checked={active} />
                     <div className="grow">
@@ -245,6 +298,7 @@ export function Inspect({ autoDemo }: { autoDemo: boolean }) {
           </button>
         </div>
       </div>
+      <CameraCapture open={cam} onClose={() => setCam(false)} onPhoto={(f) => setPhoto(f)} />
     </div>
   );
 }

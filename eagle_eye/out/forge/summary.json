@@ -40,6 +40,6 @@
  },
  "clean_cabinets_zero_fail": 14,
  "clean_cabinets": 14,
- "sec_per_cabinet": 0.93,
+ "sec_per_cabinet": 0.98,
  "cpu_cores": 4
 }

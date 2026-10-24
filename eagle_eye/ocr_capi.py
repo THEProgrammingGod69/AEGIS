@@ -91,6 +91,7 @@ def _api():
         if lib.TessBaseAPIInit3(a, data, b"eng") != 0:
             lib.TessBaseAPIDelete(a)
             raise RuntimeError("libtesseract could not load the 'eng' language data")
+        lib.TessBaseAPISetVariable(a, b"debug_file", os.devnull.encode())   # tiny-crop warnings stay quiet
         _local.api = a
         with _lock:
             _apis.append(a)
