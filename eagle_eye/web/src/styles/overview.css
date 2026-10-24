@@ -42,10 +42,10 @@
   z-index: -1;
 }
 
-.blob.b1 { width: 560px; height: 560px; right: 2%; top: -60px; background: #0a66e8; opacity: 0.32; }
-.blob.b2 { width: 460px; height: 460px; right: 28%; top: 22%; background: #00b8e0; opacity: 0.3; }
-.blob.b3 { width: 420px; height: 420px; right: -6%; top: 46%; background: #6c47d9; opacity: 0.24; }
-.blob.b4 { width: 400px; height: 400px; left: -8%; top: -40px; background: #7fe7ff; opacity: 0.42; }
+.blob.b1 { width: 728px; height: 728px; right: 2%; top: -60px; --blob: #0a66e8; opacity: 0.46; }
+.blob.b2 { width: 598px; height: 598px; right: 28%; top: 22%; --blob: #00b8e0; opacity: 0.42; }
+.blob.b3 { width: 546px; height: 546px; right: -6%; top: 46%; --blob: #6c47d9; opacity: 0.34; }
+.blob.b4 { width: 520px; height: 520px; left: -8%; top: -40px; --blob: #7fe7ff; opacity: 0.6; }
 
 .hero-inner {
   width: 100%;
@@ -1021,8 +1021,8 @@
   box-shadow: 0 60px 120px -40px rgba(0, 40, 90, 0.6), inset 0 1px 0 rgba(127, 231, 255, 0.12);
 }
 
-.cta-mesh .c1 { width: 420px; height: 420px; left: -8%; bottom: -45%; background: #0a66e8; opacity: 0.35; }
-.cta-mesh .c2 { width: 380px; height: 380px; right: 24%; top: -45%; background: #6c47d9; opacity: 0.28; }
+.cta-mesh .c1 { width: 546px; height: 546px; left: -8%; bottom: -45%; --blob: #0a66e8; opacity: 0.35; }
+.cta-mesh .c2 { width: 494px; height: 494px; right: 24%; top: -45%; --blob: #6c47d9; opacity: 0.28; }
 
 .cta-glyphs .glyph {
   position: absolute;

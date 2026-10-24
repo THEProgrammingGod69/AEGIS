@@ -62,7 +62,7 @@ function Migration() {
       <div className="card-head">
         <div>
           <div className="card-title"><Compass /> As the camera turns, findings move to REVIEW, never to FAIL</div>
-          <div className="card-sub">Measured: {SW.note.toLowerCase()} (engine {SW.engine_version}). Each dot is 2% of the items the engine judged; items outside the view are not judged and not shown.</div>
+          <div className="card-sub">Measured on {SW.note.replace(/^GA-drawing/, "GA drawing")} (engine {SW.engine_version}). Each dot is 2% of the items the engine judged; items outside the view are not judged and not shown.</div>
         </div>
         <Seg value={mode} onChange={(v) => change(() => setMode(v))} options={[{ value: "flat", label: "Flat registration" }, { value: "perspective", label: "With perspective search" }]} />
       </div>

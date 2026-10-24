@@ -180,7 +180,22 @@ npm run dev        # http://localhost:5173, proxies /api to python server.py on 
 npm run build      # type-check + build into web/dist (committed, served by server.py)
 ```
 
-React 18 + TypeScript + Vite, framer-motion, lucide icons; fonts are bundled so the console works offline.
+React 18 + TypeScript + Vite, GSAP 3.13 (all plugins, free for commercial use) with `@gsap/react`, Lenis (Overview
+scroll only), framer-motion for modals and toasts, lucide icons; fonts are bundled so the console works offline.
+
+**Design and motion (UI & Motion Guide v2, "Daylight Signal").** A light theme in Emerson's colours (Emerson Blue type,
+Electric Azure actions, an aurora gradient for energy) with dark "device" panels for photo viewers, logs and the
+presenter. Tokens live in `src/styles/base.css` (`.device` flips the same names to the dark scope); motion lives in
+`src/lib/gsap.ts`, `src/lib/interactions.ts`, `src/lib/transition.ts` and `src/components/motion.tsx`. Highlights: the
+eye-open preloader (first visit), the eye-blink route transition, a 3D device running the registration sequence on a
+recorded inspection, a pinned exploded inspection, a horizontal pinned pipeline, a draggable X-ray lens, Flip checklist
+and Lab migration, swipe review cards, a sign-off stamp with confetti, presenter slides, and a WebGL lightning band.
+
+- **Calm mode** (Ctrl K → *Motion: Calm*, `?calm`, or the OS reduced-motion setting): every animation shows its final
+  frame, nothing pins, the preloader and blink are skipped. Use it if a projector stutters; it is stored per device.
+- **Press X** anywhere (outside inputs) for X-ray mode: every photo shows its GA drawing overlay.
+- Budget: transform / opacity / clip-path / SVG strokes only; ambient loops pause off-screen; cursor, tilt, magnetic
+  and spotlight effects run for mouse and trackpad only; pages other than the Overview load on demand.
 
 ## Self-test (synthetic cabinets, held-out seeds 200–249)
 
@@ -188,4 +203,4 @@ React 18 + TypeScript + Vite, framer-motion, lucide icons; fonts are bundled so 
 
 ## Tools declared
 
-Python, OpenCV, PyMuPDF, Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI, React, Streamlit. AI coding assistant used during development. Bundled fonts: DejaVu (license in `assets/fonts/`).
+Python, OpenCV, PyMuPDF, Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI, React, GSAP, Lenis, Streamlit. AI coding assistant used during development. Bundled fonts: DejaVu (license in `assets/fonts/`).

@@ -33,7 +33,7 @@ const API = [
   ["GET", "/api/v2/diag/samples", "parity check: inspect the shipped samples on this engine and report counts"],
 ];
 
-const TOOLS = ["Python", "OpenCV", "PyMuPDF", "Tesseract OCR", "NumPy", "openpyxl", "ReportLab", "FastAPI", "React", "Streamlit"];
+const TOOLS = ["Python", "OpenCV", "PyMuPDF", "Tesseract OCR", "NumPy", "openpyxl", "ReportLab", "FastAPI", "React", "GSAP", "Lenis", "Streamlit"];
 
 type Line = { t: string; k: string; v: string; tone?: "pass" | "fail" | "review" | "accent" };
 

@@ -193,5 +193,5 @@ Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_ey
 ## Tools declared
 
 Python, OpenCV, PyMuPDF, PP-OCRv4 (RapidOCR on ONNX Runtime), Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI,
-React, pdf-lib, Streamlit, Vercel. An AI coding assistant helped write the code,
+React, GSAP, Lenis, pdf-lib, Streamlit, Vercel. An AI coding assistant helped write the code,
 as the rules ask us to declare.

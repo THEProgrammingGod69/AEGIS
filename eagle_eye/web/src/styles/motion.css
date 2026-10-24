@@ -281,11 +281,12 @@
   pointer-events: none;
 }
 
-/* aurora blobs (#39): blurred once, then only transformed */
+/* aurora blobs (#39): pre-softened radial gradients (no CSS filter), rasterised once and then only transformed on
+   the compositor, the guide's blur budget */
 .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(70px);
+  background: radial-gradient(closest-side, var(--blob, #0a66e8) 0%, color-mix(in srgb, var(--blob, #0a66e8) 55%, transparent) 45%, transparent 100%);
   opacity: 0.45;
   pointer-events: none;
   will-change: transform;
@@ -371,12 +372,19 @@ html.lenis.lenis-stopped {
 }
 
 .log-line .k {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
 }
 
+/* dot leader from the stage name to its result */
 .log-line .k::after {
-  content: " ........";
-  color: var(--text-4);
+  content: "";
+  flex: 1;
+  min-width: 8px;
+  margin: 0 2px 6px 6px;
+  border-bottom: 1px dotted var(--text-4);
 }
 
 .log-line .msg {

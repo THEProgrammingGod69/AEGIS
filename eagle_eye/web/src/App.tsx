@@ -1,5 +1,5 @@
 import { ClipboardList, FlaskConical, Gauge, Mic, PlayCircle, ScanEye, ScanLine, Trash2, Zap } from "lucide-react";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ScrollProgress } from "./components/motion";
@@ -120,6 +120,14 @@ export function App() {
   useEffect(() => {
     document.title = `EAGLE EYE · ${TITLES[page] ?? "Cabinet QC"}`;
   }, [page]);
+
+  // a new page starts at its top, however it was reached (nav, palette, or a plain #/ link in a card)
+  const routeKey = page + "/" + (route[1] ?? "");
+  const firstRoute = useRef(true);
+  useLayoutEffect(() => {
+    if (firstRoute.current) { firstRoute.current = false; return; }
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [routeKey]);
 
   useEffect(() => {
     try {

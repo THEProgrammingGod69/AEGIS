@@ -33,14 +33,16 @@
   border-bottom: 1px solid rgba(224, 250, 255, 0.9);
   box-shadow: 0 8px 30px rgba(91, 227, 255, 0.5);
   animation: beam 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
 }
 
+/* compositor-only sweep: 22% tall beam travels 122% of the frame = 555% of its own height */
 @keyframes beam {
   0% {
-    top: -22%;
+    transform: translateY(0);
   }
   100% {
-    top: 100%;
+    transform: translateY(555%);
   }
 }
 
