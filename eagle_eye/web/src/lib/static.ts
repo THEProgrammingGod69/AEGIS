@@ -7,14 +7,14 @@
  *  - recorded runs (export_static.py): genuine engine runs replayed with their stage timings. Used when the
  *    viewer picks "recorded", or automatically when the engine cannot be reached, so the demo never breaks.
  */
-import { ENGINE_URL, EngineUnreachable, NeedFiles, b64Blob, engine, ensureEngine, liveReady, makePreview, preparePhoto, renderMarked, sha256, stream, type StreamResult } from "./cloud";
+import { ENGINE_URL, EngineUnreachable, NeedFiles, b64Blob, compactPdf, postInput, engine, ensureEngine, liveReady, makePreview, preparePhoto, renderMarked, sha256, stream, type StreamResult } from "./cloud";
 import * as store from "./store";
 import type { InputKey, LiveRun } from "./store";
 import type { CheckInfo, ForgeLive, Health, JobEvent, JobView, Preset, Review, RunMeta, RunPayload, Sample, SelfTest } from "./types";
 import type { InspectInput } from "./api";
 
 const BASE = "demo/";
-export const REPO_URL = "https://github.com/THEProgrammingGod69/Code-Apex-Hackathon/tree/ccr-9309237e-ylo1qd";
+export const REPO_URL = "https://github.com/THEProgrammingGod69/AEGIS";
 export const LIVE_ONLY =
   "The cloud engine is not reachable right now, so only the recorded runs can be replayed. Retry from the engine status at the top right, or run the engine locally (eagle_eye/run.bat or ./run.sh).";
 
@@ -410,7 +410,7 @@ export const staticApi = {
       const shas: Partial<Record<InputKey, string>> = {};
       for (const k of ["ga", "wires", "checklist"] as InputKey[]) {
         const f = i[k];
-        const given = f ? { name: f.name, blob: f as Blob } : parentInputs?.[k];
+        const given = f ? { name: f.name, blob: await compactPdf(f as Blob, f.name) } : parentInputs?.[k];
         if (given) {
           inputs[k] = given;
           shas[k] = await sha256(given.blob);
@@ -429,6 +429,7 @@ export const staticApi = {
         } else fd.append("sample", sample);
         for (const k of Object.keys(inputs) as InputKey[]) {
           fd.append(`${k}_sha`, shas[k]!);
+          fd.append(`${k}_name`, inputs[k]!.name);
           if (need.has(k)) fd.append(k, inputs[k]!.blob, inputs[k]!.name);
         }
         if (i.checks) fd.append("checks", i.checks.join(","));
@@ -439,12 +440,24 @@ export const staticApi = {
           onResult: async (r) => { j.runs.push(await keep(r, j.events.slice(), Object.keys(inputs).length ? inputs : undefined, photo)); },
         });
       };
-      try {
-        await send(new Set());
-      } catch (e) {
-        if (!(e instanceof NeedFiles)) throw e;
-        j.events = [];
-        await send(new Set(e.need));
+      // Each request stays under the host's body cap: inputs the engine asks for travel on their own request
+      // (stored by fingerprint), then the inspection carries only the photo if it is needed at all.
+      let need = new Set<string>();
+      for (let attempt = 0; ; attempt++) {
+        for (const k of Object.keys(inputs) as InputKey[]) {
+          if (need.has(k)) {
+            await postInput(k, inputs[k]!.blob, inputs[k]!.name);
+            need.delete(k);
+          }
+        }
+        try {
+          await send(need);
+          break;
+        } catch (e) {
+          if (!(e instanceof NeedFiles) || attempt >= 3) throw e;
+          j.events = [];
+          need = new Set(e.need);
+        }
       }
     }, () => rec);
   },

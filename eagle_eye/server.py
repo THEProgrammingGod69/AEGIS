@@ -53,7 +53,7 @@ MAX_UPLOAD = max(MAX_PHOTO, MAX_PDF)
 RATE = max(0, int(os.environ.get("EAGLE_RATE_PER_MIN") or 6))
 REAL_DATA = Path(os.environ.get("EAGLE_EYE_REAL_DATA") or config.BASE.parent / "data" / "emerson")
 CLOUD = os.environ.get("EAGLE_EYE_CLOUD") == "1"          # hosted engine container: stateless API only
-CONSOLE_URL = os.environ.get("EAGLE_EYE_CONSOLE", "https://eagle-eye-enigma.vercel.app")
+CONSOLE_URL = os.environ.get("EAGLE_EYE_CONSOLE", "https://aegis-eagle-eye.vercel.app")
 STARTED = time.time()
 KINDS = {"photo": (".jpg", ".jpeg", ".png"), "ga": (".pdf",), "wires": (".xlsx",), "checklist": (".xlsx",)}
 
@@ -630,6 +630,24 @@ def _fingerprinted(kind, up_path, sha):
     return None
 
 
+@app.post("/api/v2/inputs")
+async def store_input_v2(request: Request, file: UploadFile = File(...), kind: str = Form(...)):
+    """Keep one input (drawing set / wire list / checklist) by its SHA-256 so inspections can name it by fingerprint.
+
+    Lets a client send a large drawing on its own request, then inspect with ``ga_sha`` + the photo: a serverless host
+    caps each request body (4.5 MB on Vercel), so drawing and photo cannot always travel together."""
+    _rate_limit(request)
+    if kind not in ("ga", "wires", "checklist"):
+        _err(400, "kind: ga | wires | checklist")
+    folder = UPLOADS / uuid.uuid4().hex[:12]
+    try:
+        p, name = await _save_upload(file, kind, folder)
+        ref = service.store_input(p, name)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    return dict(kind=kind, sha256=ref["sha256"], name=name, stored=True)
+
+
 @app.post("/api/v2/inspect")
 async def inspect_v2(request: Request, photo: Optional[UploadFile] = File(None), sample: Optional[str] = Form(None),
                      ga: Optional[UploadFile] = File(None), wires: Optional[UploadFile] = File(None),
@@ -639,7 +657,8 @@ async def inspect_v2(request: Request, photo: Optional[UploadFile] = File(None),
                      ga_sha: Optional[str] = Form(None), wires_sha: Optional[str] = Form(None),
                      checklist_sha: Optional[str] = Form(None), engine: Optional[str] = Form(None),
                      preset: Optional[str] = Form(None), preset_photo: Optional[str] = Form(None),
-                     photos: Optional[List[UploadFile]] = File(None)):
+                     photos: Optional[List[UploadFile]] = File(None), ga_name: Optional[str] = Form(None),
+                     wires_name: Optional[str] = Form(None), checklist_name: Optional[str] = Form(None)):
     """Inspect and stream progress + the complete run back (metadata, never the photo).
 
     Fingerprint-first: send ``photo_sha`` (and ``ga_sha`` / ``wires_sha`` / ``checklist_sha``) without the files. If
@@ -684,8 +703,8 @@ async def inspect_v2(request: Request, photo: Optional[UploadFile] = File(None),
         shutil.rmtree(folder, ignore_errors=True)
         raise
     enabled = _enabled(checks)
-    names = {k: n for k, n in (("ga", ga_n or (ga_p.name if ga_p and ga_sha else None)), ("wires", wl_n),
-                               ("checklist", cl_n)) if n}
+    names = {k: n for k, n in (("ga", ga_n or ga_name or (ga_p.name if ga_p and ga_sha else None)),
+                               ("wires", wl_n or wires_name), ("checklist", cl_n or checklist_name)) if n}
     if multi:
         def work(emit, made):
             for i, (p, n) in enumerate(multi):

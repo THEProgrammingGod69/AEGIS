@@ -209,6 +209,54 @@ const MAX_SIDE = Number(import.meta.env.VITE_MAX_PHOTO_SIDE ?? 2900) || 2900;
 const MAX_BYTES = (Number(import.meta.env.VITE_MAX_PHOTO_MB ?? 3.6) || 3.6) * 2 ** 20;
 export const PREVIEW_SIDE = 1600;
 
+/** Largest request body sent to the engine: serverless hosts cap it (4.5 MB on Vercel), with room for form overhead. */
+export const BODY_LIMIT = 4_300_000;
+
+/**
+ * Drawing sets exported from CAD often carry objects no page uses (earlier revisions, duplicated resources). Rewrite
+ * the PDF with only what its pages reference, in compressed object streams: lossless, the drawing parser sees the same
+ * pages (Emerson's 13GE03331 set: 5.19 MB -> 2.53 MB, identical cabinet model). pdf-lib is loaded only when needed.
+ */
+export async function compactPdf(b: Blob, name: string): Promise<Blob> {
+  if (b.size <= BODY_LIMIT || !/\.pdf$/i.test(name)) return b;
+  try {
+    const { PDFDocument } = await import("pdf-lib");
+    const src = await PDFDocument.load(await b.arrayBuffer(), { updateMetadata: false, ignoreEncryption: true });
+    const out = await PDFDocument.create({ updateMetadata: false });
+    const pages = await out.copyPages(src, src.getPageIndices());
+    pages.forEach((p) => out.addPage(p));
+    const bytes = await out.save({ useObjectStreams: true });
+    return bytes.length < b.size ? new Blob([bytes], { type: "application/pdf" }) : b;
+  } catch {
+    return b;
+  }
+}
+
+/** Keep one input (drawing set, wire list, checklist) on the engine by fingerprint, on its own request. */
+export async function postInput(kind: string, blob: Blob, name: string): Promise<string> {
+  const fd = new FormData();
+  fd.append("kind", kind);
+  fd.append("file", blob, name);
+  let res: Response;
+  try {
+    res = await fetch(`${ENGINE_URL}/api/v2/inputs`, { method: "POST", body: fd });
+  } catch (e) {
+    throw new EngineUnreachable(`The cloud engine could not be reached (${(e as Error).message}).`);
+  }
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const b = await res.json();
+      if (b?.detail) msg = typeof b.detail === "string" ? b.detail : JSON.stringify(b.detail);
+    } catch {
+      /* keep status */
+    }
+    if (res.status === 413) msg = `${name} is too large for the cloud engine (${(blob.size / 1e6).toFixed(1)} MB; at most 4.5 MB per request). Run the engine locally for this file.`;
+    throw new Error(msg);
+  }
+  return (await res.json()).sha256 as string;
+}
+
 /** SHA-256 (hex) of a file: the fingerprint the engine knows a photo or drawing by. */
 export async function sha256(b: Blob): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", await b.arrayBuffer());

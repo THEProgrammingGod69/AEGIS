@@ -4,7 +4,7 @@ Two pieces:
 
 | Piece | Where | Why |
 |---|---|---|
-| **Console** (`eagle_eye/web`, React) | Vercel (`eagle-eye-enigma.vercel.app`), static build | Fast, free, keeps the recorded-replay fallback so the demo never dies |
+| **Console** (`eagle_eye/web`, React) | Vercel (`aegis-eagle-eye.vercel.app`), static build | Fast, free, keeps the recorded-replay fallback so the demo never dies |
 | **Engine** (`eagle_eye/Dockerfile.engine`, FastAPI + PP-OCRv4 + Claude agent) | Google Cloud Run / Render / Fly.io / Railway (2 vCPU, 2-4 GB, request timeout ≥ 300 s, min instances 1 for the demo) | A real photo takes 20-60 s of CPU: too long and too large for Vercel serverless functions |
 
 The console talks to the engine at `VITE_ENGINE_URL` (`eagle_eye/web/.env.static`). Secrets live only in the engine's
@@ -54,7 +54,7 @@ printf '%s' "$ANTHROPIC_API_KEY" | gcloud secrets create anthropic-api-key --dat
 gcloud run deploy eagle-eye-engine --image "$IMG" --region "$REGION" \
   --cpu 2 --memory 4Gi --timeout 300 --min-instances 1 --max-instances 3 --concurrency 2 --allow-unauthenticated \
   --set-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
-  --set-env-vars EAGLE_CORS_ORIGINS=https://eagle-eye-enigma.vercel.app,EAGLE_OCR_WORKERS=2
+  --set-env-vars EAGLE_CORS_ORIGINS=https://aegis-eagle-eye.vercel.app,EAGLE_OCR_WORKERS=2
 # optional: the real drawing set from a private bucket, mounted read-only
 gcloud run services update eagle-eye-engine --region "$REGION" \
   --add-volume name=emerson,type=cloud-storage,bucket="$PRIVATE_BUCKET",readonly=true \

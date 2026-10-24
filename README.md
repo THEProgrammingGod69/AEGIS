@@ -4,7 +4,7 @@
 
 Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1, Problem Statement #03
 
-**▶ Live prototype: https://eagle-eye-enigma.vercel.app** · the full console on the real engine in the cloud: upload a photo or a drawing set, inspect, prove, print the work order, re-check, review, analyse. Nothing to install; runs stay in your browser. If the engine is unreachable it falls back to instant replays recorded from the same engine.
+**▶ Live console: https://aegis-eagle-eye.vercel.app** · engine API: https://aegis-engine-beta.vercel.app/api/v2/health · the full console on the real engine in the cloud: upload a photo or a drawing set, inspect, prove, print the work order, re-check, review, analyse. Nothing to install: Vercel builds the engine image (Python, PP-OCRv4, OpenCV, PyMuPDF) and the console from this repository on every push. If the engine is unreachable the console falls back to instant replays recorded from the same engine.
 
 ![EAGLE EYE overview](docs/screenshots/01_overview.jpg)
 
@@ -19,6 +19,39 @@ Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Emerson Track 1,
 | Degraded photos (tilt, blur, glare, noise, colour cast) | **0** false FAILs on 115 photos; unclear zones go to REVIEW |
 
 These numbers come from Fault Forge's generated cabinets (held-out seeds 200–249). Real photos will be harder; see [honest limits](#honest-limits).
+
+## Grand finale: Emerson's real cabinet (13GE03331)
+
+The finale engine reads Emerson's real drawing set (17-page vector PDF) and phone photos of the built cabinet. Nothing
+is hard-coded for this cabinet: views, tags, device groups, label sizes and wiring come from the PDF.
+
+```mermaid
+flowchart LR
+  KB["Drawing set → cabinet model<br/>GA views · tags · groups · wiring"] --> OCR["Read every label<br/>PP-OCRv4 multi-pass"]
+  OCR --> REG["Place the photo<br/>labels as anchors, RANSAC"]
+  REG --> CHK["Checks<br/>MISSING · ORDER · LABEL · UNKNOWN · FERRULE"]
+  CHK --> AG["Claude verifier<br/>second opinion on candidates"]
+  AG --> CON["Consensus<br/>FAIL only when both agree"]
+```
+
+| Measured on the 5 real photos (Claude verifier off) | |
+|---|---|
+| Visible labels verified (hand-made ground truth) | **53 / 58** |
+| False FAIL | **0** |
+| Real drawing-vs-cabinet differences flagged | 16 / 23 (extra baseplates 334CBP06-08, TERM1F moved, 335CBP02 missing, ferrules naming CB45/46/49/55) |
+| Planted faults in real photos (label removed / reprinted / swapped) | **5 / 7** caught, 0 false FAIL |
+| Unclear items | REVIEW with a re-photo hint (14 % of judged items, mostly labels hidden by cables) |
+
+* **Only what is visible is judged.** Items outside the photo, too small to read, or beyond the labels the photo could
+  anchor are NOT IN VIEW: neither passed nor failed.
+* **FAIL needs two signals.** OCR + geometry raise a candidate; the Claude verifier (set `ANTHROPIC_API_KEY`) must
+  confirm it. Without the verifier, candidates stay REVIEW (`EAGLE_FAIL_WITHOUT_AGENT=1` for on-prem use).
+* **Photos are kept as metadata, not photos.** The browser sends the photo's SHA-256 fingerprint first; the engine reads
+  a photo once and keeps only its fingerprint, size, quality, OCR reads, results, a small preview and proof crops.
+  Responses are JSON; the browser draws the boxes on its own copy. The same photo again is answered without an upload.
+* Reproduce: put the drawing set and photos in `data/emerson/` (git-ignored), then `python eval_real.py` and
+  `python forge_real.py && python eval_real.py --forged` in `eagle_eye/`. Locally the console shows an
+  "Emerson 13GE03331" preset on the Inspect page.
 
 ## Round 3: the complete prototype
 
@@ -110,11 +143,17 @@ flowchart LR
 
 ```
 eagle_eye/
-  inspector.py     engine: drawing parser, registration, plug-in checks, consensus
+  kb/              real drawing sets -> cabinet model (views, tags, groups, wiring), cached by SHA-256
+  vision/          photo loading, PP-OCRv4 multi-pass reader, closed-vocabulary decoding, registration
+  checks/          real-cabinet plug-in checks (MISSING, ORDER, LABEL, UNKNOWN_LABEL, FERRULE, COLOUR)
+  agent/           Claude vision verifier (tool use, cached, replayable)
+  consensus.py     candidates + verifier -> PASS / FAIL / REVIEW / NOT_IN_VIEW, multi-photo merge
+  pipeline.py      real-cabinet pipeline; forge_real.py / eval_real.py measure it on real photos
+  inspector.py     demo-cabinet engine: drawing parser, registration, plug-in checks, consensus
   service.py       run store, re-check chains, proof crops, Fault Forge scoring
   server.py        FastAPI backend + web console (python server.py), stateless cloud API /api/v2
   ocr_capi.py      in-process libtesseract (C API), 5x faster OCR with identical text
-  Dockerfile.vercel  engine container for the hosted console
+  Dockerfile.vercel  engine container Vercel builds for the hosted console (Dockerfile.engine: Cloud Run / Render / on-prem)
   report.py        marked photo, crops, GA overlay, filled Excel checklist, re-check
   pdf_report.py    one-click PDF QC report
   render.py        photo generator + Fault Forge
@@ -125,18 +164,23 @@ eagle_eye/
   sample_photos/   5 test photos + ANSWER_KEY.txt
   web/             React + TypeScript console (source and built dist/)
   tests/           pytest: engine, service, API
-docs/              screenshots, Round 2 and Round 3 run-sheets
+docs/              screenshots, run-sheets, FINALE_ENGINE_SPEC.md, DEPLOY.md
 ```
 
 Engine details, the API and how to add a check: [`eagle_eye/README.md`](eagle_eye/README.md).
 
 ## Honest limits
 
-- The numbers are on generated cabinets that copy Emerson's example layout. Real photos will be harder.
-- OCR is Tesseract today. A YOLO11 detector, PaddleOCR for curved ferrules and a local vision-model verifier for REVIEW items are planned, not built.
+- Real-cabinet numbers come from 5 photos of one cabinet and its hand-made answer key: a small sample.
+- Without the Claude verifier no real-cabinet item can FAIL (two signals are required); candidates go to REVIEW.
+- Reading a full-resolution real photo takes 1-2 minutes on one CPU (the hosted engine has one vCPU); results are cached
+  by photo fingerprint, so the same photo again is instant.
+- Labels hidden by cables, or labels whose neighbours could not be read, are REVIEW or NOT IN VIEW, never FAIL.
 - Very bad photos lose findings to REVIEW (the stress sweep catches 4/4 on mild, 3/4 on moderate, 0/4 once the photo no longer registers): safe, but a re-photo is needed.
 - The tool needs a vector GA PDF in this format. Scanned drawings are a later step.
 
 ## Tools declared
 
-Python, OpenCV, PyMuPDF, Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI, React, Streamlit. An AI coding assistant helped write the code, as the rules ask us to declare.
+Python, OpenCV, PyMuPDF, PP-OCRv4 (RapidOCR on ONNX Runtime), Tesseract OCR, NumPy, openpyxl, ReportLab, FastAPI,
+Anthropic Claude (optional verifier), React, pdf-lib, Streamlit, Vercel. An AI coding assistant helped write the code,
+as the rules ask us to declare.
