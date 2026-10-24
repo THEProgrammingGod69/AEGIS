@@ -379,9 +379,13 @@ def _pack(meta):
     files = dict(photo=_jpeg_b64(d / meta["photo"], 2000, 84), rectified=_jpeg_b64(d / F["rectified"], 1600),
                  marked=_jpeg_b64(d / F["marked"], 1600), pdf=_file_b64(d / F["pdf"]),
                  checklist=_file_b64(d / F["checklist"]))
-    if not meta["inputs"]["ga"]["demo"]:                  # the demo drawing's overlay ships with the console
-        files["overlay"] = _file_b64(d / F["overlay"])
     payload = service.run_payload(rid)
+    if not meta["inputs"]["ga"]["demo"]:                  # the demo drawing's overlay and raster ship with the console
+        files["overlay"] = _file_b64(d / F["overlay"])
+        png, scale = service.ga_raster(meta["inputs"]["ga"]["path"])
+        with Image.open(png) as im:
+            payload["ga_raster"] = dict(w=im.width, h=im.height, **scale)
+        files["ga"] = _jpeg_b64(png, 2400, 88)
     for k in ("ga", "wires", "checklist"):                 # server paths mean nothing to the browser
         payload["meta"]["inputs"][k].pop("path", None)
     return dict(payload=payload, report=service.get_report(rid), files=files)

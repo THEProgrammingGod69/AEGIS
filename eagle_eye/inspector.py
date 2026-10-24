@@ -54,7 +54,7 @@ def tesseract_info():
     try:
         out = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=10)
         ver = (out.stdout or out.stderr).splitlines()[0].strip()
-        return dict(ok=True, cmd=cmd, version=ver)
+        return dict(ok=True, cmd=cmd, version=ver, backend="libtesseract in-process" if _CAPI else "tesseract CLI")
     except Exception as e:  # noqa: BLE001 - surfaced to the UI as a setup hint
         return dict(ok=False, cmd=cmd, version=None,
                     error=f"Tesseract OCR not found ({e}). Install it or set TESSERACT_CMD.")
@@ -384,9 +384,18 @@ def has_label(img):
     return (0.03 < ink < 0.6), ink
 
 
+try:                                    # in-process libtesseract: identical text, no process start per crop
+    import ocr_capi
+    _CAPI = ocr_capi.available()
+except Exception:  # noqa: BLE001
+    _CAPI = False
+
+
 def _tess(job):
-    img, cfg = job
-    return pytesseract.image_to_string(img, config=cfg).strip()
+    img, psm = job
+    if _CAPI:
+        return ocr_capi.image_to_string(img, psm, WL).strip()
+    return pytesseract.image_to_string(img, config=f"--psm {psm} -c tessedit_char_whitelist={WL}").strip()
 
 
 def ocr_variants(img, psm=7, fast=False):
@@ -396,7 +405,6 @@ def ocr_variants(img, psm=7, fast=False):
         x, y, w, h = st; iy, ix = int(h * 0.14), int(h * 0.05)
         img = img[y + iy:y + h - iy, x + ix:x + w - ix]
     g = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    cfg = f"--psm {psm} -c tessedit_char_whitelist={WL}"
     jobs = []
     # small text (breaker tags) gets upscaled harder: target ~60 px cap height
     scales = (2.0,) if fast else (2.0, 3.0)
@@ -407,7 +415,7 @@ def ocr_variants(img, psm=7, fast=False):
                 _, gg2 = cv2.threshold(gg, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             else:
                 gg2 = gg
-            jobs.append((cv2.copyMakeBorder(gg2, 20, 20, 20, 20, cv2.BORDER_REPLICATE), cfg))
+            jobs.append((cv2.copyMakeBorder(gg2, 20, 20, 20, 20, cv2.BORDER_REPLICATE), psm))
     return list(_OCR.map(_tess, jobs))
 
 
