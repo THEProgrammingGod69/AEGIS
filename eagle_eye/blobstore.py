@@ -21,16 +21,38 @@ _lock = threading.Lock()
 _synced = {}
 
 
-def token():
+_oidc = {"token": ""}
+
+
+def remember_oidc(tok):
+    """Keep the Vercel OIDC token Vercel sends with every request (x-vercel-oidc-token): a store connected without a
+    read-write token is accessed with it plus BLOB_STORE_ID, as Vercel's SDK does."""
+    if tok:
+        _oidc["token"] = tok.strip()
+
+
+def _rw_token():
     return (os.environ.get("BLOB_READ_WRITE_TOKEN") or os.environ.get("VERCEL_BLOB_READ_WRITE_TOKEN") or "").strip()
 
 
+def token():
+    return _rw_token() or (os.environ.get("VERCEL_OIDC_TOKEN") or "").strip() or _oidc["token"]
+
+
+def store_id():
+    return (os.environ.get("BLOB_STORE_ID") or "").strip()
+
+
 def enabled():
-    return bool(token())
+    return bool(_rw_token() or store_id())
 
 
 def _call(method, url, data=None, headers=None, timeout=60, api=True):
+    if not token():
+        raise RuntimeError("no Blob credentials yet (no read-write token and no OIDC token seen)")
     h = {"authorization": f"Bearer {token()}"}
+    if not _rw_token() and store_id():
+        h["x-vercel-blob-store-id"] = store_id().removeprefix("store_")
     if api:
         h["x-api-version"] = "12"
     h.update(headers or {})

@@ -146,6 +146,16 @@ app.add_middleware(CORSMiddleware, allow_origins=_ORIGINS, allow_methods=["GET",
                    allow_headers=["*"], max_age=86400)
 
 
+@app.middleware("http")
+async def _oidc_token(request, call_next):
+    """Vercel passes a short-lived OIDC token with each request; the private Blob store is read with it."""
+    tok = request.headers.get("x-vercel-oidc-token")
+    if tok:
+        import blobstore
+        blobstore.remember_oidc(tok)
+    return await call_next(request)
+
+
 def _err(status, msg):
     raise HTTPException(status_code=status, detail=msg)
 
