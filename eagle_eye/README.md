@@ -205,6 +205,11 @@ and Lab migration, swipe review cards, a sign-off stamp with confetti, presenter
 - **Calm mode** (Ctrl K → *Motion: Calm*, `?calm`, or the OS reduced-motion setting): every animation shows its final
   frame, nothing pins, the preloader and blink are skipped. Use it if a projector stutters; it is stored per device.
 - **Press X** anywhere (outside inputs) for X-ray mode: every photo shows its GA drawing overlay.
+- **Install as an app**: on Android open the hosted console in Chrome, then ⋮ → *Install app* (iPhone: Safari → Share →
+  *Add to Home Screen*). It opens full-screen from its own icon, with shortcuts to the demo, Review, Analytics and Fault
+  Forge on a long press. The hosted build registers `static-public/sw.js`: pages and data stay network-first (a new
+  deploy shows at once), build files are cache-first, and whatever has been opened, plus every recorded run's data,
+  still opens offline. The local console (`python server.py`) gets the manifest and icons but no service worker.
 - Budget: transform / opacity / clip-path / SVG strokes only; ambient loops pause off-screen; cursor, tilt, magnetic,
   spotlight and ambient-glow effects run for mouse and trackpad only; pages other than the Overview load on demand.
   A CSS transition never shares a property with a GSAP tween (it would stall the tween part-way).

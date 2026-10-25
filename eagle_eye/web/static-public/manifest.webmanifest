@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "EAGLE EYE · Cabinet QC",
+  "short_name": "Eagle Eye",
+  "description": "Drawing-first control-cabinet QC: photo, GA drawing and wire list in, a filled QC checklist with proof out.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f8fb",
+  "theme_color": "#f6f8fb",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Run the live demo", "short_name": "Demo", "url": "./#/inspect/demo", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Review station", "short_name": "Review", "url": "./#/review", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Analytics", "short_name": "Analytics", "url": "./#/analytics", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Fault Forge", "short_name": "Forge", "url": "./#/forge", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}
