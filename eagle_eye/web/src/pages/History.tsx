@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url } from "../lib/api";
 import { pct } from "../lib/confidence";
-import { STATUS_COLOR, runDate } from "../lib/format";
+import { STATUS_COLOR, runDate, tone } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
 import type { JobView, RunMeta } from "../lib/types";
@@ -110,7 +110,7 @@ export function History() {
               {c.map((m, i) => (
                 <div key={m.id} className="row" style={{ ["--gap" as string]: "10px" }}>
                   {i > 0 && <ArrowRight size={16} className="faint" />}
-                  <a className="version" href={`#/run/${m.id}`} style={{ ["--c" as string]: STATUS_COLOR[m.verdict.label] }}>
+                  <a className="version" href={`#/run/${m.id}`} style={tone(STATUS_COLOR[m.verdict.label])}>
                     <div className="version-img"><img src={url.file(m.id, "marked", 320)} alt="" loading="lazy" /></div>
                     <div className="version-body">
                       <div className="row between">

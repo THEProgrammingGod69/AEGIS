@@ -3,33 +3,7 @@
    capture assistant, command palette, presenter mode.
    ========================================================================== */
 
-/* ---------- top bar: 8 destinations + engine popover ---------- */
-@media (max-width: 1440px) {
-  .nav-item:not([aria-current="page"]) span {
-    display: none;
-  }
-  .nav-item:not([aria-current="page"]) {
-    padding: 0 11px;
-  }
-}
-
-.palette-btn {
-  gap: 6px;
-  color: var(--text-3);
-}
-.palette-btn kbd {
-  font-size: 10.5px;
-}
-
-.status-pill.clickable {
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-}
-.status-pill.clickable:hover {
-  border-color: var(--line-3);
-  background: rgba(0, 75, 141, 0.06);
-}
-
+/* ---------- engine popover (the top bar itself lives in topbar.css) ---------- */
 .engine-pop-wrap {
   position: relative;
 }
@@ -94,8 +68,8 @@
   padding: 6px 8px;
   border-radius: 10px;
   color: var(--c);
-  background: color-mix(in srgb, var(--c) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+  background: color-mix(in srgb, var(--cf, var(--c)) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cf, var(--c)) 30%, transparent);
 }
 .quality-score b {
   font-size: 22px;
@@ -123,8 +97,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--c);
-  box-shadow: 0 0 8px var(--c);
+  background: var(--cf, var(--c));
+  box-shadow: 0 0 8px var(--cf, var(--c));
 }
 .quality-chip b {
   color: var(--text);
@@ -216,8 +190,8 @@
   border-radius: 12px;
   display: grid;
   gap: 9px;
-  border: 1px dashed color-mix(in srgb, var(--c) 45%, var(--line));
-  background: color-mix(in srgb, var(--c) 5%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--cf, var(--c)) 45%, var(--line));
+  background: color-mix(in srgb, var(--cf, var(--c)) 5%, transparent);
 }
 .decision.done {
   border-style: solid;
@@ -334,10 +308,16 @@
   border: 1px solid var(--rule);
   border-radius: 14px;
   break-inside: avoid;
-  transition: opacity 0.2s, background 0.2s;
+  transition: background 0.2s;
+}
+/* the step itself is faded in by GSAP, so a finished step dims its contents instead */
+.wo-step > * {
+  transition: opacity 0.2s;
 }
 .wo-step.done {
   background: var(--pass-fill);
+}
+.wo-step.done > * {
   opacity: 0.7;
 }
 .wo-step h3 {
@@ -508,7 +488,7 @@
     padding: 0;
     max-width: none;
   }
-  .wo-step.done {
+  .wo-step.done > * {
     opacity: 1;
   }
 }
@@ -545,6 +525,8 @@
 .rq-row {
   display: flex;
   gap: 10px;
+  min-width: 0;
+  width: 100%;
   align-items: flex-start;
   text-align: left;
   padding: 10px;
@@ -554,12 +536,12 @@
   transition: border-color 0.2s, background 0.2s;
 }
 .rq-row:hover {
-  border-color: color-mix(in srgb, var(--c) 40%, transparent);
+  border-color: color-mix(in srgb, var(--cf, var(--c)) 40%, transparent);
 }
 .rq-row.on {
-  border-color: color-mix(in srgb, var(--c) 70%, transparent);
-  background: color-mix(in srgb, var(--c) 8%, transparent);
-  box-shadow: inset 3px 0 0 var(--c);
+  border-color: color-mix(in srgb, var(--cf, var(--c)) 70%, transparent);
+  background: color-mix(in srgb, var(--cf, var(--c)) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--cf, var(--c));
 }
 .decide {
   display: grid;
@@ -709,7 +691,7 @@
   height: 100%;
   max-height: 24px;
   border-radius: 0 4px 4px 0;
-  background: var(--azure);
+  background: linear-gradient(90deg, var(--azure), var(--cyan));
   min-width: 2px;
 }
 .outcome-bar {
@@ -845,14 +827,14 @@
   padding: 12px 14px;
   border-radius: 12px;
   color: var(--text);
-  border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
-  background: color-mix(in srgb, var(--c) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cf, var(--c)) 30%, var(--line));
+  background: color-mix(in srgb, var(--cf, var(--c)) 4%, transparent);
   transition: border-color 0.2s, transform 0.2s var(--ease);
 }
 .trial:hover {
   color: var(--text);
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--c) 60%, var(--line));
+  border-color: color-mix(in srgb, var(--cf, var(--c)) 60%, var(--line));
 }
 .trial-stats {
   display: flex;
@@ -1122,29 +1104,9 @@
     top: calc(var(--nav-h) + 8px);
     width: auto;
   }
-  .palette-btn {
-    display: none;
-  }
   .quality {
     flex-direction: column;
     align-items: stretch;
-  }
-}
-@media (max-width: 720px) {
-  .nav {
-    overflow-x: auto;
-    scrollbar-width: none;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-  .nav::-webkit-scrollbar {
-    display: none;
-  }
-  .engine-pop-wrap .status-pill {
-    display: inline-flex;
-    padding: 0 11px;
-    font-size: 0;
-    gap: 0;
   }
 }
 
@@ -1330,8 +1292,8 @@
 .lab-col {
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--c) 30%, var(--line));
-  background: color-mix(in srgb, var(--c) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--cf, var(--c)) 30%, var(--line));
+  background: color-mix(in srgb, var(--cf, var(--c)) 6%, var(--surface));
   min-height: 150px;
 }
 .lab-col-head {
@@ -1356,8 +1318,8 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--c);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent);
+  background: var(--cf, var(--c));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf, var(--c)) 18%, transparent);
 }
 .lab-col.review .lab-dot.moved {
   box-shadow: 0 0 0 3px rgba(255, 181, 71, 0.35), 0 0 12px rgba(255, 181, 71, 0.6);

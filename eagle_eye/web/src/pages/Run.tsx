@@ -17,7 +17,7 @@ import { Kpi, Marker, Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, dl, followJob, url, useCanLive } from "../lib/api";
 import { inspectorName, reviewSummary } from "../lib/reviews";
 import { recheckOptions } from "../lib/static";
-import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf } from "../lib/format";
+import { CHECK_TITLE, STATUS_COLOR, isIssue, plural, runDate, statusOf, tone } from "../lib/format";
 import { straightener } from "../lib/geometry";
 import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
@@ -45,7 +45,7 @@ function VerdictBanner({ p }: { p: RunPayload }) {
   const rc = p.meta.recheck;
   const sha = p.meta.photo_meta?.sha256 ?? p.photo_meta?.sha256;
   return (
-    <motion.div className="verdict card" style={{ ["--c" as string]: c }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+    <motion.div className="verdict card" style={tone(c)} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <div className="verdict-main">
         <motion.div className="verdict-icon" initial={{ scale: 0.6, rotate: -12 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.1 }}>
           <Icon />
@@ -108,7 +108,7 @@ function Chain({ chain, current }: { chain: RunMeta[]; current: string }) {
       {chain.map((m, i) => (
         <div key={m.id} className="row" style={{ ["--gap" as string]: "6px" }}>
           {i > 0 && <ChevronRight size={14} className="faint" />}
-          <a href={`#/run/${m.id}`} className={`chain-pill${m.id === current ? " on" : ""}`} style={{ ["--c" as string]: STATUS_COLOR[m.verdict.label] }}>
+          <a href={`#/run/${m.id}`} className={`chain-pill${m.id === current ? " on" : ""}`} style={tone(STATUS_COLOR[m.verdict.label])}>
             <b>v{m.version}</b>
             <span>{m.verdict.label}{m.counts.FAIL ? ` · ${m.counts.FAIL}` : ""}</span>
           </a>
@@ -134,7 +134,7 @@ function IssueList({ items, eng, selected, hovered, onSelect, onHover }: {
         const s = statusOf(it);
         return (
           <motion.button key={it.id} className={`issue-card${selected === it.id ? " on" : ""}${hovered === it.id ? " hover" : ""}`}
-            style={{ ["--c" as string]: STATUS_COLOR[s] }} onClick={() => onSelect(it.id)} onMouseEnter={() => onHover(it.id)} onMouseLeave={() => onHover(null)}
+            style={tone(STATUS_COLOR[s])} onClick={() => onSelect(it.id)} onMouseEnter={() => onHover(it.id)} onMouseLeave={() => onHover(null)}
             initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.05 }}>
             <Marker n={it.marker ?? "·"} s={s} />
             <div className="grow" style={{ minWidth: 0 }}>
@@ -187,7 +187,7 @@ function Checklist({ items, eng, selected, onSelect }: { items: Item[]; eng: Eng
     <div className="checklist" ref={scope}>
       <div className="row wrap" style={{ ["--gap" as string]: "6px", marginBottom: 10 }}>
         {(["ALL", "FAIL", "REVIEW", "SKIP", "PASS", "NOT_IN_VIEW"] as const).filter((k) => k !== "NOT_IN_VIEW" || counts[k] > 0).map((k) => (
-          <button key={k} className="chip" aria-pressed={f === k} style={{ ["--c" as string]: k === "ALL" ? "var(--accent)" : STATUS_COLOR[k] }} onClick={() => changeFilter(k)}>
+          <button key={k} className="chip" aria-pressed={f === k} style={tone(k === "ALL" ? "var(--accent)" : STATUS_COLOR[k])} onClick={() => changeFilter(k)}>
             {k === "ALL" ? "All" : k === "NOT_IN_VIEW" ? "Not in view" : k} <span className="count">{counts[k]}</span>
           </button>
         ))}
@@ -332,7 +332,7 @@ function DecisionBar({ it, review, onDecide }: { it: Item; review?: Review; onDe
   if (it.result === "SKIP" || it.check === "REGISTRATION" || it.id === "REG-DRAWING") return null;
   const engine = it.result;
   return (
-    <div className={`decision${review ? " done" : ""}`} style={{ ["--c" as string]: review ? STATUS_COLOR[review.decision] : "var(--accent-3)" }}>
+    <div className={`decision${review ? " done" : ""}`} style={tone(review ? STATUS_COLOR[review.decision] : "var(--accent-3)")}>
       <div className="row between wrap" style={{ ["--gap" as string]: "8px" }}>
         <div className="tiny faint row" style={{ ["--gap" as string]: "6px" }}><UserCheck size={13} /> Inspector decision</div>
         {review && (
@@ -344,7 +344,7 @@ function DecisionBar({ it, review, onDecide }: { it: Item; review?: Review; onDe
       </div>
       <div className="row" style={{ ["--gap" as string]: "6px" }}>
         <input className="input grow" placeholder={engine === "REVIEW" ? "What did you see on the cabinet?" : "Note (optional)"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
-        <button className="btn btn-sm" style={{ ["--c" as string]: "var(--pass)" }} onClick={() => onDecide(it.id, "PASS", note)} title="The item is correct on the cabinet">
+        <button className="btn btn-sm" style={tone("var(--pass)")} onClick={() => onDecide(it.id, "PASS", note)} title="The item is correct on the cabinet">
           <CheckCircle2 style={{ color: "var(--pass)" }} /> PASS
         </button>
         <button className="btn btn-sm" onClick={() => onDecide(it.id, "FAIL", note)} title="The item is wrong on the cabinet">

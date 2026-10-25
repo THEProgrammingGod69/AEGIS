@@ -2,7 +2,6 @@ import { ClipboardList, FlaskConical, Gauge, Mic, PlayCircle, ScanEye, ScanLine,
 import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { ScrollProgress } from "./components/motion";
 import { Preloader } from "./components/Preloader";
 import { Presenter } from "./components/Presenter";
 import { NAV, TopBar } from "./components/TopBar";
@@ -10,7 +9,7 @@ import { ToastProvider } from "./components/ui";
 import { STATIC, api } from "./lib/api";
 import { setPreferLive, useEngine } from "./lib/cloud";
 import { ScrollTrigger, SplitText, calm, gsap, introDone, setMotion, useGSAP } from "./lib/gsap";
-import { installClickSpark, installInteractions, installXray, toggleXray } from "./lib/interactions";
+import { installAmbient, installClickSpark, installInteractions, installXray, toggleXray } from "./lib/interactions";
 import { go, useRoute } from "./lib/router";
 import { blinkTo } from "./lib/transition";
 import type { Health } from "./lib/types";
@@ -97,6 +96,7 @@ export function App() {
   useEffect(() => {
     if (!preload) introDone();
     installInteractions();
+    installAmbient();
     installXray();
     installClickSpark();
     // pinned sections measure after images and fonts settle
@@ -190,7 +190,6 @@ export function App() {
 
   return (
     <ToastProvider>
-      <ScrollProgress />
       <TopBar page={page} health={health} onPalette={() => setPalette(true)} />
       {!STATIC && health && !health.tesseract.ok && (
         <div className="setup-warn">
@@ -206,6 +205,11 @@ export function App() {
         </ErrorBoundary>
       </main>
       <footer className="footer">
+        <div className="footer-mark" aria-hidden="true">
+          <span className="fm-outline">EAGLE EYE</span>
+          <span className="fm-fill">EAGLE EYE</span>
+          <span className="fm-beam" />
+        </div>
         <div className="footer-inner">
           <span>EAGLE EYE · Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Built for Emerson&apos;s Track 1 challenge</span>
           <span>Drawing-first verification · FAIL only when evidence agrees · CPU only · <button className="linkish" onClick={() => setPalette(true)}>Ctrl K</button> · press <kbd>X</kbd> for X-ray</span>

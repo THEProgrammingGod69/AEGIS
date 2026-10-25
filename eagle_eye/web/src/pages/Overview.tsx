@@ -17,6 +17,7 @@ import { useAsync } from "../lib/hooks";
 import { go } from "../lib/router";
 import { useSmoothScroll } from "../lib/smooth";
 import { blinkTo } from "../lib/transition";
+import { tone } from "../lib/format";
 
 const IDEAS = [
   { icon: FileCode2, title: "Read the drawing with code, not AI", body: "The GA PDF is vector, so PyMuPDF pulls every tag (PS11, CB41…) and its box exactly. The drawing becomes a closed list of expected items." },
@@ -210,10 +211,10 @@ export function Overview({ onPresent }: { onPresent?: () => void }) {
               <div className="example">
                 <span className="tiny faint">Emerson's own example has 4 faults:</span>
                 <div className="row wrap" style={{ ["--gap" as string]: "6px" }}>
-                  <span className="badge" style={{ ["--c" as string]: "var(--fail)" }}>PS12 missing</span>
-                  <span className="badge" style={{ ["--c" as string]: "var(--fail)" }}>CB43 ↔ CB44 swapped</span>
-                  <span className="badge" style={{ ["--c" as string]: "var(--fail)" }}>1CBP03 no label</span>
-                  <span className="badge" style={{ ["--c" as string]: "var(--fail)" }}>X3 wire without ferrule</span>
+                  <span className="badge" style={tone("var(--fail)")}>PS12 missing</span>
+                  <span className="badge" style={tone("var(--fail)")}>CB43 ↔ CB44 swapped</span>
+                  <span className="badge" style={tone("var(--fail)")}>1CBP03 no label</span>
+                  <span className="badge" style={tone("var(--fail)")}>X3 wire without ferrule</span>
                 </div>
               </div>
             </Reveal>

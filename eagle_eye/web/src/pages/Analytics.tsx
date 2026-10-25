@@ -7,7 +7,7 @@ import { Count, Kpi, Seg, StatusBadge } from "../components/ui";
 import { calm, gsap } from "../lib/gsap";
 import { api, url } from "../lib/api";
 import type { ParetoBy } from "../lib/assembly";
-import { CHECK_TITLE, STATUS_COLOR, runDate } from "../lib/format";
+import { CHECK_TITLE, STATUS_COLOR, runDate, statusFill, tone } from "../lib/format";
 import { useAsync, useSize } from "../lib/hooks";
 import { go } from "../lib/router";
 import type { RunMeta, RunPayload } from "../lib/types";
@@ -157,7 +157,7 @@ export function Analytics() {
         <div ref={charts}>
           <div className="an-kpis">
             <Kpi value={n} label="cabinets inspected" color="var(--accent)" note={`${s.items.toLocaleString()} items checked`} />
-            <div className="kpi ring-kpi" data-spotlight="" style={{ ["--c" as string]: "var(--pass)" }}>
+            <div className="kpi ring-kpi" data-spotlight="" style={tone("var(--pass)")}>
               <div>
                 <div className="kpi-value"><Count value={s.fpy * 100} /><span style={{ fontSize: "0.55em", marginLeft: 3, opacity: 0.8 }}>%</span></div>
                 <div className="kpi-label">first-pass yield</div>
@@ -206,7 +206,7 @@ export function Analytics() {
                 </div>
                 <div className="outcome-bar" role="img" aria-label={`PASS ${s.verdicts.PASS}, HOLD ${s.verdicts.HOLD}, REVIEW ${s.verdicts.REVIEW}`}>
                   {(["PASS", "HOLD", "REVIEW"] as const).filter((k) => s.verdicts[k]).map((k) => (
-                    <i key={k} className="tip" data-grow-x="" data-tip={`${VERDICT_TEXT[k]}: ${s.verdicts[k]} (${Math.round((s.verdicts[k] / n) * 100)}%)`} style={{ flexGrow: s.verdicts[k], background: STATUS_COLOR[k] }} />
+                    <i key={k} className="tip" data-grow-x="" data-tip={`${VERDICT_TEXT[k]}: ${s.verdicts[k]} (${Math.round((s.verdicts[k] / n) * 100)}%)`} style={{ flexGrow: s.verdicts[k], background: statusFill(k) }} />
                   ))}
                 </div>
                 <div className="outcome-legend">
@@ -263,7 +263,7 @@ export function Analytics() {
                   <div className="cols-grid"><i /><i /><i /></div>
                   {chrono.map((m) => (
                     <a key={m.id} href={`#/run/${m.id}`} className="col tip" data-tip={`${m.label}\n${runDate(m.created)} · ${m.counts.FAIL} FAIL · ${m.verdict.label}`}>
-                      <i data-grow-y="" style={{ height: `${Math.max(4, (m.counts.FAIL / maxFail) * 100)}%`, background: STATUS_COLOR[m.verdict.label] }} />
+                      <i data-grow-y="" style={{ height: `${Math.max(4, (m.counts.FAIL / maxFail) * 100)}%`, background: statusFill(m.verdict.label) }} />
                     </a>
                   ))}
                 </div>

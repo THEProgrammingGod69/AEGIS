@@ -68,7 +68,7 @@ function Split({ c, empty }: { c: GapCategory | null; empty: string }) {
     <div className="gap-split tip" data-tip={`${c.FAIL} confirmed · ${c.REVIEW} referred · ${c.PASS} incorrect PASS · ${c.unassessed} not assessed`}>
       <div className="gap-bar">
         <motion.i style={{ background: "var(--pass)" }} initial={{ width: 0 }} whileInView={{ width: w(c.FAIL) }} viewport={{ once: true }} transition={{ duration: 0.8 }} />
-        <motion.i style={{ background: "var(--review)" }} initial={{ width: 0 }} whileInView={{ width: w(c.REVIEW) }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} />
+        <motion.i style={{ background: "var(--review-bar)" }} initial={{ width: 0 }} whileInView={{ width: w(c.REVIEW) }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.1 }} />
         <motion.i style={{ background: "var(--fail)" }} initial={{ width: 0 }} whileInView={{ width: w(c.PASS) }} viewport={{ once: true }} transition={{ duration: 0.8, delay: 0.2 }} />
       </div>
       <span className="mono small">{c.FAIL}/{c.planted}</span>
@@ -140,7 +140,7 @@ function GapView({ g }: { g: Gap }) {
           <div className="card-title">By fault type{showExample && <span className="gap-example-tag">EXAMPLE</span>}</div>
           <div className="legend tiny faint">
             <span><i className="gap-swatch" style={{ background: "var(--pass)" }} />confirmed (FAIL)</span>
-            <span><i className="gap-swatch" style={{ background: "var(--review)" }} />referred (REVIEW)</span>
+            <span><i className="gap-swatch" style={{ background: "var(--review-bar)" }} />referred (REVIEW)</span>
             <span><i className="gap-swatch" style={{ background: "var(--fail)" }} />incorrect PASS</span>
             <span><i className="gap-swatch" style={{ background: "var(--line-3)" }} />not assessed</span>
           </div>
@@ -169,7 +169,7 @@ function GapView({ g }: { g: Gap }) {
           <div className="card-title" style={{ marginBottom: 6 }}>{measured.kind === "drawing_render" ? "Real-cabinet renders" : "Real photos"} with a planted fault</div>
           {g.real_rows.flatMap((row) => row.faults.map((f, i) => (
             <div key={`${row.photo}-${i}`} className="gap-item">
-              <span className="gap-dot" style={{ background: OUTCOME[f.outcome][1] }} />
+              <span className="gap-dot" style={{ background: OUTCOME[f.outcome][1] === "var(--review)" ? "var(--review-bar)" : OUTCOME[f.outcome][1] }} />
               <span className="small grow ellipsis">{f.text ?? f.type}</span>
               <span className="tiny faint mono ellipsis">{row.photo}</span>
               <span className="tiny" style={{ color: OUTCOME[f.outcome][1] }}>{OUTCOME[f.outcome][0]}</span>

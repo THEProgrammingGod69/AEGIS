@@ -191,11 +191,23 @@ eye-open preloader (first visit), the eye-blink route transition, a 3D device ru
 recorded inspection, a pinned exploded inspection, a horizontal pinned pipeline, a draggable X-ray lens, Flip checklist
 and Lab migration, swipe review cards, a sign-off stamp with confetti, presenter slides, and a WebGL lightning band.
 
+- **Command bar** (`src/components/TopBar.tsx`, `src/styles/topbar.css`): numbered destinations with viewfinder
+  focus brackets that hunt and lock onto the active page, a logo eye that follows the pointer and blinks with each
+  route change, a jump field for the Ctrl K palette, an engine signal meter, and a drawing ruler along the bottom edge
+  that fills with the aurora as the page scrolls (the reading progress).
+- **Page-wide flair** (`src/styles/flair.css`): cards rise in, page heads drift back and KPI tiles catch a sheen as
+  they scroll, all with CSS scroll-driven animations (no JavaScript; browsers without them just show the page), an
+  ambient glow trails the pointer, primary buttons pull gently towards it, and the footer wordmark fills as the page
+  ends.
+- **Colour roles**: status colours set `--c` (text), `--cf` (fills, tints, glows) and `--ci` (ink on a fill) together
+  through `tone()` in `src/lib/format.ts`, so REVIEW reads in a dark amber but fills bars and markers in the bright one.
+
 - **Calm mode** (Ctrl K → *Motion: Calm*, `?calm`, or the OS reduced-motion setting): every animation shows its final
   frame, nothing pins, the preloader and blink are skipped. Use it if a projector stutters; it is stored per device.
 - **Press X** anywhere (outside inputs) for X-ray mode: every photo shows its GA drawing overlay.
-- Budget: transform / opacity / clip-path / SVG strokes only; ambient loops pause off-screen; cursor, tilt, magnetic
-  and spotlight effects run for mouse and trackpad only; pages other than the Overview load on demand.
+- Budget: transform / opacity / clip-path / SVG strokes only; ambient loops pause off-screen; cursor, tilt, magnetic,
+  spotlight and ambient-glow effects run for mouse and trackpad only; pages other than the Overview load on demand.
+  A CSS transition never shares a property with a GSAP tween (it would stall the tween part-way).
 
 ## Self-test (synthetic cabinets, held-out seeds 200–249)
 

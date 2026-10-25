@@ -9,7 +9,7 @@ import { PhotoViewer } from "../components/PhotoViewer";
 import { Running } from "../components/Running";
 import { Kpi, Reveal, Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
-import { STATUS_COLOR, isIssue, statusOf } from "../lib/format";
+import { STATUS_COLOR, isIssue, statusOf, tone } from "../lib/format";
 import { confettiFrom } from "../lib/confetti";
 import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
@@ -87,7 +87,7 @@ function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) 
           selected={sel} onSelect={setSel} focusKey={fk} />
       </div>
       <div className="stack" style={{ ["--gap" as string]: "16px" }}>
-        <div className="card pad" ref={scoreRef} style={{ ["--c" as string]: perfect ? "var(--pass)" : "var(--fail)" }}>
+        <div className="card pad" ref={scoreRef} style={tone(perfect ? "var(--pass)" : "var(--fail)")}>
           <div className="forge-verdict">
             {perfect ? <ShieldCheck style={{ color: "var(--pass)" }} /> : <XCircle style={{ color: "var(--fail)" }} />}
             <div>
@@ -126,7 +126,7 @@ function Result({ p, others }: { p: RunPayload; others: RunPayload["meta"][] }) 
           <div className="card-title" style={{ marginBottom: 10 }}>What the engine reported</div>
           {issues.length === 0 ? <div className="small muted">41 / 41 PASS</div> : issues.map((it) => (
             <button key={it.id} className="rc-row" onClick={() => { setSel(it.id); setFk((k) => k + 1); }}>
-              <span className="marker" style={{ ["--c" as string]: STATUS_COLOR[statusOf(it)], width: 22, height: 22, fontSize: 11 }}>{it.marker}</span>
+              <span className="marker" style={{ ...tone(STATUS_COLOR[statusOf(it)]), width: 22, height: 22, fontSize: 11 }}>{it.marker}</span>
               <span className="mono small">{it.id}</span>
               <span className="tiny faint ellipsis grow">{it.found}</span>
               <StatusBadge s={statusOf(it)} />
@@ -174,7 +174,7 @@ function SelfTest() {
   return (
     <div className="stack" style={{ ["--gap" as string]: "18px" }}>
       <div className="selftest-kpis">
-        <div className="kpi odo-kpi" data-spotlight="" style={{ ["--c" as string]: "var(--pass)" }}>
+        <div className="kpi odo-kpi" data-spotlight="" style={tone("var(--pass)")}>
           <div className="kpi-value"><Odometer value={s.caught} /><span className="odo-of">/{s.planted}</span></div>
           <div className="kpi-label">faults caught</div>
           <div className="kpi-note">{(s.recall * 100).toFixed(0)}% recall</div>

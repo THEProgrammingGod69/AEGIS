@@ -10,6 +10,7 @@ import { api, followJob, url, useCanLive } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { NEUTRAL, PRESETS, describe, loadImage, render, toFile, type Perturb } from "../lib/perturb";
 import type { JobView, RunMeta } from "../lib/types";
+import { tone } from "../lib/format";
 
 gsap.registerPlugin(Flip);
 
@@ -84,7 +85,7 @@ function Migration() {
       </div>
       <div className="lab-cols">
         {COLS.map((c) => (
-          <div key={c.key} className={`lab-col ${c.key.toLowerCase()}`} style={{ ["--c" as string]: c.c }}>
+          <div key={c.key} className={`lab-col ${c.key.toLowerCase()}`} style={tone(c.c)}>
             <div className="lab-col-head mono"><span>{c.label}</span><b>{now[c.key]}</b></div>
             <div className="lab-dots">
               {Array.from({ length: DOTS }, (_, i) => i).filter((i) => colOf(i) === c.key).map((i) => (
@@ -286,7 +287,7 @@ export function Lab() {
                 const clean = !t.falseAlarms.length;
                 const weak = t.meta.warnings?.some((w) => w.code === "weak_registration");
                 return (
-                  <a key={t.id} href={`#/run/${t.id}`} className="trial" style={{ ["--c" as string]: clean ? "var(--pass)" : "var(--fail)" }}>
+                  <a key={t.id} href={`#/run/${t.id}`} className="trial" style={tone(clean ? "var(--pass)" : "var(--fail)")}>
                     <div className="row between">
                       <b>{t.label}</b>
                       <StatusBadge s={t.meta.verdict.label} />

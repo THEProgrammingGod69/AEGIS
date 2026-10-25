@@ -20,6 +20,7 @@ export function blinkTo(hash: string, label: string) {
   if (busy) return;
   busy = true;
   lab.textContent = "";
+  window.dispatchEvent(new Event("ee:blink"));
   gsap.timeline({ onComplete: () => void (busy = false) })
     .set([top, bottom], { visibility: "visible" })
     .fromTo(top, { y: 0, yPercent: -101 }, { yPercent: 0, duration: 0.26, ease: "power3.in" })

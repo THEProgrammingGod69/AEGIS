@@ -709,6 +709,8 @@
 
 .value-card {
   background: var(--surface);
+  /* GSAP owns this card's transform (deck Flip, tilt), so only the border eases in CSS */
+  transition: border-color 0.3s;
 }
 
 /* ---------------- horizontal pipeline (#13) ---------------- */

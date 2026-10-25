@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProofCard } from "../components/ProofCard";
 import { Kpi, Marker, StatusBadge, useToast } from "../components/ui";
 import { api } from "../lib/api";
-import { STATUS_COLOR, runDate } from "../lib/format";
+import { STATUS_COLOR, runDate, tone } from "../lib/format";
 import { calm, gsap, useGSAP } from "../lib/gsap";
 import { useAsync } from "../lib/hooks";
 import { inspectorName, setInspectorName } from "../lib/reviews";
@@ -205,7 +205,7 @@ export function Review() {
             {list.map((e) => {
               const s = e.review?.decision ?? e.result;
               return (
-                <button key={key(e)} className={`rq-row${cur && key(cur) === key(e) ? " on" : ""}`} onClick={() => setSel(key(e))} style={{ ["--c" as string]: STATUS_COLOR[s] }}>
+                <button key={key(e)} className={`rq-row${cur && key(cur) === key(e) ? " on" : ""}`} onClick={() => setSel(key(e))} style={tone(STATUS_COLOR[s])}>
                   <Marker n={e.marker} s={e.result} />
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row between">

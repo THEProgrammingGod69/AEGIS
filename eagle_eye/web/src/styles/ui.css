@@ -191,144 +191,13 @@
   line-height: 1.6;
 }
 
-/* ---------- top bar: floating white glass pill, 16px from the top ---------- */
-.topbar {
-  position: sticky;
-  top: 12px;
-  z-index: 50;
-  height: 60px;
-  margin: 12px auto 0;
-  width: calc(100% - 2 * var(--gutter));
-  max-width: var(--maxw);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: saturate(180%) blur(16px);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 1px 2px rgba(11, 23, 38, 0.05), 0 12px 32px -16px rgba(0, 75, 141, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.topbar-inner {
-  height: 100%;
-  padding: 0 10px 0 14px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  color: var(--text);
-  flex-shrink: 0;
-}
-
-.brand:hover {
-  color: var(--text);
-}
-
-.brand-name {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.14em;
-  color: var(--brand);
-}
-
-.brand-sub {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  color: var(--text-3);
-  text-transform: uppercase;
-  margin-top: 1px;
-}
-
-.nav {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(11, 23, 38, 0.04);
-  margin: 0 auto;
-}
-
-.nav-item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  color: var(--text-2);
-  font-size: 13.5px;
-  font-weight: 550;
-  transition: color 0.2s;
-  white-space: nowrap;
-  z-index: 1;
-}
-
-.nav-item:hover {
-  color: var(--brand);
-}
-
-.nav-item[aria-current="page"] {
-  color: var(--brand);
-}
-
-.nav-item svg {
-  width: 15px;
-  height: 15px;
-  opacity: 0.9;
-}
-
-/* #25 sliding active pill (GSAP moves it; it sits behind the links) */
-.nav-pill {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  height: 34px;
-  width: 0;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(11, 23, 38, 0.08), 0 6px 16px -8px rgba(0, 75, 141, 0.35), 0 0 0 1px rgba(0, 75, 141, 0.08);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
-  font-size: 12px;
-  font-weight: 550;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
 .dot {
   position: relative;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--c, var(--pass));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--pass)) 18%, transparent);
+  background: var(--cf, var(--c, var(--pass)));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf, var(--c, var(--pass))) 18%, transparent);
   flex-shrink: 0;
 }
 
@@ -337,7 +206,7 @@
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 1px solid var(--c, var(--pass));
+  border: 1px solid var(--cf, var(--c, var(--pass)));
   animation: ping 1.8s var(--ease) infinite;
 }
 
@@ -450,24 +319,28 @@
   background: var(--surface);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-sm);
-  transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease), box-shadow 0.25s, color 0.2s, opacity 0.2s;
+  /* hover lift and press use the individual translate / scale properties, so `transform` stays free for GSAP
+     (magnetic pull, entrances) without a CSS transition fighting it */
+  transition: background 0.2s, border-color 0.2s, translate 0.2s var(--ease), scale 0.2s var(--ease), box-shadow 0.25s, color 0.2s, opacity 0.2s;
   user-select: none;
 }
 
 .btn:hover {
   border-color: var(--line-3);
-  transform: translateY(-2px);
+  translate: 0 -2px;
   color: var(--text);
 }
 
 .btn:active {
-  transform: translateY(0) scale(0.97);
+  translate: 0 0;
+  scale: 0.97;
 }
 
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-  transform: none;
+  translate: none;
+  scale: none;
 }
 
 .btn svg {
@@ -519,13 +392,31 @@
 }
 
 .btn-primary:disabled {
-  box-shadow: none;
-  filter: saturate(0.5);
+  opacity: 1;
+  color: var(--text-4);
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.btn-primary:disabled::after,
+.btn-primary:disabled .shine {
+  display: none;
+}
+
+.btn-primary:disabled kbd {
+  color: var(--text-4);
+  border-color: var(--line-2);
+  background: transparent;
 }
 
 .device .btn-primary {
   color: #04121c;
   background: linear-gradient(110deg, #7fe7ff, #5be3ff 50%, #00b8e0);
+}
+
+.device .btn-primary:disabled {
+  color: var(--text-4);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 /* brand: Emerson Blue fill (sign off, export) */
@@ -553,7 +444,7 @@
   background: var(--hover);
   border-color: transparent;
   color: var(--brand);
-  transform: none;
+  translate: none;
 }
 
 .btn-danger {
@@ -624,6 +515,8 @@
 /* ---------- status chips: tinted fill + text colour + dot (status is never colour alone) ---------- */
 .badge {
   --c: var(--skip);
+  --cf: var(--c);
+  --ci: #fff;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -635,8 +528,8 @@
   font-weight: 650;
   letter-spacing: 0.06em;
   color: var(--c);
-  background: color-mix(in srgb, var(--c) 11%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c) 26%, transparent);
+  background: color-mix(in srgb, var(--cf, var(--c)) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cf, var(--c)) 26%, transparent);
   white-space: nowrap;
 }
 
@@ -700,6 +593,8 @@ kbd {
 
 .marker {
   --c: var(--fail);
+  --cf: var(--c);
+  --ci: #fff;
   display: inline-grid;
   place-items: center;
   width: 26px;
@@ -708,9 +603,9 @@ kbd {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 12px;
-  color: #fff;
-  background: var(--c);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent), 0 6px 14px -6px var(--c);
+  color: var(--ci, #fff);
+  background: var(--cf, var(--c));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf, var(--c)) 18%, transparent), 0 6px 14px -6px var(--cf, var(--c));
   flex-shrink: 0;
 }
 
@@ -726,6 +621,7 @@ kbd {
 
 /* ---------- segmented / chips / switches ---------- */
 .seg {
+  position: relative;
   display: inline-flex;
   padding: 3px;
   gap: 2px;
@@ -735,6 +631,8 @@ kbd {
 }
 
 .seg button {
+  position: relative;
+  z-index: 1;
   height: 28px;
   padding: 0 11px;
   border-radius: 8px;
@@ -759,8 +657,24 @@ kbd {
 
 .seg button[aria-pressed="true"] {
   color: var(--brand);
+}
+
+/* the sliding selection (Seg places it; transitions only once it has been placed) */
+.seg-ind {
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 0;
+  border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(11, 23, 38, 0.08), 0 0 0 1px rgba(0, 75, 141, 0.08);
+  box-shadow: 0 1px 2px rgba(11, 23, 38, 0.08), 0 4px 12px -6px rgba(0, 75, 141, 0.35), 0 0 0 1px rgba(0, 75, 141, 0.08);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.seg.seg-ready .seg-ind {
+  transition: transform 0.42s var(--ease-snap), width 0.42s var(--ease), opacity 0.2s;
 }
 
 .device .seg {
@@ -769,12 +683,17 @@ kbd {
 
 .device .seg button[aria-pressed="true"] {
   color: var(--text);
+}
+
+.device .seg-ind {
   background: rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .chip {
   --c: var(--accent);
+  --cf: var(--c);
+  --ci: #fff;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -797,9 +716,9 @@ kbd {
 
 .chip[aria-pressed="true"] {
   color: var(--text);
-  border-color: color-mix(in srgb, var(--c) 55%, transparent);
-  background: color-mix(in srgb, var(--c) 10%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 9%, transparent);
+  border-color: color-mix(in srgb, var(--cf, var(--c)) 55%, transparent);
+  background: color-mix(in srgb, var(--cf, var(--c)) 10%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cf, var(--c)) 9%, transparent);
 }
 
 .chip:disabled {
@@ -962,18 +881,20 @@ select.input {
 /* ---------- KPI / metric tile ---------- */
 .kpi {
   --c: var(--text);
+  --cf: var(--c);
+  --ci: #fff;
   position: relative;
   padding: 16px 18px;
   border-radius: var(--radius);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 7%, transparent), transparent 70%), var(--surface);
-  border: 1px solid color-mix(in srgb, var(--c) 18%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cf, var(--c)) 7%, transparent), transparent 70%), var(--surface);
+  border: 1px solid color-mix(in srgb, var(--cf, var(--c)) 18%, var(--line));
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   min-width: 0;
 }
 
 .device .kpi {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 10%, transparent), transparent 80%), rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cf, var(--c)) 10%, transparent), transparent 80%), rgba(255, 255, 255, 0.03);
   box-shadow: none;
 }
 
@@ -1067,7 +988,7 @@ select.input {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--c, var(--accent));
+  background: var(--cf, var(--c, var(--accent)));
 }
 
 /* ---------- misc ---------- */
@@ -1247,38 +1168,7 @@ select.input {
   flex-wrap: wrap;
 }
 
-@media (max-width: 1080px) {
-  .nav-item span {
-    display: none;
-  }
-  .nav-item {
-    padding: 0 12px;
-  }
-  .status-pill .hide-sm {
-    display: none;
-  }
-}
-
 @media (max-width: 720px) {
-  .topbar {
-    top: 8px;
-    margin-top: 8px;
-    width: calc(100% - 16px);
-  }
-  .topbar-inner {
-    gap: 8px;
-    padding: 0 8px;
-  }
-  .brand-sub,
-  .brand-name {
-    display: none;
-  }
-  .status-pill {
-    display: none;
-  }
-  .nav {
-    margin: 0;
-  }
   .main {
     padding-top: 20px;
   }

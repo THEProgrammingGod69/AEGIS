@@ -1,6 +1,7 @@
 /** Pointer feedback for the whole console, from four delegated listeners instead of one per element, so cards and
  *  buttons rendered later (async data, route changes) get it for free:
- *  #22 magnetic buttons ([data-magnetic]), #23 spotlight ([data-spotlight]), #24 3D tilt ([data-tilt]),
+ *  #22 magnetic buttons ([data-magnetic] pulls hard, every other primary button gently), #23 spotlight
+ *  ([data-spotlight]), #24 3D tilt ([data-tilt]),
  *  #26 icon line-draw on hover (buttons, [data-draw]). Mouse / trackpad only, never in Calm. */
 import { calm, fine, gsap } from "./gsap";
 
@@ -9,6 +10,7 @@ const tilts = new WeakMap<Element, { rx: Quick; ry: Quick }>();
 const mags = new WeakMap<Element, { x: Quick; y: Quick }>();
 
 const DRAW = ".btn, [data-draw], .new-card, .idea, .nav-item";
+const MAGNETIC = "[data-magnetic], .btn-primary:not(:disabled)";
 
 function tiltOf(el: HTMLElement) {
   let t = tilts.get(el);
@@ -57,12 +59,13 @@ export function installInteractions() {
         q.ry(((e.clientX - r.left) / r.width - 0.5) * k);
         q.rx(-((e.clientY - r.top) / r.height - 0.5) * k);
       }
-      const mag = t.closest<HTMLElement>("[data-magnetic]");
+      const mag = t.closest<HTMLElement>(MAGNETIC);
       if (mag) {
         const r = mag.getBoundingClientRect();
         const q = magOf(mag);
-        q.x((e.clientX - r.left - r.width / 2) * 0.25);
-        q.y((e.clientY - r.top - r.height / 2) * 0.25);
+        const k = mag.hasAttribute("data-magnetic") ? 0.25 : 0.14;
+        q.x((e.clientX - r.left - r.width / 2) * k);
+        q.y((e.clientY - r.top - r.height / 2) * k);
       }
     },
     { passive: true },
@@ -79,8 +82,9 @@ export function installInteractions() {
         q.rx(0);
         q.ry(0);
       }
-      const mag = t.closest<HTMLElement>("[data-magnetic]");
-      if (mag && entered(e, mag)) {
+      // released by any primary button, even one that turned disabled while the pointer was on it
+      const mag = t.closest<HTMLElement>("[data-magnetic], .btn-primary");
+      if (mag && entered(e, mag) && mags.has(mag)) {
         const q = magOf(mag);
         q.x(0);
         q.y(0);
@@ -102,6 +106,37 @@ export function installInteractions() {
     },
     { passive: true },
   );
+}
+
+/** Ambient light: a soft aurora glow that trails the pointer across the canvas, behind every card. One fixed
+ *  element moved by transform (compositor only); it sleeps while the tab is hidden. */
+export function installAmbient() {
+  if (calm() || !fine() || document.querySelector(".ambient")) return;
+  const el = document.createElement("div");
+  el.className = "ambient";
+  el.setAttribute("aria-hidden", "true");
+  document.body.prepend(el);
+  const x = gsap.quickTo(el, "x", { duration: 1.1, ease: "power3" });
+  const y = gsap.quickTo(el, "y", { duration: 1.1, ease: "power3" });
+  gsap.set(el, { x: innerWidth * 0.7, y: innerHeight * 0.2 });
+  let shown = false;
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (e.pointerType !== "mouse") return;
+      x(e.clientX);
+      y(e.clientY);
+      if (!shown) {
+        shown = true;
+        gsap.to(el, { opacity: 1, duration: 0.8 });
+      }
+    },
+    { passive: true },
+  );
+  document.documentElement.addEventListener("pointerleave", () => {
+    shown = false;
+    gsap.to(el, { opacity: 0, duration: 0.6 });
+  });
 }
 
 /* ---------- Bonus: the X-ray Easter egg. Press X anywhere outside inputs: every photo shows its GA overlay and the

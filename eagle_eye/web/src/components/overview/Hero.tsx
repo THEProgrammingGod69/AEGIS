@@ -10,6 +10,7 @@ import { go } from "../../lib/router";
 import { scrollToEl } from "../../lib/smooth";
 import { ISSUE_TEXT, SHOW, SH, SW, bb, isFailedTag, pts } from "../../lib/showcase";
 import type { SelfTest } from "../../lib/types";
+import { tone } from "../../lib/format";
 
 const LAYOUT = [...SHOW.layout].sort((a, b) => bb(a.quad).x0 - bb(b.quad).x0);
 const PASS_COUNT = SHOW.counts.PASS;
@@ -100,7 +101,7 @@ function RegistrationViewport() {
         <div className="rv-beam" aria-hidden="true" />
       </div>
       <div className="rv-foot mono">
-        <span className="rv-hud"><span className="dot pulse" style={{ ["--c" as string]: "var(--accent)" }} /><span className="rv-hud-text">{FAIL_COUNT} FAIL with proof · 0 false alarms</span></span>
+        <span className="rv-hud"><span className="dot pulse" style={tone("var(--accent)")} /><span className="rv-hud-text">{FAIL_COUNT} FAIL with proof · 0 false alarms</span></span>
         <span className="rv-counts">
           <b style={{ color: "var(--pass)" }}><span className="rv-count-pass">{PASS_COUNT}</span> PASS</b>
           <b style={{ color: "var(--fail)" }}><span className="rv-count-fail">{FAIL_COUNT}</span> FAIL</b>
@@ -237,7 +238,7 @@ export function Hero({ s, onPresent }: { s?: SelfTest["summary"]; onPresent?: ()
             <div className="float-v" style={{ color: "var(--pass)" }}>{fa}<span className="float-of"> / {correct.toLocaleString()}</span></div>
           </div></div>
           <div className="float f-bl"><div className="float-inner card glass float-chip">
-            <span className="badge" style={{ ["--c" as string]: "var(--fail)" }}>FAIL</span>
+            <span className="badge" style={tone("var(--fail)")}>FAIL</span>
             <b className="mono">{ISSUE_TEXT["ORD-RAIL-1"]}</b>
             <span className="faint small">proof ›</span>
           </div></div>

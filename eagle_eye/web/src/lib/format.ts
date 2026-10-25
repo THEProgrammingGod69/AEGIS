@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Item, Status } from "./types";
 
 export const STATUS_COLOR: Record<Status | "HOLD", string> = {
@@ -25,6 +26,20 @@ export const STATUS_HEX: Record<Status, string> = {
   REGRESSION: "#a78bfa",
   NEW: "#fb923c",
 };
+
+/** Fills for a text colour: REVIEW's text amber is too dark to fill a bar, dot or marker with on the light canvas,
+ *  so its fills use the bright bar amber (and dark ink on top). Every other colour fills with itself. */
+const FILL: Record<string, [fill: string, ink: string]> = { "var(--review)": ["var(--review-bar)", "#3d2600"] };
+
+/** Inline colour variables for a coloured element: --c for its text, --cf for its fills, tints and glows, --ci for
+ *  text set on that fill. Set all three wherever --c is set, so a nested element never inherits a parent's fill. */
+export function tone(c: string): CSSProperties {
+  const [f, i] = FILL[c] ?? [c, "#fff"];
+  return { ["--c" as string]: c, ["--cf" as string]: f, ["--ci" as string]: i } as CSSProperties;
+}
+
+/** Solid fill for a status (chart bars and segments). */
+export const statusFill = (s: Status | "HOLD") => (FILL[STATUS_COLOR[s]]?.[0] ?? STATUS_COLOR[s]);
 
 export const CHECK_TITLE: Record<string, string> = {
   GA: "Part present",

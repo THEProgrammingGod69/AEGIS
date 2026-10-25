@@ -8,6 +8,7 @@ import { useRef } from "react";
 import { url } from "../../lib/api";
 import { ScrollTrigger, calm, gsap, useGSAP } from "../../lib/gsap";
 import { SHOW, SH, SW, bb, isFailedTag, pts } from "../../lib/showcase";
+import { tone } from "../../lib/format";
 
 gsap.registerPlugin(Flip, MotionPathPlugin);
 
@@ -211,7 +212,7 @@ export function PipelineScroll({ steps }: { steps: { n: number; icon: LucideIcon
           <div key={p.n} className={`card stage-card${p.hl ? " hl aurora-border" : ""}`} data-spotlight="">
             <div className="row between">
               <span className="pipe-n mono">0{p.n}</span>
-              {p.hl && <span className="badge" style={{ ["--c" as string]: "var(--brand)" }}>FALSE ALARMS STOP HERE</span>}
+              {p.hl && <span className="badge" style={tone("var(--brand)")}>FALSE ALARMS STOP HERE</span>}
             </div>
             <div className="stage-icon"><p.icon /></div>
             <h3>{p.t}</h3>

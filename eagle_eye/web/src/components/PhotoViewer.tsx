@@ -1,6 +1,6 @@
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { STATUS_HEX } from "../lib/format";
+import { STATUS_HEX, tone } from "../lib/format";
 import { calm, gsap, useGSAP } from "../lib/gsap";
 import { onXray, xrayOn } from "../lib/interactions";
 import { useSize } from "../lib/hooks";
@@ -245,7 +245,7 @@ export function PhotoViewer({
                 const on = it.id === selected || it.id === hovered;
                 const pad = 6 * u;
                 return (
-                  <g key={it.id} className={`issue${on ? " on" : ""}`} onClick={() => click(it.id)} onMouseEnter={() => onHover?.(it.id)} onMouseLeave={() => onHover?.(null)} style={{ ["--c" as string]: c }}>
+                  <g key={it.id} className={`issue${on ? " on" : ""}`} onClick={() => click(it.id)} onMouseEnter={() => onHover?.(it.id)} onMouseLeave={() => onHover?.(null)} style={tone(c)}>
                     <rect x={b.x0 - pad} y={b.y0 - pad} width={b.x1 - b.x0 + 2 * pad} height={b.y1 - b.y0 + 2 * pad} rx={4 * u} fill={c} fillOpacity={on ? 0.2 : 0.1} stroke={c} strokeWidth={on ? 3.2 : 2.2} vectorEffect="non-scaling-stroke" />
                     {on && <rect x={b.x0 - pad * 2.4} y={b.y0 - pad * 2.4} width={b.x1 - b.x0 + 4.8 * pad} height={b.y1 - b.y0 + 4.8 * pad} rx={7 * u} fill="none" stroke={c} strokeWidth={1} strokeOpacity={0.55} vectorEffect="non-scaling-stroke" className="pulse-ring" />}
                     {it.marker != null && (
@@ -271,12 +271,12 @@ export function PhotoViewer({
       )}
       {(show.anchors || show.drawing) && (
         <div className="viewer-legend">
-          {show.drawing && <span><i className="sq" style={{ ["--c" as string]: "#5be3ff" }} /> Drawing, laid onto the photo</span>}
+          {show.drawing && <span><i className="sq" style={tone("#5be3ff")} /> Drawing, laid onto the photo</span>}
           {layers.anchors && (
             <>
-              <span><i style={{ ["--c" as string]: "#2bd49a" }} /> Anchor fits the drawing</span>
-              <span><i style={{ ["--c" as string]: "#ff5468" }} /> Off-pattern: points to a misplaced part</span>
-              <span><i className="ring" style={{ ["--c" as string]: "#5be3ff" }} /> Where the drawing expects it</span>
+              <span><i style={tone("#2bd49a")} /> Anchor fits the drawing</span>
+              <span><i style={tone("#ff5468")} /> Off-pattern: points to a misplaced part</span>
+              <span><i className="ring" style={tone("#5be3ff")} /> Where the drawing expects it</span>
             </>
           )}
         </div>

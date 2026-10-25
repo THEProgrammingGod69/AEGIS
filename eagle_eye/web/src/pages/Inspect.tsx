@@ -8,7 +8,7 @@ import { Seg, StatusBadge, useToast } from "../components/ui";
 import { STATIC, api, followJob, url, useCanLive } from "../lib/api";
 import { pingEngine, useEngine } from "../lib/cloud";
 import { LIVE_ONLY } from "../lib/static";
-import { CHECK_TITLE } from "../lib/format";
+import { CHECK_TITLE, tone } from "../lib/format";
 import { useAsync } from "../lib/hooks";
 import { analyzePhoto, type PhotoQuality } from "../lib/quality";
 import { go } from "../lib/router";
@@ -75,14 +75,14 @@ function QualityPanel({ q }: { q: PhotoQuality | null }) {
   if (!q) return <div className="skeleton" style={{ height: 74 }} />;
   return (
     <div className="quality">
-      <div className="quality-score" style={{ ["--c" as string]: LEVEL_C[q.level] }}>
+      <div className="quality-score" style={tone(LEVEL_C[q.level])}>
         <Gauge size={15} />
         <b className="mono">{q.score}</b>
         <span className="tiny faint">photo score</span>
       </div>
       <div className="quality-checks">
         {q.checks.map((c) => (
-          <span key={c.key} className="quality-chip tip" data-tip={c.tip} style={{ ["--c" as string]: LEVEL_C[c.level] }}>
+          <span key={c.key} className="quality-chip tip" data-tip={c.tip} style={tone(LEVEL_C[c.level])}>
             <i />{c.label} <b className="mono">{c.value}</b>
           </span>
         ))}

@@ -1,21 +1,7 @@
 /* ==========================================================================
-   Motion system (v2): progress bar, blink lids, preloader, spotlight, odometer, marquee, cursor, sparks, X-ray.
+   Motion system (v2): blink lids, preloader, spotlight, odometer, marquee, cursor, sparks, X-ray.
    Everything here animates transform / opacity / clip-path / SVG strokes only.
    ========================================================================== */
-
-/* #20 aurora scroll-progress bar */
-.scroll-progress {
-  position: fixed;
-  left: 0;
-  top: 0;
-  right: 0;
-  height: 3px;
-  z-index: 90;
-  background: var(--aurora);
-  transform: scaleX(0);
-  transform-origin: 0 50%;
-  pointer-events: none;
-}
 
 /* #2 eye-blink lids: aurora panels with curved, lash-lit edges */
 .lid {

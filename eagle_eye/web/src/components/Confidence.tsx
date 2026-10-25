@@ -2,13 +2,14 @@
 import { Gauge } from "lucide-react";
 import { confidenceColor, confidenceMeaning, engineOf, itemConfidence, pct, photoConfidence, type Engine } from "../lib/confidence";
 import type { Item, RunPayload } from "../lib/types";
+import { tone } from "../lib/format";
 
 export function ConfidenceChip({ it, eng, wide }: { it: Item; eng: Engine; wide?: boolean }) {
   const c = itemConfidence(it, eng);
   if (c == null) return <span className="tiny faint">not judged</span>;
   const color = confidenceColor(c, it.result);
   return (
-    <span className={`conf-chip tip${wide ? " wide" : ""}`} style={{ ["--c" as string]: color }}
+    <span className={`conf-chip tip${wide ? " wide" : ""}`} style={tone(color)}
       data-tip={`${pct(c)} ${confidenceMeaning(it.result)}\ncalibrated on Fault Forge runs · raw engine score ${Math.round((it.conf ?? 0) * 100)}%`}>
       <i className="conf-meter"><b style={{ width: `${Math.max(4, c * 100)}%` }} /></i>
       <span className="mono">{pct(c)}</span>
@@ -23,7 +24,7 @@ export function PhotoConfidenceLine({ p }: { p: RunPayload }) {
   const color = pc.score >= 0.95 ? "var(--pass)" : pc.score >= 0.85 ? "var(--review)" : "var(--fail)";
   const weakest = pc.lowest.filter((l) => l.confidence < 0.9);
   return (
-    <div className="photo-conf" style={{ ["--c" as string]: color }}>
+    <div className="photo-conf" style={tone(color)}>
       <Gauge size={15} />
       <span className="photo-conf-score mono">{pct(pc.score)}</span>
       <span className="small">

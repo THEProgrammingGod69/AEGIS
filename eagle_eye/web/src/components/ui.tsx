@@ -1,13 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
-import { createContext, useCallback, useContext, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { STATUS_COLOR, statusText } from "../lib/format";
+import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { STATUS_COLOR, statusText, tone } from "../lib/format";
 import { ScrollTrigger, SplitText, calm, gsap, useGSAP } from "../lib/gsap";
 import type { Status } from "../lib/types";
 
 export function StatusBadge({ s, lg, label }: { s: Status | "HOLD"; lg?: boolean; label?: string }) {
   return (
-    <span className={`badge${lg ? " lg" : ""}`} style={{ ["--c" as string]: STATUS_COLOR[s] }}>
+    <span className={`badge${lg ? " lg" : ""}`} style={tone(STATUS_COLOR[s])}>
       {label ?? statusText(s)}
     </span>
   );
@@ -15,7 +15,7 @@ export function StatusBadge({ s, lg, label }: { s: Status | "HOLD"; lg?: boolean
 
 export function Marker({ n, s, lg }: { n: number | string; s: Status; lg?: boolean }) {
   return (
-    <span className={`marker${lg ? " lg" : ""}`} style={{ ["--c" as string]: STATUS_COLOR[s] }}>
+    <span className={`marker${lg ? " lg" : ""}`} style={tone(STATUS_COLOR[s])}>
       {n}
     </span>
   );
@@ -53,7 +53,7 @@ export function Kpi({ value, label, note, color, suffix, decimals }: {
   value: number; label: string; note?: ReactNode; color?: string; suffix?: string; decimals?: number;
 }) {
   return (
-    <div className="kpi" data-spotlight="" style={{ ["--c" as string]: color ?? "var(--text)" }}>
+    <div className="kpi" data-spotlight="" style={tone(color ?? "var(--text)")}>
       <div className="kpi-value">
         <Count value={value} decimals={decimals} />
         {suffix && <span style={{ fontSize: "0.55em", marginLeft: 3, opacity: 0.8 }}>{suffix}</span>}
@@ -73,11 +73,37 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
   );
 }
 
+/** Segmented control. The selection is one indicator that slides (and overshoots a touch) between options, so
+ *  every filter, tab set and mode switch in the console moves the same way. */
 export function Seg<T extends string | number>({ value, options, onChange }: {
   value: T; options: { value: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const ind = useRef<HTMLSpanElement>(null);
+  const idx = options.findIndex((o) => o.value === value);
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const i = ind.current!;
+    const place = () => {
+      const b = el.querySelectorAll<HTMLElement>(":scope > button")[idx];
+      if (!b) return void (i.style.opacity = "0");
+      i.style.opacity = "1";
+      i.style.width = `${b.offsetWidth}px`;
+      i.style.transform = `translateX(${b.offsetLeft}px)`;
+    };
+    place();
+    // transitions switch on after the first placement, so the indicator never flies in from the left edge
+    const raf = requestAnimationFrame(() => el.classList.add("seg-ready"));
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [idx, options.length]);
   return (
-    <div className="seg" role="group">
+    <div className="seg" role="group" ref={ref}>
+      <span className="seg-ind" ref={ind} aria-hidden="true" />
       {options.map((o) => (
         <button key={String(o.value)} type="button" aria-pressed={o.value === value} title={o.title} onClick={() => onChange(o.value)}>
           {o.label}
@@ -96,7 +122,7 @@ export function Meter({ value, color }: { value: number; color?: string }) {
     gsap.fromTo(ref.current, { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "expo.out" });
   }, { dependencies: [w] });
   return (
-    <div className="meter" style={{ ["--c" as string]: color ?? "var(--accent)" }}>
+    <div className="meter" style={tone(color ?? "var(--accent)")}>
       <i ref={ref} style={{ width: `${w * 100}%`, transformOrigin: "0 50%" }} />
     </div>
   );

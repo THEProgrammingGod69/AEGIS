@@ -1,0 +1,249 @@
+/* ==========================================================================
+   Flair (v2.1): page-wide motion that costs no JavaScript.
+   Scroll reveals use CSS scroll-driven animations (animation-timeline: view()), so they also catch cards that mount
+   after their data loads; browsers without them simply show the cards. They animate the individual `translate`,
+   `scale` and `opacity` properties, so they compose with the transforms GSAP and framer-motion own.
+   ========================================================================== */
+
+/* ---------- cards rise into view on the product pages ---------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    translate: 0 44px;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media screen and (prefers-reduced-motion: no-preference) {
+    html:not(.calm) .main:not(.ov-main) .card,
+    html:not(.calm) .main:not(.ov-main) .kpi,
+    html:not(.calm) .main:not(.ov-main) .chain-card {
+      animation: rise-in linear backwards;
+      animation-timeline: view();
+      animation-range: entry 0% entry 170px;
+    }
+    /* a card inside a card rides with its parent instead of rising twice */
+    html:not(.calm) .main:not(.ov-main) :is(.card, .kpi, .chain-card) :is(.card, .kpi, .chain-card) {
+      animation: none;
+    }
+  }
+}
+
+/* ---------- eyebrow: one light sweep across the page's eyebrow as it arrives ---------- */
+.page-head .eyebrow {
+  position: relative;
+  overflow: hidden;
+}
+
+.page-head .eyebrow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.9) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: eyebrow-sweep 1.3s var(--ease) 0.55s both;
+  pointer-events: none;
+}
+
+@keyframes eyebrow-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+html.calm .page-head .eyebrow::after {
+  display: none;
+}
+
+/* ---------- history: thumbnails lean in on hover ---------- */
+.version-img {
+  overflow: hidden;
+}
+
+.version-img img {
+  transition: transform 0.6s var(--ease);
+}
+
+.version:hover .version-img img {
+  transform: scale(1.08);
+}
+
+/* ---------- footer wordmark: an outline that the aurora fills as the page reaches its end ---------- */
+.footer {
+  position: relative;
+  /* clip, not hidden: a hidden overflow would make the footer its own scroll container and freeze the timeline */
+  overflow: clip;
+}
+
+.footer-mark {
+  position: relative;
+  max-width: var(--maxw);
+  margin: 6px auto 22px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(54px, 14.6vw, 232px);
+  line-height: 0.86;
+  letter-spacing: -0.045em;
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+.fm-outline {
+  display: block;
+  color: transparent;
+  -webkit-text-stroke: 1.2px rgba(0, 75, 141, 0.2);
+}
+
+.fm-fill {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background: var(--aurora-v);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0.92;
+}
+
+/* the scan line rides the fill's leading edge */
+.fm-beam {
+  position: absolute;
+  inset: -6% 0;
+  background: linear-gradient(90deg, transparent calc(100% - 90px), rgba(127, 231, 255, 0.32) calc(100% - 2px), #7fe7ff calc(100% - 1px), transparent);
+  translate: -100% 0;
+  opacity: 0;
+}
+
+@keyframes fm-fill {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes fm-beam {
+  0% { translate: -100% 0; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { translate: 0 0; opacity: 0; }
+}
+
+@supports (animation-timeline: view()) {
+  @media screen and (prefers-reduced-motion: no-preference) {
+    html:not(.calm) .fm-fill {
+      animation: fm-fill linear both;
+      animation-timeline: --fm;
+      animation-range: entry 0% entry 100%;
+    }
+    html:not(.calm) .fm-beam {
+      animation: fm-beam linear both;
+      animation-timeline: --fm;
+      animation-range: entry 0% entry 100%;
+    }
+    .footer-mark {
+      view-timeline: --fm block;
+    }
+  }
+}
+
+.footer-inner {
+  position: relative;
+}
+
+@media (max-width: 720px) {
+  .footer-mark {
+    margin-bottom: 16px;
+  }
+  .fm-outline {
+    -webkit-text-stroke-width: 1px;
+  }
+}
+
+@media print {
+  .footer-mark {
+    display: none;
+  }
+}
+
+/* ---------- ambient light that trails the pointer (installAmbient) ---------- */
+.ambient {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  width: 820px;
+  height: 820px;
+  margin: -410px 0 0 -410px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(10, 102, 232, 0.11), rgba(0, 184, 224, 0.06) 48%, transparent 72%);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* ---------- page heads drift back and fade as the page scrolls over them ---------- */
+@keyframes head-drift {
+  to {
+    translate: 0 56px;
+    opacity: 0.25;
+  }
+}
+
+/* ---------- KPI tiles: a sheen passes over each tile as it scrolls in ---------- */
+.kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.6) 50%, transparent 62%) no-repeat;
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  pointer-events: none;
+}
+
+@keyframes kpi-sheen {
+  from { background-position: 130% 0; }
+  to { background-position: -30% 0; }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media screen and (prefers-reduced-motion: no-preference) {
+    html:not(.calm) .main:not(.ov-main) .page-head {
+      animation: head-drift linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0px 400px;
+    }
+    html:not(.calm) .main:not(.ov-main) .kpi::before {
+      animation: kpi-sheen linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+  }
+}
+
+/* ---------- inspection verdict: one scan pass across the banner as the result lands ---------- */
+.verdict::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 38%, color-mix(in srgb, var(--cf, var(--c)) 14%, transparent) 48%, color-mix(in srgb, var(--cf, var(--c)) 75%, transparent) 50%, transparent 50.4%);
+  transform: translateX(-62%);
+  animation: verdict-scan 1.4s var(--ease) 0.3s both;
+  pointer-events: none;
+}
+
+@keyframes verdict-scan {
+  0% { transform: translateX(-62%); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateX(62%); opacity: 0; }
+}
+
+html.calm .verdict::before {
+  display: none;
+}

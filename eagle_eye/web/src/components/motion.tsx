@@ -1,43 +1,9 @@
 /** Reusable motion pieces from the v2 catalogue. Each returns early to its final frame in Calm. */
-import { useEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { TextPlugin } from "gsap/TextPlugin";
 import { ScrollTrigger, calm, gsap, useGSAP } from "../lib/gsap";
 
 gsap.registerPlugin(TextPlugin);
-
-/** #20 aurora scroll-progress bar: transform-origin left, scaleX follows the page (smoothed like scrub: 0.3). */
-export function ScrollProgress() {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current!;
-    if (calm()) {
-      el.style.display = "none";
-      return;
-    }
-    const to = gsap.quickTo(el, "scaleX", { duration: 0.3, ease: "power3" });
-    let raf = 0;
-    const tick = () => {
-      raf = 0;
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      to(max > 8 ? Math.min(1, window.scrollY / max) : 0);
-    };
-    const on = () => void (raf ||= requestAnimationFrame(tick));
-    window.addEventListener("scroll", on, { passive: true });
-    window.addEventListener("resize", on, { passive: true });
-    window.addEventListener("hashchange", on);
-    const ro = new ResizeObserver(on);
-    ro.observe(document.body);
-    tick();
-    return () => {
-      window.removeEventListener("scroll", on);
-      window.removeEventListener("resize", on);
-      window.removeEventListener("hashchange", on);
-      ro.disconnect();
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-  return <div ref={ref} className="scroll-progress" aria-hidden="true" />;
-}
 
 /** #17 odometer: every digit is a 0-9 strip tweened by yPercent, rolling in once when it scrolls into view. */
 export function Odometer({ value, className, style, delay = 0 }: { value: number; className?: string; style?: CSSProperties; delay?: number }) {

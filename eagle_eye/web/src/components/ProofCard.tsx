@@ -4,7 +4,7 @@ import { ArrowRight, Bot, Camera, FileImage, Layers, Maximize2, ScanLine, X } fr
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { STATIC, url } from "../lib/api";
-import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf, wireClassPhrase } from "../lib/format";
+import { CHECK_TITLE, COLOUR_HEX, COLOUR_NAME, STATUS_COLOR, STATUS_HEX, explain, statusOf, tone, wireClassPhrase } from "../lib/format";
 import { calm, gsap, useGSAP } from "../lib/gsap";
 import { gaFor } from "../lib/static";
 import type { Item, Pt } from "../lib/types";
@@ -62,7 +62,7 @@ function ProofZoom({ run, it, geo, from, state, onClose }: {
           {kinds.map((k) => (
             <figure key={k} className={`pz-fig${k === from ? " pz-from" : ""}`}>
               <figcaption>{k === "expected" ? "Expected · GA drawing" : k === "found" ? "Found · photo" : "Aligned to the drawing"}</figcaption>
-              <div className={`pz-img${k === "expected" ? " drawing" : ""}`} data-flip-id={`crop-${it.id}-${k}`} style={{ ["--c" as string]: STATUS_COLOR[statusOf(it)] }}>
+              <div className={`pz-img${k === "expected" ? " drawing" : ""}`} data-flip-id={`crop-${it.id}-${k}`} style={tone(STATUS_COLOR[statusOf(it)])}>
                 {crop(k)}
                 {k === "aligned" && xray && <div className="pz-xray">{crop("expected")}</div>}
               </div>
@@ -189,7 +189,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
       <motion.div key={it.id} className="proof" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.28 }}>
         <div className="row between proof-head">
           <div className="row" style={{ ["--gap" as string]: "11px" }}>
-            {it.marker != null ? <Marker n={it.marker} s={s} lg /> : <span className="proof-dot" style={{ ["--c" as string]: STATUS_COLOR[s] }} />}
+            {it.marker != null ? <Marker n={it.marker} s={s} lg /> : <span className="proof-dot" style={tone(STATUS_COLOR[s])} />}
             <div style={{ minWidth: 0 }}>
               <div className="mono proof-id">{it.id}</div>
               <div className="tiny faint">{CHECK_TITLE[it.check] ?? it.check} · {it.target}</div>
@@ -215,7 +215,7 @@ export function ProofCard({ run, it, geo }: { run: string; it: Item; geo?: Geo }
               <span className="row" style={{ ["--gap" as string]: "6px" }}><ScanLine size={13} /> Found · photo</span>
               {!real && <Seg value={found} onChange={setFound} options={[{ value: "found", label: "Photo", title: "Zoomed crop of the original photo" }, { value: "aligned", label: <><Layers size={12} />Aligned</>, title: "Perspective-corrected, pixel-aligned with the drawing" }]} />}
             </figcaption>
-            <div className="proof-img zoomable" data-flip-id={`crop-${it.id}-${real ? "found" : found}`} style={{ ["--c" as string]: STATUS_COLOR[s] }} role="button" tabIndex={0} title="Open the proof large"
+            <div className="proof-img zoomable" data-flip-id={`crop-${it.id}-${real ? "found" : found}`} style={tone(STATUS_COLOR[s])} role="button" tabIndex={0} title="Open the proof large"
               onClick={() => open(real ? "found" : found)} onKeyDown={(e) => e.key === "Enter" && open(real ? "found" : found)}>
               <span className="zoom-hint"><Maximize2 size={12} /></span>
               {STATIC && geo ? <StaticCrop key={found} run={run} it={it} kind={real ? "found" : found} geo={geo} /> : <img key={found} src={url.crop(run, it.id, real ? "found" : found)} alt={`Photo crop for ${it.id}`} />}
