@@ -30,13 +30,6 @@
   grid-template-columns: 92px 1fr;
 }
 
-.linkish {
-  color: var(--accent);
-  font: inherit;
-}
-.linkish:hover {
-  text-decoration: underline;
-}
 
 .callout.ok {
   border-color: rgba(8, 135, 90, 0.3);

@@ -210,10 +210,6 @@ export function App() {
           <span className="fm-fill">EAGLE EYE</span>
           <span className="fm-beam" />
         </div>
-        <div className="footer-inner">
-          <span>EAGLE EYE · Team ENIGMA (Arya Ambekar, Arnav Sirse) · VIT Code_Apex 3.0 · Built for Emerson&apos;s Track 1 challenge</span>
-          <span>Drawing-first verification · FAIL only when evidence agrees · CPU only · <button className="linkish" onClick={() => setPalette(true)}>Ctrl K</button> · press <kbd>X</kbd> for X-ray</span>
-        </div>
       </footer>
       <div className="lids" aria-hidden="true">
         <div className="lid lid-top" />

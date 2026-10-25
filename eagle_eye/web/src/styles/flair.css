@@ -152,10 +152,6 @@ html.calm .page-head .eyebrow::after {
   }
 }
 
-.footer-inner {
-  position: relative;
-}
-
 @media (max-width: 720px) {
   .footer-mark {
     margin-bottom: 16px;

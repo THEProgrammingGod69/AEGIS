@@ -1152,20 +1152,9 @@ select.input {
 
 .footer {
   margin-top: 80px;
-  padding: 28px var(--gutter) 40px;
+  padding: 28px var(--gutter) 12px;
   border-top: 1px solid var(--line);
-  color: var(--text-3);
-  font-size: 12.5px;
   background: rgba(255, 255, 255, 0.5);
-}
-
-.footer-inner {
-  max-width: var(--maxw);
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
 }
 
 @media (max-width: 720px) {
