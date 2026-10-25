@@ -197,8 +197,7 @@ and Lab migration, swipe review cards, a sign-off stamp with confetti, presenter
   that fills with the aurora as the page scrolls (the reading progress).
 - **Page-wide flair** (`src/styles/flair.css`): cards rise in, page heads drift back and KPI tiles catch a sheen as
   they scroll, all with CSS scroll-driven animations (no JavaScript; browsers without them just show the page), an
-  ambient glow trails the pointer, primary buttons pull gently towards it, and the footer wordmark fills as the page
-  ends.
+  ambient glow trails the pointer, and primary buttons pull gently towards it.
 - **Colour roles**: status colours set `--c` (text), `--cf` (fills, tints, glows) and `--ci` (ink on a fill) together
   through `tone()` in `src/lib/format.ts`, so REVIEW reads in a dark amber but fills bars and markers in the bright one.
 

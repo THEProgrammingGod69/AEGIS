@@ -204,13 +204,6 @@ export function App() {
           <Suspense fallback={<PageFallback />}><PageMotion>{view}</PageMotion></Suspense>
         </ErrorBoundary>
       </main>
-      <footer className="footer">
-        <div className="footer-mark" aria-hidden="true">
-          <span className="fm-outline">EAGLE EYE</span>
-          <span className="fm-fill">EAGLE EYE</span>
-          <span className="fm-beam" />
-        </div>
-      </footer>
       <div className="lids" aria-hidden="true">
         <div className="lid lid-top" />
         <div className="lid lid-bottom" />

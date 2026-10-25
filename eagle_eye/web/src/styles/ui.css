@@ -1150,12 +1150,6 @@ select.input {
   box-shadow: 0 12px 30px -10px rgba(11, 23, 38, 0.5);
 }
 
-.footer {
-  margin-top: 80px;
-  padding: 28px var(--gutter) 12px;
-  border-top: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.5);
-}
 
 @media (max-width: 720px) {
   .main {

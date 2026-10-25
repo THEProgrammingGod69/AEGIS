@@ -1,4 +1,4 @@
-import{w as G,v as a}from"./index-B1XJBLCa.js";/*!
+import{w as G,v as a}from"./index-D2lNfn9w.js";/*!
  * Physics2DPlugin 3.13.0
  * https://gsap.com
  *

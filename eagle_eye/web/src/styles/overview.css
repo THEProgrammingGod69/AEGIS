@@ -1012,7 +1012,7 @@
   width: calc(100% - 2 * var(--gutter));
   max-width: var(--maxw);
   min-height: 400px;
-  margin: 130px auto 0;
+  margin: 130px auto 64px;
   border-radius: 28px;
   overflow: hidden;
   isolation: isolate;
